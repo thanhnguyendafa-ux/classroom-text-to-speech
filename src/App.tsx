@@ -22,7 +22,10 @@ import {
   Settings,
   HelpCircle as QuestionIcon,
   Mic,
-  Monitor
+  Monitor,
+  Key,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode } from './types';
@@ -56,6 +59,13 @@ export default function App() {
   
   const [speechList, setSpeechList] = useState<SpeechItem[]>([]);
   const [speed, setSpeed] = useState<number>(1.0);
+  const [volume, setVolume] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('speechVolume');
+      return saved !== null ? parseFloat(saved) : 1.0;
+    }
+    return 1.0;
+  });
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   
   // Custom preferred voices
@@ -160,6 +170,29 @@ export default function App() {
   const toggleRowLayoutMode = (mode: 'below' | 'side') => {
     setRowLayoutMode(mode);
     localStorage.setItem('rowLayoutMode', mode);
+  };
+
+  // User-supplied Gemini API Key for Premium Voices
+  const [userGeminiApiKey, setUserGeminiApiKey] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('userGeminiApiKey') || '';
+    }
+    return '';
+  });
+  const [showApiKey, setShowApiKey] = useState<boolean>(false);
+
+  const handleVolumeChange = (newVolume: number) => {
+    setVolume(newVolume);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('speechVolume', String(newVolume));
+    }
+  };
+
+  const handleApiKeyChange = (val: string) => {
+    setUserGeminiApiKey(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('userGeminiApiKey', val);
+    }
   };
 
   // Keep references to avoid browser closure or garbage collection issues
@@ -301,6 +334,7 @@ export default function App() {
         const utterance = new SpeechSynthesisUtterance(item.text);
         utteranceRef.current = utterance; // Keep active to avoid Garbage Collector drops
         utterance.rate = item.speed !== undefined ? item.speed : speed;
+        utterance.volume = volume;
 
         const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
         utterance.lang = langCode === 'vi' ? 'vi-VN' : 'en-US';
@@ -374,6 +408,14 @@ export default function App() {
       speakIteration();
     } else {
       // PREMIUM AI TTS (Gemini tts-preview)
+      if (!userGeminiApiKey || !userGeminiApiKey.trim()) {
+        alert("⚠️ Bạn đã chọn chế độ Giọng Premium AI. Vui lòng tự nhập Gemini API Key của riêng bạn ở cột 'Cấu hình giọng đọc' (bên trái) để tiếp tục phát âm.");
+        setPlayingItemId(null);
+        setCurrentRepeatIndex(0);
+        setPlayingState('idle');
+        return;
+      }
+
       setPlayingItemId(item.id);
       setPlayingState('playing');
       setCurrentRepeatIndex(1);
@@ -388,7 +430,8 @@ export default function App() {
           body: JSON.stringify({
             text: item.text,
             voice: chosenVoice,
-            lang: langCode
+            lang: langCode,
+            userApiKey: userGeminiApiKey
           })
         });
 
@@ -412,6 +455,7 @@ export default function App() {
           const audio = new Audio(audioUrl);
           currentAudioRef.current = audio;
           audio.playbackRate = item.speed !== undefined ? item.speed : speed;
+          audio.volume = volume;
 
           audio.onplay = () => {
             setPlayingItemId(item.id);
@@ -861,6 +905,30 @@ export default function App() {
 
                 <hr className="border-slate-100" />
 
+                {/* Speech Volume Slider */}
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Âm lượng đọc (Volume):</span>
+                    <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{Math.round(volume * 100)}%</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[10px] text-slate-400">Tắt (0%)</span>
+                    <input
+                      id="volume-input-slider"
+                      type="range"
+                      min="0.0"
+                      max="1.0"
+                      step="0.05"
+                      value={volume}
+                      onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                      className="flex-1 accent-indigo-600 h-1.5 bg-slate-100 rounded-lg cursor-pointer"
+                    />
+                    <span className="text-[10px] text-slate-400">Lớn (100%)</span>
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
+
                 {/* 2. Auto Advance Configuration (Auto chuyển dòng) */}
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
                   <div className="flex items-center justify-between">
@@ -1006,6 +1074,48 @@ export default function App() {
                           <option value="Charon">Charon 👨 (Nam - Vừa phải, ấm áp)</option>
                           <option value="Fenrir">Fenrir 🧔 (Nam - Mạnh mẽ, rõ chữ)</option>
                         </select>
+                      </div>
+
+                      {/* Personal Gemini API Key Entry */}
+                      <div className="bg-indigo-50/60 border border-indigo-150/85 rounded-xl p-3 mt-3">
+                        <div className="flex justify-between items-center mb-1.5">
+                          <label htmlFor="user-api-key" className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider flex items-center gap-1">
+                            <Key className="w-3.5 h-3.5 text-indigo-600" /> Key Gemini API Của Bạn
+                          </label>
+                          <a 
+                            href="https://aistudio.google.com/app/apikey" 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-[10px] font-extrabold text-indigo-600 hover:underline flex items-center gap-0.5"
+                          >
+                            Lấy Key Miễn Phí ↗
+                          </a>
+                        </div>
+                        <div className="relative">
+                          <input
+                            id="user-api-key"
+                            type={showApiKey ? "text" : "password"}
+                            placeholder="Nhập API Key: AIzaSy..."
+                            className="w-full text-xs font-mono bg-white border border-indigo-200 rounded-lg pl-3 pr-8 py-2 text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                            value={userGeminiApiKey}
+                            onChange={(e) => handleApiKeyChange(e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKey(!showApiKey)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-450 hover:text-slate-650 p-1 cursor-pointer font-bold"
+                            title={showApiKey ? "Ẩn API Key" : "Hiển thị API Key"}
+                          >
+                            {showApiKey ? (
+                              <EyeOff className="w-3.5 h-3.5" />
+                            ) : (
+                              <Eye className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-[9px] text-slate-450 mt-1.5 leading-relaxed">
+                          * <strong>Cam kết bảo mật</strong>: Key được lưu an toàn trên máy của bạn (localStorage), không lưu trữ trái phép trên máy chủ.
+                        </p>
                       </div>
                     </>
                   )}

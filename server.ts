@@ -72,18 +72,36 @@ app.use(express.json());
 // Premium TTS proxy endpoint
 app.post("/api/tts", async (req, res) => {
   try {
-    const { text, voice, lang } = req.body;
+    const { text, voice, lang, userApiKey } = req.body;
 
     if (!text || typeof text !== "string") {
       res.status(400).json({ error: "Text content is required" });
       return;
     }
 
-    if (!apiKey) {
-      res.status(500).json({ 
-        error: "Vui lòng cấu hình API Key trong mục Settings > Secrets của không gian AI Studio để sử dụng giọng đọc Premium." 
+    // Use user-supplied key if provided, else fall back to server's key
+    const keyToUse = (userApiKey && typeof userApiKey === "string" && userApiKey.trim() !== "")
+      ? userApiKey.trim()
+      : apiKey;
+
+    if (!keyToUse) {
+      res.status(400).json({ 
+        error: "Vui lòng nhập Gemini API Key của riêng bạn trong cột Cấu hình bên trái để sử dụng giọng đọc Premium AI." 
       });
       return;
+    }
+
+    // Determine GoogleGenAI instance
+    let aiInstance = ai;
+    if (keyToUse !== apiKey) {
+      aiInstance = new GoogleGenAI({
+        apiKey: keyToUse,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          }
+        }
+      });
     }
 
     // Structure appropriate trigger prompt according to language choice
@@ -97,7 +115,7 @@ app.post("/api/tts", async (req, res) => {
     const chosenVoice = voice || "Kore";
 
     // Call Gemini 3.1 TTS model
-    const response = await ai.models.generateContent({
+    const response = await aiInstance.models.generateContent({
       model: "gemini-3.1-flash-tts-preview",
       contents: [{ parts: [{ text: steeringPrompt }] }],
       config: {
