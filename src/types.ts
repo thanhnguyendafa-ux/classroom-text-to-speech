@@ -2,7 +2,7 @@
  * Define the structural interfaces for our text elements and voice profiles.
  */
 
-export type LanguageCode = 'en' | 'vi';
+export type LanguageCode = 'en' | 'vi' | 'zh-cn' | 'zh-tw' | 'ja' | 'ko';
 
 export interface SpeechItem {
   id: string;

@@ -46,10 +46,19 @@ const TEMPLATES = [
     title: 'Everyday Classroom English',
     description: 'Các khẩu lệnh cơ bản giáo viên dùng trong lớp học.',
     content: 'Please stand up.\nChào cả lớp.\nOpen your books to page ten.\nTrật tự nào các em.\nListen and repeat.\nHoàn thành bài tập về nhà.'
+  },
+  {
+    title: 'Châu Á (CN - JP - KR)',
+    description: 'Mẫu câu luyện nghe và nói Tiếng Trung, Nhật, Hàn chất lượng cao.',
+    content: 'こんにちは\nHi, Nice to meet you.\n안녕하세요\n어떻게 지내세요?\n你好吗？\n祝你今天过得愉快\n學會中文、聽懂世界\n祝大家身體健康、萬事如意'
   }
 ];
 
-// Helper regex to detect Vietnamese characters
+// Helper regex to detect language characters
+const JAPANESE_CHARACTER_REGEX = /[\u3040-\u309F\u30A0-\u30FF]/;
+const KOREAN_CHARACTER_REGEX = /[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/;
+const CHINESE_TRADITIONAL_UNIQUE_CHARS = /[體廣門見劃設對華遷萬國學會東億個開鳳龍聽擊買賣車愛東漢義鋸齒靈麗響讓觀認邊發變禮藝]/;
+const CHINESE_CHARACTER_REGEX = /[\u4E00-\u9FFF]/;
 const VIETNAMESE_DIACRITICS_REGEX = /[àáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệđìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵĂÂÊÔƠƯĐ]/i;
 
 export default function App() {
@@ -71,11 +80,19 @@ export default function App() {
   // Custom preferred voices
   const [selectedEnVoiceName, setSelectedEnVoiceName] = useState<string>('');
   const [selectedViVoiceName, setSelectedViVoiceName] = useState<string>('');
+  const [selectedZhCnVoiceName, setSelectedZhCnVoiceName] = useState<string>('');
+  const [selectedZhTwVoiceName, setSelectedZhTwVoiceName] = useState<string>('');
+  const [selectedJaVoiceName, setSelectedJaVoiceName] = useState<string>('');
+  const [selectedKoVoiceName, setSelectedKoVoiceName] = useState<string>('');
 
   // Engine Mode: 'browser' (native speech) vs 'premium' (Gemini AI TTS)
   const [engineMode, setEngineMode] = useState<'browser' | 'premium'>('browser');
   const [selectedPremiumVoiceEn, setSelectedPremiumVoiceEn] = useState<string>('Zephyr');
   const [selectedPremiumVoiceVi, setSelectedPremiumVoiceVi] = useState<string>('Kore');
+  const [selectedPremiumVoiceZhCn, setSelectedPremiumVoiceZhCn] = useState<string>('Kore');
+  const [selectedPremiumVoiceZhTw, setSelectedPremiumVoiceZhTw] = useState<string>('Zephyr');
+  const [selectedPremiumVoiceJa, setSelectedPremiumVoiceJa] = useState<string>('Zephyr');
+  const [selectedPremiumVoiceKo, setSelectedPremiumVoiceKo] = useState<string>('Kore');
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   
   // Active playing item tracker
@@ -227,6 +244,31 @@ export default function App() {
           if (viVoice && !selectedViVoiceName) {
             setSelectedViVoiceName(viVoice.name);
           }
+
+          // Check for Chinese Simplified voice
+          const zhCnVoice = availableVoices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith('zh-cn') || v.lang.toLowerCase().replace('_', '-').startsWith('zh-chs')) ||
+                            availableVoices.find(v => v.lang.toLowerCase().startsWith('zh'));
+          if (zhCnVoice && !selectedZhCnVoiceName) {
+            setSelectedZhCnVoiceName(zhCnVoice.name);
+          }
+
+          // Check for Chinese Traditional voice
+          const zhTwVoice = availableVoices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith('zh-tw') || v.lang.toLowerCase().replace('_', '-').startsWith('zh-hk') || v.lang.toLowerCase().replace('_', '-').startsWith('zh-cht'));
+          if (zhTwVoice && !selectedZhTwVoiceName) {
+            setSelectedZhTwVoiceName(zhTwVoice.name);
+          }
+
+          // Check for Japanese voice
+          const jaVoice = availableVoices.find(v => v.lang.toLowerCase().startsWith('ja'));
+          if (jaVoice && !selectedJaVoiceName) {
+            setSelectedJaVoiceName(jaVoice.name);
+          }
+
+          // Check for Korean voice
+          const koVoice = availableVoices.find(v => v.lang.toLowerCase().startsWith('ko'));
+          if (koVoice && !selectedKoVoiceName) {
+            setSelectedKoVoiceName(koVoice.name);
+          }
         }
       }
     };
@@ -235,7 +277,14 @@ export default function App() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.onvoiceschanged = fetchVoices;
     }
-  }, [selectedEnVoiceName, selectedViVoiceName]);
+  }, [
+    selectedEnVoiceName, 
+    selectedViVoiceName, 
+    selectedZhCnVoiceName, 
+    selectedZhTwVoiceName, 
+    selectedJaVoiceName, 
+    selectedKoVoiceName
+  ]);
 
   // Clean speech when active item finishes or component unmounts
   useEffect(() => {
@@ -248,7 +297,14 @@ export default function App() {
 
   // Helper function to detect language of a given line
   const handleDetectLanguage = (line: string): LanguageCode => {
-    return VIETNAMESE_DIACRITICS_REGEX.test(line) ? 'vi' : 'en';
+    const trimmed = line.trim();
+    if (KOREAN_CHARACTER_REGEX.test(trimmed)) return 'ko';
+    if (JAPANESE_CHARACTER_REGEX.test(trimmed)) return 'ja';
+    if (CHINESE_CHARACTER_REGEX.test(trimmed)) {
+      return CHINESE_TRADITIONAL_UNIQUE_CHARS.test(trimmed) ? 'zh-tw' : 'zh-cn';
+    }
+    if (VIETNAMESE_DIACRITICS_REGEX.test(trimmed)) return 'vi';
+    return 'en';
   };
 
   // Create the main interactive speaker list
@@ -337,18 +393,36 @@ export default function App() {
         utterance.volume = volume;
 
         const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
-        utterance.lang = langCode === 'vi' ? 'vi-VN' : 'en-US';
+        let targetLang = 'en-US';
+        if (langCode === 'vi') targetLang = 'vi-VN';
+        else if (langCode === 'zh-cn') targetLang = 'zh-CN';
+        else if (langCode === 'zh-tw') targetLang = 'zh-TW';
+        else if (langCode === 'ja') targetLang = 'ja-JP';
+        else if (langCode === 'ko') targetLang = 'ko-KR';
+        utterance.lang = targetLang;
 
         // Attach voice
-        if (langCode === 'en' && selectedEnVoiceName) {
-          const preferredVoice = voices.find(v => v.name === selectedEnVoiceName);
-          if (preferredVoice) utterance.voice = preferredVoice;
-        } else if (langCode === 'vi' && selectedViVoiceName) {
-          const preferredVoice = voices.find(v => v.name === selectedViVoiceName);
+        let preferredVoiceName = '';
+        if (langCode === 'en') {
+          preferredVoiceName = selectedEnVoiceName;
+        } else if (langCode === 'vi') {
+          preferredVoiceName = selectedViVoiceName;
+        } else if (langCode === 'zh-cn') {
+          preferredVoiceName = selectedZhCnVoiceName;
+        } else if (langCode === 'zh-tw') {
+          preferredVoiceName = selectedZhTwVoiceName;
+        } else if (langCode === 'ja') {
+          preferredVoiceName = selectedJaVoiceName;
+        } else if (langCode === 'ko') {
+          preferredVoiceName = selectedKoVoiceName;
+        }
+
+        if (preferredVoiceName) {
+          const preferredVoice = voices.find(v => v.name === preferredVoiceName);
           if (preferredVoice) utterance.voice = preferredVoice;
         } else {
-          const targetLangPrefix = langCode === 'vi' ? 'vi' : 'en';
-          const bestVoice = voices.find(v => v.lang.toLowerCase().startsWith(targetLangPrefix));
+          const targetLangPrefix = langCode === 'vi' ? 'vi' : (langCode.startsWith('zh') ? 'zh' : (langCode === 'ja' ? 'ja' : (langCode === 'ko' ? 'ko' : 'en')));
+          const bestVoice = voices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith(targetLangPrefix));
           if (bestVoice) utterance.voice = bestVoice;
         }
 
@@ -421,7 +495,18 @@ export default function App() {
       setCurrentRepeatIndex(1);
 
       const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
-      const chosenVoice = langCode === 'vi' ? selectedPremiumVoiceVi : selectedPremiumVoiceEn;
+      let chosenVoice = selectedPremiumVoiceEn;
+      if (langCode === 'vi') {
+        chosenVoice = selectedPremiumVoiceVi;
+      } else if (langCode === 'zh-cn') {
+        chosenVoice = selectedPremiumVoiceZhCn;
+      } else if (langCode === 'zh-tw') {
+        chosenVoice = selectedPremiumVoiceZhTw;
+      } else if (langCode === 'ja') {
+        chosenVoice = selectedPremiumVoiceJa;
+      } else if (langCode === 'ko') {
+        chosenVoice = selectedPremiumVoiceKo;
+      }
 
       try {
         const response = await fetch("/api/tts", {
@@ -701,9 +786,22 @@ export default function App() {
     }
   };
 
-  // English & Vietnamese filter categories
+  // Filter categories for all supported languages
   const englishVoices = voices.filter(v => v.lang.toLowerCase().startsWith('en'));
   const vietnameseVoices = voices.filter(v => v.lang.toLowerCase().startsWith('vi'));
+  const zhCnVoices = voices.filter(v => 
+    v.lang.toLowerCase().replace('_', '-').startsWith('zh-cn') || 
+    v.lang.toLowerCase().replace('_', '-').startsWith('zh-chs') || 
+    (v.lang.toLowerCase().startsWith('zh') && !v.lang.toLowerCase().includes('tw') && !v.lang.toLowerCase().includes('hk'))
+  );
+  const zhTwVoices = voices.filter(v => 
+    v.lang.toLowerCase().replace('_', '-').startsWith('zh-tw') || 
+    v.lang.toLowerCase().replace('_', '-').startsWith('zh-hk') || 
+    v.lang.toLowerCase().replace('_', '-').startsWith('zh-cht') || 
+    (v.lang.toLowerCase().startsWith('zh') && (v.lang.toLowerCase().includes('tw') || v.lang.toLowerCase().includes('hk')))
+  );
+  const japaneseVoices = voices.filter(v => v.lang.toLowerCase().startsWith('ja'));
+  const koreanVoices = voices.filter(v => v.lang.toLowerCase().startsWith('ko'));
 
   return (
     <div id="classroom-tts-root" className="min-h-screen bg-slate-55 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 pb-20">
@@ -1037,6 +1135,94 @@ export default function App() {
                           )}
                         </select>
                       </div>
+
+                      <div>
+                        <label htmlFor="zh-cn-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                          🇨🇳 Giọng ZH-CN ưu tiên (Browser's engine)
+                        </label>
+                        <select
+                          id="zh-cn-voice-fav"
+                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
+                          value={selectedZhCnVoiceName}
+                          onChange={(e) => setSelectedZhCnVoiceName(e.target.value)}
+                        >
+                          {zhCnVoices.length === 0 ? (
+                            <option value="">-- Dùng ZH-CN mặc định máy --</option>
+                          ) : (
+                            zhCnVoices.map((v) => (
+                              <option key={v.name} value={v.name}>
+                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="zh-tw-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                          🇭🇰 Giọng ZH-TW ưu tiên (Browser's engine)
+                        </label>
+                        <select
+                          id="zh-tw-voice-fav"
+                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
+                          value={selectedZhTwVoiceName}
+                          onChange={(e) => setSelectedZhTwVoiceName(e.target.value)}
+                        >
+                          {zhTwVoices.length === 0 ? (
+                            <option value="">-- Dùng ZH-TW mặc định máy --</option>
+                          ) : (
+                            zhTwVoices.map((v) => (
+                              <option key={v.name} value={v.name}>
+                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="ja-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                          🇯🇵 Giọng Tiếng Nhật ưu tiên (Browser's engine)
+                        </label>
+                        <select
+                          id="ja-voice-fav"
+                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
+                          value={selectedJaVoiceName}
+                          onChange={(e) => setSelectedJaVoiceName(e.target.value)}
+                        >
+                          {japaneseVoices.length === 0 ? (
+                            <option value="">-- Dùng Tiếng Nhật mặc định máy --</option>
+                          ) : (
+                            japaneseVoices.map((v) => (
+                              <option key={v.name} value={v.name}>
+                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="ko-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                          🇰🇷 Giọng Tiếng Hàn ưu tiên (Browser's engine)
+                        </label>
+                        <select
+                          id="ko-voice-fav"
+                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
+                          value={selectedKoVoiceName}
+                          onChange={(e) => setSelectedKoVoiceName(e.target.value)}
+                        >
+                          {koreanVoices.length === 0 ? (
+                            <option value="">-- Dùng Tiếng Hàn mặc định máy --</option>
+                          ) : (
+                            koreanVoices.map((v) => (
+                              <option key={v.name} value={v.name}>
+                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -1073,6 +1259,78 @@ export default function App() {
                           <option value="Puck">Puck 👦 (Nam - Cá tính)</option>
                           <option value="Charon">Charon 👨 (Nam - Vừa phải, ấm áp)</option>
                           <option value="Fenrir">Fenrir 🧔 (Nam - Mạnh mẽ, rõ chữ)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="zh-cn-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
+                          🇨🇳 Giọng Premium ZH-CN (Gemini) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
+                        </label>
+                        <select
+                          id="zh-cn-premium-voice"
+                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
+                          value={selectedPremiumVoiceZhCn}
+                          onChange={(e) => setSelectedPremiumVoiceZhCn(e.target.value)}
+                        >
+                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo, khuyến nghị)</option>
+                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Sống động)</option>
+                          <option value="Puck">Puck 👦 (Nam - Cá tính)</option>
+                          <option value="Charon">Charon 👨 (Nam - Ấm áp)</option>
+                          <option value="Fenrir">Fenrir 🧔 (Nam - Rõ chữ)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="zh-tw-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
+                          🇭🇰 Giọng Premium ZH-TW (Gemini) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
+                        </label>
+                        <select
+                          id="zh-tw-premium-voice"
+                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
+                          value={selectedPremiumVoiceZhTw}
+                          onChange={(e) => setSelectedPremiumVoiceZhTw(e.target.value)}
+                        >
+                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Truyền cảm, khuyến nghị)</option>
+                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo)</option>
+                          <option value="Puck">Puck 👦 (Nam - Cá tính)</option>
+                          <option value="Charon">Charon 👨 (Nam - Trầm ấm)</option>
+                          <option value="Fenrir">Fenrir 🧔 (Nam - Dõng dạc)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="ja-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
+                          🇯🇵 Giọng Premium JA (Gemini) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
+                        </label>
+                        <select
+                          id="ja-premium-voice"
+                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
+                          value={selectedPremiumVoiceJa}
+                          onChange={(e) => setSelectedPremiumVoiceJa(e.target.value)}
+                        >
+                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Truyền cảm, khuyến nghị)</option>
+                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo)</option>
+                          <option value="Puck">Puck 👦 (Nam - Cá tính)</option>
+                          <option value="Charon">Charon 👨 (Nam - Trầm ấm)</option>
+                          <option value="Fenrir">Fenrir 🧔 (Nam - Sảng khoái)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="ko-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
+                          🇰🇷 Giọng Premium KO (Gemini) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
+                        </label>
+                        <select
+                          id="ko-premium-voice"
+                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
+                          value={selectedPremiumVoiceKo}
+                          onChange={(e) => setSelectedPremiumVoiceKo(e.target.value)}
+                        >
+                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo, khuyến nghị)</option>
+                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Sống động)</option>
+                          <option value="Puck">Puck 👦 (Nam - Cá tính)</option>
+                          <option value="Charon">Charon 👨 (Nam - Vừa phải)</option>
+                          <option value="Fenrir">Fenrir 🧔 (Nam - Mạnh mẽ)</option>
                         </select>
                       </div>
 

@@ -108,6 +108,14 @@ app.post("/api/tts", async (req, res) => {
     let steeringPrompt = text;
     if (lang === "vi") {
       steeringPrompt = `Say in natural, perfect Vietnamese with appropriate accent, tone, and pacing: ${text}`;
+    } else if (lang === "zh-cn") {
+      steeringPrompt = `Say in natural, perfect Mandarin Chinese (Simplified character mode) with appropriate tone and pacing: ${text}`;
+    } else if (lang === "zh-tw") {
+      steeringPrompt = `Say in natural, perfect Traditional Mandarin Chinese (Traditional character/Taiwan/Hong Kong style) with appropriate tone and pacing: ${text}`;
+    } else if (lang === "ja") {
+      steeringPrompt = `Say in perfect natural Japanese with perfect accentuation and natural rhythm: ${text}`;
+    } else if (lang === "ko") {
+      steeringPrompt = `Say in perfect natural Korean with appropriate pronunciation, rhythm, and intonation: ${text}`;
     } else {
       steeringPrompt = `Say in natural, standard native English with appropriate pacing: ${text}`;
     }
