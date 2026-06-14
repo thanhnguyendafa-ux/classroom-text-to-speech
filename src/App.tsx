@@ -1,0 +1,1546 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Volume2, 
+  VolumeX, 
+  Trash2, 
+  Plus, 
+  X, 
+  Check, 
+  Sliders, 
+  Sparkles, 
+  BookOpen, 
+  Play, 
+  RotateCcw,
+  Edit2,
+  Trash,
+  Info,
+  HelpCircle,
+  FileText,
+  GripVertical,
+  Repeat,
+  ArrowRight,
+  Settings,
+  HelpCircle as QuestionIcon,
+  Mic,
+  Monitor
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { SpeechItem, LanguageCode } from './types';
+
+// Pre-defined educational templates for teachers and students
+const TEMPLATES = [
+  {
+    title: 'Bilingual Fruits',
+    description: 'Danh sách từ vựng song ngữ Anh - Việt đơn giản cho bé.',
+    content: 'apple\ntáo tây\nbanana\nchuối chín\norange\ncam sành\nwatermelon\ndưa hấu đỏ'
+  },
+  {
+    title: 'Vietnamese Accent & Diacritics',
+    description: 'Các từ tiếng Việt mang dấu thanh khó phát âm chuẩn.',
+    content: 'bắp rang bơ\nhạt dẻ cười\nbuổi trưa ăn bưởi chua\nđường lầy lội đi lại khó khăn\ntrứng cuộn phô mai'
+  },
+  {
+    title: 'Everyday Classroom English',
+    description: 'Các khẩu lệnh cơ bản giáo viên dùng trong lớp học.',
+    content: 'Please stand up.\nChào cả lớp.\nOpen your books to page ten.\nTrật tự nào các em.\nListen and repeat.\nHoàn thành bài tập về nhà.'
+  }
+];
+
+// Helper regex to detect Vietnamese characters
+const VIETNAMESE_DIACRITICS_REGEX = /[àáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệđìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵĂÂÊÔƠƯĐ]/i;
+
+export default function App() {
+  const [rawText, setRawText] = useState<string>(
+    'popcorn\nI like popcorn\nCon thích bắp rang\nflower\nbông hoa nhài thơm ngát\nwelcome to classroom\nChào mừng thầy cô và các học sinh'
+  );
+  
+  const [speechList, setSpeechList] = useState<SpeechItem[]>([]);
+  const [speed, setSpeed] = useState<number>(1.0);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  
+  // Custom preferred voices
+  const [selectedEnVoiceName, setSelectedEnVoiceName] = useState<string>('');
+  const [selectedViVoiceName, setSelectedViVoiceName] = useState<string>('');
+
+  // Engine Mode: 'browser' (native speech) vs 'premium' (Gemini AI TTS)
+  const [engineMode, setEngineMode] = useState<'browser' | 'premium'>('browser');
+  const [selectedPremiumVoiceEn, setSelectedPremiumVoiceEn] = useState<string>('Zephyr');
+  const [selectedPremiumVoiceVi, setSelectedPremiumVoiceVi] = useState<string>('Kore');
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Active playing item tracker
+  const [playingItemId, setPlayingItemId] = useState<string | null>(null);
+  const [playingState, setPlayingState] = useState<'idle' | 'playing' | 'paused'>('idle');
+  const [currentRepeatIndex, setCurrentRepeatIndex] = useState<number>(0);
+  
+  // Visual Countdown timer state for pauses between repetitions & lines (ideal for dictation)
+  const [waitingState, setWaitingState] = useState<{ isWaiting: boolean; remainingSec: number; itemId: string | null; type: 'repeat' | 'advance' | null }>({
+    isWaiting: false,
+    remainingSec: 0,
+    itemId: null,
+    type: null
+  });
+  const waitTimerRef = useRef<any>(null);
+  const waitIntervalRef = useRef<any>(null);
+
+  const clearWaitTimers = () => {
+    if (waitTimerRef.current) {
+      clearTimeout(waitTimerRef.current);
+      waitTimerRef.current = null;
+    }
+    if (waitIntervalRef.current) {
+      clearInterval(waitIntervalRef.current);
+      waitIntervalRef.current = null;
+    }
+    setWaitingState({ isWaiting: false, remainingSec: 0, itemId: null, type: null });
+  };
+
+  const startCountdown = (sec: number, type: 'repeat' | 'advance', onComplete: () => void, itemId: string) => {
+    clearWaitTimers();
+    if (sec <= 0) {
+      onComplete();
+      return;
+    }
+
+    setWaitingState({ isWaiting: true, remainingSec: sec, itemId, type });
+
+    const intervalTime = 100; // Update ticker every 100ms
+    const totalTicks = Math.round(sec * 10);
+    let ticksElapsed = 0;
+
+    waitIntervalRef.current = setInterval(() => {
+      ticksElapsed++;
+      const left = Math.max(0, sec - (ticksElapsed / 10));
+      setWaitingState(prev => {
+        if (prev.itemId === itemId) {
+          return { ...prev, remainingSec: parseFloat(left.toFixed(1)) };
+        }
+        return prev;
+      });
+
+      if (ticksElapsed >= totalTicks) {
+        clearInterval(waitIntervalRef.current);
+        waitIntervalRef.current = null;
+      }
+    }, intervalTime);
+
+    waitTimerRef.current = setTimeout(() => {
+      clearWaitTimers();
+      onComplete();
+    }, sec * 1000);
+  };
+
+  // HTML5 Drag and Drop states
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Auto progression configuration
+  const [autoAdvance, setAutoAdvance] = useState<boolean>(true);
+  const [timeBetweenLines, setTimeBetweenLines] = useState<number>(2.0); // Default pause time in seconds
+
+  // Inline editing row state
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<string>('');
+
+  // Quick addition line form
+  const [newRowText, setNewRowText] = useState<string>('');
+  const [newRowLang, setNewRowLang] = useState<LanguageCode | 'auto'>('auto');
+  const [newRowRepeats, setNewRowRepeats] = useState<number>(1);
+  const [newRowDelay, setNewRowDelay] = useState<number>(2.0);
+
+  // Layout mode for the speech item rows
+  const [rowLayoutMode, setRowLayoutMode] = useState<'below' | 'side'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('rowLayoutMode');
+      return (saved === 'side' || saved === 'below') ? saved : 'below';
+    }
+    return 'below';
+  });
+
+  const toggleRowLayoutMode = (mode: 'below' | 'side') => {
+    setRowLayoutMode(mode);
+    localStorage.setItem('rowLayoutMode', mode);
+  };
+
+  // Keep references to avoid browser closure or garbage collection issues
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const activePlayingIdRef = useRef<string | null>(null);
+  const speechListRef = useRef<SpeechItem[]>([]);
+  
+  // Track mutable list to avoid closure locking in async timers
+  useEffect(() => {
+    speechListRef.current = speechList;
+  }, [speechList]);
+
+  // Load browser speech synthesis voices
+  useEffect(() => {
+    const fetchVoices = () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        const availableVoices = window.speechSynthesis.getVoices();
+        setVoices(availableVoices);
+
+        // Auto selection strategy for Vietnamese / English defaults
+        if (availableVoices.length > 0) {
+          // Check for Chrome or native US voice
+          const enVoice = availableVoices.find(v => v.lang.includes('en-US')) || 
+                          availableVoices.find(v => v.lang.startsWith('en'));
+          if (enVoice && !selectedEnVoiceName) {
+            setSelectedEnVoiceName(enVoice.name);
+          }
+
+          // Check for native Vietnamese voice
+          const viVoice = availableVoices.find(v => v.lang.includes('vi-VN')) || 
+                          availableVoices.find(v => v.lang.startsWith('vi'));
+          if (viVoice && !selectedViVoiceName) {
+            setSelectedViVoiceName(viVoice.name);
+          }
+        }
+      }
+    };
+
+    fetchVoices();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = fetchVoices;
+    }
+  }, [selectedEnVoiceName, selectedViVoiceName]);
+
+  // Clean speech when active item finishes or component unmounts
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  // Helper function to detect language of a given line
+  const handleDetectLanguage = (line: string): LanguageCode => {
+    return VIETNAMESE_DIACRITICS_REGEX.test(line) ? 'vi' : 'en';
+  };
+
+  // Create the main interactive speaker list
+  const handleCreateList = () => {
+    const lines = rawText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    
+    const newList: SpeechItem[] = lines.map((text, idx) => {
+      const detected = handleDetectLanguage(text);
+      return {
+        id: `row-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
+        text: text,
+        detectedLang: detected,
+        selectedLang: 'auto',
+        resolvedLang: detected,
+        repeats: 1, // default loop setting is once
+        delaySec: 2.0, // default wait of 2.0 seconds after reading
+        speed: speed // default speed multiplier
+      };
+    });
+
+    setSpeechList(newList);
+    handleStopAll();
+  };
+
+  // Add single custom row
+  const handleAddSingleRow = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRowText.trim()) return;
+
+    const detected = handleDetectLanguage(newRowText.trim());
+    const resolved: LanguageCode = newRowLang === 'auto' ? detected : newRowLang;
+
+    const newItem: SpeechItem = {
+      id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      text: newRowText.trim(),
+      detectedLang: detected,
+      selectedLang: newRowLang,
+      resolvedLang: resolved,
+      repeats: newRowRepeats,
+      delaySec: newRowDelay,
+      speed: speed
+    };
+
+    setSpeechList(prev => [...prev, newItem]);
+    setNewRowText('');
+    setNewRowLang('auto');
+    setNewRowRepeats(1);
+    setNewRowDelay(2.0);
+  };
+
+  // Main Speech logic: supports customized loop/repeat count and automatic chaining to next line
+  const handleSpeakItem = async (item: SpeechItem) => {
+    // Terminate existing sounds first
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    clearWaitTimers();
+
+    let currentIteration = 1;
+    const maxIterations = item.repeats || 1;
+    activePlayingIdRef.current = item.id;
+
+    if (engineMode === 'browser') {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        alert('Trình duyệt của bạn không hỗ trợ Web Speech API. Vui lòng thử dùng Google Chrome.');
+        return;
+      }
+
+      const speakIteration = () => {
+        // Security guard to check if audio was general-stopped or switched to another item
+        if (activePlayingIdRef.current !== item.id) {
+          setPlayingItemId(null);
+          setCurrentRepeatIndex(0);
+          setPlayingState('idle');
+          clearWaitTimers();
+          return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(item.text);
+        utteranceRef.current = utterance; // Keep active to avoid Garbage Collector drops
+        utterance.rate = item.speed !== undefined ? item.speed : speed;
+
+        const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
+        utterance.lang = langCode === 'vi' ? 'vi-VN' : 'en-US';
+
+        // Attach voice
+        if (langCode === 'en' && selectedEnVoiceName) {
+          const preferredVoice = voices.find(v => v.name === selectedEnVoiceName);
+          if (preferredVoice) utterance.voice = preferredVoice;
+        } else if (langCode === 'vi' && selectedViVoiceName) {
+          const preferredVoice = voices.find(v => v.name === selectedViVoiceName);
+          if (preferredVoice) utterance.voice = preferredVoice;
+        } else {
+          const targetLangPrefix = langCode === 'vi' ? 'vi' : 'en';
+          const bestVoice = voices.find(v => v.lang.toLowerCase().startsWith(targetLangPrefix));
+          if (bestVoice) utterance.voice = bestVoice;
+        }
+
+        utterance.onstart = () => {
+          setPlayingItemId(item.id);
+          setCurrentRepeatIndex(currentIteration);
+          setPlayingState('playing');
+        };
+
+        utterance.onend = () => {
+          // Enforce check
+          if (activePlayingIdRef.current !== item.id) {
+            setPlayingItemId(null);
+            setCurrentRepeatIndex(0);
+            setPlayingState('idle');
+            clearWaitTimers();
+            return;
+          }
+
+          const currentDelay = item.delaySec !== undefined ? item.delaySec : 2.0;
+
+          if (currentIteration < maxIterations) {
+            currentIteration++;
+            setPlayingState('paused'); // Show that we are waiting for timer
+            startCountdown(currentDelay, 'repeat', () => {
+              speakIteration();
+            }, item.id);
+          } else {
+            // Completed repetitions for this particular row
+            if (autoAdvance) {
+              setPlayingState('paused'); // Waiting to advance
+              startCountdown(currentDelay, 'advance', () => {
+                setPlayingItemId(null);
+                setCurrentRepeatIndex(0);
+                setPlayingState('idle');
+                handleAutoAdvanceToNext(item.id);
+              }, item.id);
+            } else {
+              setPlayingItemId(null);
+              setCurrentRepeatIndex(0);
+              setPlayingState('idle');
+            }
+          }
+        };
+
+        utterance.onerror = (e) => {
+          console.warn('Speech Engine warning:', e);
+          setPlayingItemId(null);
+          setCurrentRepeatIndex(0);
+          setPlayingState('idle');
+          clearWaitTimers();
+        };
+
+        window.speechSynthesis.speak(utterance);
+      };
+
+      speakIteration();
+    } else {
+      // PREMIUM AI TTS (Gemini tts-preview)
+      setPlayingItemId(item.id);
+      setPlayingState('playing');
+      setCurrentRepeatIndex(1);
+
+      const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
+      const chosenVoice = langCode === 'vi' ? selectedPremiumVoiceVi : selectedPremiumVoiceEn;
+
+      try {
+        const response = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: item.text,
+            voice: chosenVoice,
+            lang: langCode
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || "Thất bại khi kết nối API giọng nói Premium.");
+        }
+
+        const data = await response.json();
+        const audioUrl = data.audioUrl;
+
+        const playIteration = () => {
+          if (activePlayingIdRef.current !== item.id) {
+            setPlayingItemId(null);
+            setCurrentRepeatIndex(0);
+            setPlayingState('idle');
+            clearWaitTimers();
+            return;
+          }
+
+          const audio = new Audio(audioUrl);
+          currentAudioRef.current = audio;
+          audio.playbackRate = item.speed !== undefined ? item.speed : speed;
+
+          audio.onplay = () => {
+            setPlayingItemId(item.id);
+            setCurrentRepeatIndex(currentIteration);
+            setPlayingState('playing');
+          };
+
+          audio.onended = () => {
+            if (activePlayingIdRef.current !== item.id) {
+              setPlayingItemId(null);
+              setCurrentRepeatIndex(0);
+              setPlayingState('idle');
+              clearWaitTimers();
+              return;
+            }
+
+            const currentDelay = item.delaySec !== undefined ? item.delaySec : 2.0;
+
+            if (currentIteration < maxIterations) {
+              currentIteration++;
+              setPlayingState('paused'); // waiting
+              startCountdown(currentDelay, 'repeat', () => {
+                playIteration();
+              }, item.id);
+            } else {
+              if (autoAdvance) {
+                setPlayingState('paused'); // waiting
+                startCountdown(currentDelay, 'advance', () => {
+                  setPlayingItemId(null);
+                  setCurrentRepeatIndex(0);
+                  setPlayingState('idle');
+                  handleAutoAdvanceToNext(item.id);
+                }, item.id);
+              } else {
+                setPlayingItemId(null);
+                setCurrentRepeatIndex(0);
+                setPlayingState('idle');
+              }
+            }
+          };
+
+          audio.onerror = (e) => {
+            console.error("Audio playback error:", e);
+            setPlayingItemId(null);
+            setCurrentRepeatIndex(0);
+            setPlayingState('idle');
+            clearWaitTimers();
+          };
+
+          audio.play().catch(err => {
+            console.error("Play failed:", err);
+            setPlayingItemId(null);
+            setCurrentRepeatIndex(0);
+            setPlayingState('idle');
+            clearWaitTimers();
+          });
+        };
+
+        playIteration();
+
+      } catch (err: any) {
+        console.error("Premium audio generation failed:", err);
+        alert(err.message || "Không thể tải giọng đọc AI Premium. Hãy đảm bảo API Key đã được cấp hoặc chuyển về chế độ Trình duyệt của máy.");
+        setPlayingItemId(null);
+        setCurrentRepeatIndex(0);
+        setPlayingState('idle');
+        clearWaitTimers();
+      }
+    }
+  };
+
+  // Helper to transition automatically to the next active line
+  const handleAutoAdvanceToNext = (currentId: string) => {
+    const list = speechListRef.current;
+    const currentIndex = list.findIndex(item => item.id === currentId);
+    if (currentIndex !== -1 && currentIndex + 1 < list.length) {
+      const nextItem = list[currentIndex + 1];
+      handleSpeakItem(nextItem);
+    }
+  };
+
+  // Draggable Drop handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    // Add visual styling to indicate drag start
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.4';
+    }
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1';
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDropRow = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+    const listCopy = [...speechList];
+    const [draggedItem] = listCopy.splice(draggedIndex, 1);
+    listCopy.splice(targetIndex, 0, draggedItem);
+    setSpeechList(listCopy);
+
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Immediate cancel
+  const handleStopAll = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    clearWaitTimers();
+    activePlayingIdRef.current = null;
+    setPlayingItemId(null);
+    setCurrentRepeatIndex(0);
+    setPlayingState('idle');
+  };
+
+  const handleClearAll = () => {
+    handleStopAll();
+    setSpeechList([]);
+  };
+
+  // Apply templates
+  const handleApplyTemplate = (content: string) => {
+    setRawText(content);
+  };
+
+  // Modify individual repeats configuration
+  const handleRowRepeatsChange = (id: string, count: number) => {
+    setSpeechList(prev => prev.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          repeats: Math.max(1, Math.min(10, count))
+        };
+      }
+      return item;
+    }));
+  };
+
+  // Modify individual delay configuration
+  const handleRowDelayChange = (id: string, delay: number) => {
+    setSpeechList(prev => prev.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          delaySec: Math.max(0.5, Math.min(20, Math.round(delay * 10) / 10))
+        };
+      }
+      return item;
+    }));
+  };
+
+  // Modify individual speech speed configuration
+  const handleRowSpeedChange = (id: string, rate: number) => {
+    setSpeechList(prev => prev.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          speed: Math.max(0.3, Math.min(2.0, Math.round(rate * 10) / 10))
+        };
+      }
+      return item;
+    }));
+  };
+
+  // Modify individual row language manually
+  const handleRowLangChange = (id: string, newLang: LanguageCode | 'auto') => {
+    setSpeechList(prev => prev.map(item => {
+      if (item.id === id) {
+        const detected = item.detectedLang;
+        const resolved = newLang === 'auto' ? detected : newLang;
+        return {
+          ...item,
+          selectedLang: newLang,
+          resolvedLang: resolved
+        };
+      }
+      return item;
+    }));
+  };
+
+  // Edit item text inline
+  const startEditingRow = (item: SpeechItem) => {
+    setEditingItemId(item.id);
+    setEditingText(item.text);
+  };
+
+  const saveEditedRow = (id: string) => {
+    if (!editingText.trim()) {
+      handleDeleteRow(id);
+      return;
+    }
+
+    setSpeechList(prev => prev.map(item => {
+      if (item.id === id) {
+        const newText = editingText.trim();
+        const detected = handleDetectLanguage(newText);
+        const resolved = item.selectedLang === 'auto' ? detected : item.selectedLang;
+        return {
+          ...item,
+          text: newText,
+          detectedLang: detected,
+          resolvedLang: resolved
+        };
+      }
+      return item;
+    }));
+
+    setEditingItemId(null);
+    setEditingText('');
+  };
+
+  const handleDeleteRow = (id: string) => {
+    if (playingItemId === id) {
+      handleStopAll();
+    }
+    setSpeechList(prev => prev.filter(item => item.id !== id));
+  };
+
+  // Generate speech starting from row index zero
+  const triggerPlaylistDrill = () => {
+    if (speechList.length > 0) {
+      handleSpeakItem(speechList[0]);
+    }
+  };
+
+  // English & Vietnamese filter categories
+  const englishVoices = voices.filter(v => v.lang.toLowerCase().startsWith('en'));
+  const vietnameseVoices = voices.filter(v => v.lang.toLowerCase().startsWith('vi'));
+
+  return (
+    <div id="classroom-tts-root" className="min-h-screen bg-slate-55 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 pb-20">
+      
+      {/* Dynamic Header */}
+      <header id="app-header" className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-indigo-600 rounded-xl text-white shadow-sm flex items-center justify-center">
+              <Volume2 className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
+                Classroom Speech <span className="text-xs font-semibold px-2.5 py-0.5 bg-indigo-50 border border-indigo-100/50 rounded-full text-indigo-600">Pro Studio</span>
+              </h1>
+              <p className="text-[11px] text-slate-500 hidden sm:block">Giáo trình luyện nghe, chính tả bài hát tiếng Anh & tiếng Việt tối ưu</p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            {engineMode === 'premium' ? (
+              <div className="hidden md:flex items-center space-x-1.5 bg-indigo-50 border border-indigo-100 rounded-lg px-2.5 py-1 text-xs text-indigo-700 font-bold animate-pulse">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-650" />
+                <span>Premium Studio AI Active</span>
+              </div>
+            ) : (
+              <div className="hidden md:flex items-center space-x-1.5 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1 text-xs text-emerald-700 font-semibold">
+                <Monitor className="w-3.5 h-3.5" />
+                <span>Native Browser SpeechSynthesis</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main id="app-main" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        
+        {/* Banner with Vietnamese focus guidelines */}
+        <div id="welcome-message-banner" className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 rounded-2xl text-white p-6 sm:p-8 shadow-md relative overflow-hidden mb-6">
+          <div className="absolute right-0 bottom-0 opacity-10 translate-x-10 translate-y-10 pointer-events-none">
+            <Volume2 className="w-80 h-80" />
+          </div>
+          <div className="relative z-10 max-w-4xl">
+            <div className="flex items-center space-x-2 text-indigo-300 text-xs font-bold uppercase tracking-wider mb-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>Chrome / Safari Browser Optimized Speech Technology</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight leading-snug">
+              Hệ Thống Luyện Phát Âm Trực Tuyến & Chép Chính Tả
+            </h2>
+            <p className="text-indigo-200 text-xs sm:text-sm mt-2 leading-relaxed">
+              Dành cho giáo viên ngoại ngữ thiết kế bài giảng. Nhập danh sách từ vựng, tự động nhận diện ngôn ngữ tốt nhất, lặp lại phát âm tùy ý từng dòng và tự động chuyển tiếp liên lục để học sinh chép bài. Kéo thả dòng bất kì để đổi thứ tự câu hỏi!
+            </p>
+          </div>
+        </div>
+
+        {/* Primary Functional Dashboard Grid */}
+        <div id="studio-grid" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* LEFT AREA: Text Editor & Settings Configurations */}
+          <div id="creator-workspace-col" className="lg:col-span-5 space-y-6">
+            
+            {/* Standard Text Editor Input */}
+            <div id="words-maker-box" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs hover:border-slate-350 transition-colors duration-200">
+              <div className="flex items-center justify-between mb-3">
+                <label htmlFor="word-list-textarea" className="font-bold text-slate-900 text-base flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-indigo-600" />
+                  Nhập danh sách dòng từ
+                </label>
+                <div id="row-estimation" className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-md">
+                  {rawText.split('\n').filter(l => l.trim().length > 0).length} dòng phát hiện
+                </div>
+              </div>
+
+              <textarea
+                id="word-list-textarea"
+                rows={6}
+                value={rawText}
+                onChange={(e) => setRawText(e.target.value)}
+                placeholder="Ví dụ:&#10;banana&#10;Good morning everyone&#10;bánh mì ngon thịt nguội&#10;how is the weather today?..."
+                className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white focus:border-indigo-500 transition-all text-left"
+              />
+
+              {/* Course Template selectors */}
+              <div id="text-preset-box" className="mt-4">
+                <span className="text-[11px] font-bold text-slate-400 block mb-2 uppercase tracking-tight">Bài giảng mẫu nhanh:</span>
+                <div id="presets-links" className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {TEMPLATES.map((tmpl, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleApplyTemplate(tmpl.content)}
+                      className="text-left text-xs bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 rounded-lg p-2.5 transition active:scale-[0.98] cursor-pointer"
+                      title={tmpl.description}
+                    >
+                      <strong className="text-slate-800 block truncate">{tmpl.title}</strong>
+                      <span className="text-[10px] text-slate-400 block truncate mt-0.5">{tmpl.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Build interactive board keys */}
+              <div id="creator-actions-row" className="mt-5 pt-4 border-t border-slate-100 flex gap-2">
+                <button
+                  id="create-list-trigger"
+                  onClick={handleCreateList}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Volume2 className="w-4 h-4" />
+                  Tạo danh mục loa đọc
+                </button>
+                <button
+                  id="clear-input-trigger"
+                  onClick={() => setRawText('')}
+                  className="bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 font-semibold text-xs px-3 rounded-xl transition flex items-center justify-center cursor-pointer"
+                  title="Xoá trống vùng nhập"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Custom Control Settings box */}
+            <div id="audio-settings-box" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Sliders className="w-4.5 h-4.5 text-indigo-600" />
+                  Cấu hình giọng đọc & Chuyển câu
+                </h3>
+              </div>
+
+              <div className="space-y-4">
+                {/* Engine Mode Segmented Control */}
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 block mb-2 uppercase tracking-tight">CÔNG NGHỆ VOICE CHỌN:</span>
+                  <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setEngineMode('browser')}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-150 flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                        engineMode === 'browser'
+                          ? 'bg-white text-indigo-700 shadow-sm'
+                          : 'text-slate-505 hover:text-slate-800'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1">🌐 Trình duyệt</span>
+                      <span className="text-[9px] text-slate-400 font-normal">Tốc độ cao, offline</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEngineMode('premium')}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-150 flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                        engineMode === 'premium'
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-505 hover:text-slate-800'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1">💎 Giọng Premium AI</span>
+                      <span className="text-[9px] text-indigo-200 font-normal">Cực hay như TTSMaker</span>
+                    </button>
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
+
+                 {/* 1. Speech Speed Slider */}
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Tốc độ giọng nói (Speed):</span>
+                    <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{speed.toFixed(1)}x</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[10px] text-slate-400">Chậm (0.5)</span>
+                    <input
+                      id="speed-input-slider"
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.1"
+                      value={speed}
+                      onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                      className="flex-1 accent-indigo-600 h-1.5 bg-slate-100 rounded-lg cursor-pointer"
+                    />
+                    <span className="text-[10px] text-slate-400">Nhanh (2.0)</span>
+                  </div>
+                  <div className="flex justify-end mt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSpeechList(prev => prev.map(item => ({ ...item, speed: speed })));
+                      }}
+                      className="text-[10px] font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 border border-indigo-100 py-1 rounded hover:bg-indigo-100 transition duration-150 cursor-pointer w-full text-center"
+                      title="Áp dụng tốc độ này cho toàn bộ các dòng hiện tại"
+                    >
+                      ⚡ Áp dụng tốc độ này cho tất cả câu
+                    </button>
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
+
+                {/* 2. Auto Advance Configuration (Auto chuyển dòng) */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-700 block">Tự động chuyển dòng kế tiếp</span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">Bật để nói liên tục từ trên xuống</span>
+                    </div>
+                    
+                    {/* Switch Toggle */}
+                    <button
+                      id="auto-advance-toggle"
+                      onClick={() => setAutoAdvance(!autoAdvance)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                        autoAdvance ? 'bg-indigo-600' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                          autoAdvance ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {autoAdvance && (
+                    <div className="pt-2 border-t border-slate-200">
+                      <div className="flex justify-between mb-1.5 text-xs">
+                        <span className="font-semibold text-slate-700">Thời gian nghỉ mặc định:</span>
+                        <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{timeBetweenLines} giây</span>
+                      </div>
+                      <input
+                        id="time-between-input"
+                        type="range"
+                        min="0.5"
+                        max="10.0"
+                        step="0.5"
+                        value={timeBetweenLines}
+                        onChange={(e) => setTimeBetweenLines(parseFloat(e.target.value))}
+                        className="w-full accent-indigo-600 h-1 bg-white rounded-lg border border-slate-200 cursor-pointer"
+                      />
+                      <div className="flex justify-end mt-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSpeechList(prev => prev.map(item => ({ ...item, delaySec: timeBetweenLines })));
+                          }}
+                          className="text-[10px] font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 border border-indigo-100 px-20 py-1 rounded hover:bg-indigo-100 transition duration-150 cursor-pointer w-full text-center"
+                          title="Áp dụng thời gian nghỉ này cho toàn bộ các dòng hiện tại"
+                        >
+                          ⚡ Áp dụng thời gian nghỉ này cho tất cả câu
+                        </button>
+                      </div>
+                      <span className="text-[10px] text-slate-400 block mt-2 text-left leading-relaxed">
+                        * Bạn cũng có thể điều chỉnh thời gian nghỉ riêng biệt từng câu (bằng nút <strong className="text-slate-500">Nghỉ</strong>) trực tiếp trên từng thẻ dòng bên phải!
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <hr className="border-slate-100" />
+
+                {/* 3. Favorite Preferred Voice Mappings (Conditional logic on mode selection) */}
+                <div className="space-y-4">
+                  {engineMode === 'browser' ? (
+                    <>
+                      <div>
+                        <label htmlFor="en-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                          🇺🇸 Giọng English ưu tiên (Browser's engine)
+                        </label>
+                        <select
+                          id="en-voice-fav"
+                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
+                          value={selectedEnVoiceName}
+                          onChange={(e) => setSelectedEnVoiceName(e.target.value)}
+                        >
+                          {englishVoices.length === 0 ? (
+                            <option value="">-- Dùng English mặc định máy --</option>
+                          ) : (
+                            englishVoices.map((v) => (
+                              <option key={v.name} value={v.name}>
+                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="vi-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                          🇻🇳 Giọng Tiếng Việt ưu tiên (Browser's engine)
+                        </label>
+                        <select
+                          id="vi-voice-fav"
+                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
+                          value={selectedViVoiceName}
+                          onChange={(e) => setSelectedViVoiceName(e.target.value)}
+                        >
+                          {vietnameseVoices.length === 0 ? (
+                            <option value="">-- Dùng Tiếng Việt mặc định máy --</option>
+                          ) : (
+                            vietnameseVoices.map((v) => (
+                              <option key={v.name} value={v.name}>
+                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label htmlFor="en-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
+                          🇺🇸 Giọng Premium EN (Gemini AI) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
+                        </label>
+                        <select
+                          id="en-premium-voice"
+                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
+                          value={selectedPremiumVoiceEn}
+                          onChange={(e) => setSelectedPremiumVoiceEn(e.target.value)}
+                        >
+                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Truyền cảm, khuyến nghị)</option>
+                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo)</option>
+                          <option value="Puck">Puck 👦 (Nam - Cá tính, vui vẻ)</option>
+                          <option value="Charon">Charon 👨 (Nam - Trầm ấm, dõng dạc)</option>
+                          <option value="Fenrir">Fenrir 🧔 (Nam - Sảng khoái, rõ ràng)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="vi-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
+                          🇻🇳 Giọng Premium VI (Gemini AI) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
+                        </label>
+                        <select
+                          id="vi-premium-voice"
+                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
+                          value={selectedPremiumVoiceVi}
+                          onChange={(e) => setSelectedPremiumVoiceVi(e.target.value)}
+                        >
+                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo, khuyến nghị)</option>
+                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Sống động)</option>
+                          <option value="Puck">Puck 👦 (Nam - Cá tính)</option>
+                          <option value="Charon">Charon 👨 (Nam - Vừa phải, ấm áp)</option>
+                          <option value="Fenrir">Fenrir 🧔 (Nam - Mạnh mẽ, rõ chữ)</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+              </div>
+            </div>
+
+            {/* Instruction on Chrome High-Quality Voice Activation */}
+            <div id="chrome-voice-info-card" className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 text-xs text-emerald-800 space-y-2">
+              <div className="flex items-center space-x-2 text-emerald-900 font-bold">
+                <Sparkles className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
+                <span>Mẹo dùng giọng đọc Chrome chuẩn nhất</span>
+              </div>
+              <p className="leading-relaxed">
+                Ứng dụng này sử dụng các gói đọc tự nhiên tích hợp sẵn của trình duyệt. 
+                Khi sử dụng trên <strong className="text-emerald-900">Google Chrome</strong>, các giọng nói <strong className="text-emerald-950">&quot;Google tiếng Việt&quot;</strong> hoặc <strong className="text-emerald-950">&quot;Google US English&quot;</strong> trực tuyến sẽ tự động được tải, mang đến độ chân thực mượt mà cao nhất mà không tốn chi phí.
+              </p>
+            </div>
+
+          </div>
+
+          {/* RIGHT AREA: Editable and Interactive Speaker List view */}
+          <div id="results-col" className="lg:col-span-7 space-y-6">
+            
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
+              
+              {/* Dynamic list controls & status banner */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 mb-4 gap-4">
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-indigo-600" />
+                    Bảng tương tác từ và âm thanh
+                  </h3>
+                  <div className="flex gap-2 items-center flex-wrap mt-1">
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                      Tổng số: {speechList.length} dòng
+                    </span>
+                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                      🇺🇸 EN: {speechList.filter(item => item.resolvedLang === 'en').length}
+                    </span>
+                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">
+                      🇻🇳 VI: {speechList.filter(item => item.resolvedLang === 'vi').length}
+                    </span>
+                    <span className="text-[10px] text-slate-400 italic">
+                      (Kéo thả đổi vị trí)
+                    </span>
+                  </div>
+
+                  {/* Layout mode indicator & selection controller */}
+                  <div className="mt-2.5 flex items-center bg-slate-100/80 rounded-lg p-0.5 border border-slate-200/60 w-fit">
+                    <button
+                      type="button"
+                      onClick={() => toggleRowLayoutMode('below')}
+                      className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                        rowLayoutMode === 'below'
+                          ? 'bg-white text-indigo-700 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                      title="Nút cấu hình xếp dưới, dòng chữ chiếm trọn chiều ngang rất dễ nhìn"
+                    >
+                      ⚡ Bố cục rộng (Nút dưới)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleRowLayoutMode('side')}
+                      className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                        rowLayoutMode === 'side'
+                          ? 'bg-white text-indigo-700 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                      title="Nút cấu hình xếp cạnh dòng chữ"
+                    >
+                      🎛️ Bố cục gọn (Bên cạnh)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  {speechList.length > 0 && (
+                    <>
+                      {/* Play All Drill Mode trigger button */}
+                      <button
+                        id="play-all-drill-trigger"
+                        onClick={triggerPlaylistDrill}
+                        className="text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 py-1.5 px-3 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                        title={autoAdvance ? "Liên tục phát các dòng" : "Phát từ câu đầu tiên"}
+                      >
+                        <Play className="w-3.5 h-3.5 fill-indigo-700" />
+                        Phát chuỗi luyện tập (Play)
+                      </button>
+
+                      <button
+                        id="stop-global-audio"
+                        onClick={handleStopAll}
+                        className="text-xs font-bold bg-slate-100 border border-slate-200 text-slate-800 hover:bg-slate-200 py-1.5 px-2.5 rounded-lg transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                        title="Ngưng mọi giọng đọc ngay"
+                      >
+                        <VolumeX className="w-3.5 h-3.5 text-slate-600" />
+                        Dừng audio
+                      </button>
+
+                      <button
+                        id="clear-list-trigger"
+                        onClick={handleClearAll}
+                        className="text-xs font-bold bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100/50 py-1.5 px-2.5 rounded-lg transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                        title="Xoá hết danh sách câu"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                        Xoá bảng
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Inline dynamic row direct addition form */}
+              <form onSubmit={handleAddSingleRow} id="quick-add-form" className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 mb-4 bg-slate-50 border border-slate-200 rounded-xl p-2 font-sans">
+                <input
+                  id="quick-text-box"
+                  type="text"
+                  placeholder="Thêm nhanh từ/câu mục tiêu..."
+                  className="flex-1 bg-white border border-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 min-w-0"
+                  value={newRowText}
+                  onChange={(e) => setNewRowText(e.target.value)}
+                />
+                
+                <div className="flex items-center space-x-1">
+                  <select
+                    id="quick-lang-select"
+                    className="bg-white border border-slate-200 text-[11px] rounded-lg p-1.5 text-slate-600 focus:outline-hidden cursor-pointer shrink-0"
+                    value={newRowLang}
+                    onChange={(e) => setNewRowLang(e.target.value as LanguageCode | 'auto')}
+                  >
+                    <option value="auto">🔮 Tự nhận diện</option>
+                    <option value="en">🇺🇸 Chỉ EN Voice</option>
+                    <option value="vi">🇻🇳 Chỉ VI Voice</option>
+                  </select>
+
+                  <select
+                    id="quick-repeats-select"
+                    className="bg-white border border-slate-200 text-[11px] rounded-lg p-1.5 text-slate-600 focus:outline-hidden cursor-pointer shrink-0"
+                    value={newRowRepeats}
+                    onChange={(e) => setNewRowRepeats(parseInt(e.target.value))}
+                    title="Số lần lặp mặc định"
+                  >
+                    <option value={1}>🔁 1 lần lặp</option>
+                    <option value={2}>🔁 2 lần lặp</option>
+                    <option value={3}>🔁 3 lần lặp</option>
+                    <option value={4}>🔁 4 lần lặp</option>
+                    <option value={5}>🔁 5 lần lặp</option>
+                  </select>
+
+                  <select
+                    id="quick-delay-select"
+                    className="bg-white border border-slate-200 text-[11px] rounded-lg p-1.5 text-slate-600 focus:outline-hidden cursor-pointer shrink-0"
+                    value={newRowDelay}
+                    onChange={(e) => setNewRowDelay(parseFloat(e.target.value))}
+                    title="Thời gian nghỉ sau câu này"
+                  >
+                    <option value={1.0}>⏱️ Nghỉ 1s</option>
+                    <option value={1.5}>⏱️ Nghỉ 1.5s</option>
+                    <option value={2.0}>⏱️ Nghỉ 2s</option>
+                    <option value={3.0}>⏱️ Nghỉ 3s</option>
+                    <option value={4.0}>⏱️ Nghỉ 4s</option>
+                    <option value={5.0}>⏱️ Nghỉ 5s</option>
+                    <option value={8.0}>⏱️ Nghỉ 8s</option>
+                    <option value={12.0}>⏱️ Nghỉ 12s</option>
+                  </select>
+
+                  <button
+                    id="submit-quick-button"
+                    type="submit"
+                    className="bg-indigo-600 text-white rounded-lg p-1.5 hover:bg-indigo-700 transition cursor-pointer flex items-center justify-center shrink-0 w-8"
+                    title="Thêm dòng"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </form>
+
+              {/* Speech Interactive rows list with Drag & Drop */}
+              <div id="speech-rows-draggable-container" className="space-y-2 max-h-[620px] overflow-y-auto pr-1">
+                <AnimatePresence mode="popLayout">
+                  {speechList.length === 0 ? (
+                    <motion.div
+                      id="card-empty-feedback"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="text-center py-14 px-4 border border-dashed border-slate-200 rounded-xl bg-slate-50"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
+                        <Volume2 className="h-5 w-5" />
+                      </div>
+                      <h4 className="font-bold text-slate-800 text-sm mb-1">Chưa có loa tương tác nào!</h4>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
+                        Nhấn nút &quot;Tạo danh mục loa đọc&quot; ở cột trái để tách các câu hoặc thêm thủ công qua biểu mẫu phía trên.
+                      </p>
+                      <button
+                        onClick={() => handleApplyTemplate(TEMPLATES[0].content)}
+                        className="text-xs text-indigo-700 font-bold bg-indigo-50 hover:bg-indigo-100/75 px-3.5 py-1.75 rounded-lg border border-indigo-100 transition whitespace-nowrap"
+                      >
+                        Tải danh sách song ngữ mẫu
+                      </button>
+                    </motion.div>
+                  ) : (
+                    speechList.map((item, index) => {
+                      const isItemPlaying = playingItemId === item.id;
+                      const isEditing = editingItemId === item.id;
+                      const isBeingDragged = draggedIndex === index;
+                      const isOverThisRow = dragOverIndex === index && draggedIndex !== index;
+
+                      // 1. Left elements (Grip, Index, Play speaker button, Text word inline edit, Repeating wave indicator)
+                      const renderLeftElements = () => (
+                        <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                          {/* Grip handle and order numbering */}
+                          <div 
+                            className="flex items-center space-x-1 shrink-0 text-slate-350 cursor-grab active:cursor-grabbing hover:text-slate-500 p-1"
+                            title="Ấn giữ để kéo thả đổi vị trí câu"
+                          >
+                            <GripVertical className="w-4 h-4 shrink-0" />
+                            <span className="text-[10px] font-mono font-bold w-4 text-center">
+                              {index + 1}
+                            </span>
+                          </div>
+
+                          {/* Speaker action key */}
+                          <button
+                            id={`trigger-btn-${item.id}`}
+                            onClick={() => {
+                              if (isItemPlaying) {
+                                handleStopAll();
+                              } else {
+                                handleSpeakItem(item);
+                              }
+                            }}
+                            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-2xs transition-all duration-150 cursor-pointer ${
+                              isItemPlaying
+                                ? 'bg-rose-500 text-white scale-105 hover:bg-rose-600'
+                                : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 active:scale-95'
+                            }`}
+                            title={isItemPlaying ? 'Click để ngừng đọc dòng này' : 'Click để đọc phát âm dòng'}
+                          >
+                            {isItemPlaying ? (
+                              <VolumeX className="w-4 h-4 animate-bounce" />
+                            ) : (
+                              <Volume2 className="w-4.5 h-4.5" />
+                            )}
+                          </button>
+
+                          {/* Text word row or editor */}
+                          <div className="min-w-0 flex-1">
+                            {isEditing ? (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  id={`inline-text-edit-${item.id}`}
+                                  type="text"
+                                  className="w-full bg-white border border-indigo-400 rounded-md px-1.5 py-0.5 text-xs text-slate-800 focus:outline-hidden"
+                                  value={editingText}
+                                  onChange={(e) => setEditingText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') saveEditedRow(item.id);
+                                    if (e.key === 'Escape') setEditingItemId(null);
+                                  }}
+                                  autoFocus
+                                />
+                                <button
+                                  id={`save-btn-${item.id}`}
+                                  onClick={() => saveEditedRow(item.id)}
+                                  type="button"
+                                  className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  id={`cancel-btn-${item.id}`}
+                                  onClick={() => setEditingItemId(null)}
+                                  type="button"
+                                  className="p-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="group/word flex items-center space-x-1.5">
+                                <span
+                                  onClick={() => startEditingRow(item)}
+                                  className={`text-xs sm:text-sm font-semibold tracking-tight text-left select-none break-words cursor-pointer rounded px-1 -mx-1 hover:bg-amber-50 ${
+                                    isItemPlaying ? 'text-indigo-950 font-bold underline decoration-indigo-400 decoration-2' : 'text-slate-800'
+                                  }`}
+                                  title="Nháy đúp hoặc click để sửa trực tiếp câu từ"
+                                >
+                                  {item.text}
+                                </span>
+                                <button
+                                  onClick={() => startEditingRow(item)}
+                                  className="opacity-0 group-hover/word:opacity-60 hover:!opacity-100 p-0.5 text-slate-400 transition"
+                                  title="Sửa từ"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Iteration/Repeat tracker bubble visualization */}
+                            {isItemPlaying && (
+                              <div className="flex items-center space-x-1.5 mt-1.5 h-3.5" id={`waves-layout-${item.id}`}>
+                                {waitingState.isWaiting && waitingState.itemId === item.id ? (
+                                  <>
+                                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping"></span>
+                                    <span className="text-[9px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.2 animate-pulse uppercase flex items-center gap-1">
+                                      ⏱️ {waitingState.type === 'repeat' ? 'Chờ lặp' : 'Chờ chuyển câu'}: {waitingState.remainingSec}s
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="w-0.5 bg-indigo-600 rounded-full animate-pulse h-2.5 animate-bounce"></span>
+                                    <span className="w-0.5 bg-indigo-600 rounded-full animate-pulse h-1.5"></span>
+                                    <span className="w-0.5 bg-indigo-600 rounded-full animate-pulse h-3"></span>
+                                    <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100/50 rounded px-1.5 py-0.2 animate-pulse uppercase col-span-3">
+                                      Đang phát (Lần {currentRepeatIndex}/{item.repeats || 1})
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+
+                      // 2. Right configuration widget groups (Repeats, Pause delay, Speed override, Engine selection)
+                      const renderConfigElements = () => (
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                          {/* Repetitions counter controller */}
+                          <div className="flex items-center space-x-1 bg-slate-50 border border-slate-200/80 rounded-lg p-0.5 sm:p-1" title="Số lần tự phát lại dòng này">
+                            <span className="text-[10px] text-slate-400 font-bold mr-0.5 pl-0.5">Lặp:</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRowRepeatsChange(item.id, (item.repeats || 1) - 1)}
+                              className="w-5 h-5 text-[10px] sm:text-[11px] font-bold text-slate-500 bg-white hover:bg-slate-150 rounded-md border border-slate-200 flex items-center justify-center cursor-pointer active:scale-90"
+                            >
+                              -
+                            </button>
+                            <span className="text-[10px] sm:text-[11px] font-mono font-extrabold text-slate-800 min-w-[12px] text-center">
+                              {item.repeats || 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRowRepeatsChange(item.id, (item.repeats || 1) + 1)}
+                              className="w-5 h-5 text-[10px] sm:text-[11px] font-bold text-slate-500 bg-white hover:bg-slate-150 rounded-md border border-slate-200 flex items-center justify-center cursor-pointer active:scale-90"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* Individual delay timer controller */}
+                          <div className="flex items-center space-x-1 bg-slate-50 border border-slate-200/80 rounded-lg p-0.5 sm:p-1" title="Thời gian chờ nghỉ sau khi đọc hết câu này (rất hữu ích cho thi chính tả)">
+                            <span className="text-[10px] text-slate-400 font-bold mr-0.5 pl-0.5">Nghỉ:</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRowDelayChange(item.id, (item.delaySec !== undefined ? item.delaySec : 2.0) - 0.5)}
+                              className="w-5 h-5 text-[10px] sm:text-[11px] font-bold text-slate-500 bg-white hover:bg-slate-150 rounded-md border border-slate-200 flex items-center justify-center cursor-pointer active:scale-90"
+                            >
+                              -
+                            </button>
+                            <span className="text-[10px] sm:text-[11px] font-mono font-extrabold text-slate-800 min-w-[20px] text-center">
+                              {item.delaySec !== undefined ? item.delaySec.toFixed(1) : "2.0"}s
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRowDelayChange(item.id, (item.delaySec !== undefined ? item.delaySec : 2.0) + 0.5)}
+                              className="w-5 h-5 text-[10px] sm:text-[11px] font-bold text-slate-500 bg-white hover:bg-slate-150 rounded-md border border-slate-200 flex items-center justify-center cursor-pointer active:scale-90"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* Individual speed controller */}
+                          <div className="flex items-center space-x-1 bg-slate-50 border border-slate-200/80 rounded-lg p-0.5 sm:p-1" title="Tốc độ đọc của riêng câu này (0.3x đến 2.0x)">
+                            <span className="text-[10px] text-slate-400 font-bold mr-0.5 pl-0.5">Tốc:</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRowSpeedChange(item.id, (item.speed !== undefined ? item.speed : speed) - 0.1)}
+                              className="w-5 h-5 text-[10px] sm:text-[11px] font-bold text-slate-500 bg-white hover:bg-slate-150 rounded-md border border-slate-200 flex items-center justify-center cursor-pointer active:scale-90"
+                            >
+                              -
+                            </button>
+                            <span className="text-[10px] sm:text-[11px] font-mono font-extrabold text-slate-800 min-w-[24px] text-center">
+                              {(item.speed !== undefined ? item.speed : speed).toFixed(1)}x
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRowSpeedChange(item.id, (item.speed !== undefined ? item.speed : speed) + 0.1)}
+                              className="w-5 h-5 text-[10px] sm:text-[11px] font-bold text-slate-500 bg-white hover:bg-slate-150 rounded-md border border-slate-200 flex items-center justify-center cursor-pointer active:scale-90"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* Dropdown for manually overrides translation / audio engine target */}
+                          <select
+                            id={`select-row-engine-${item.id}`}
+                            className={`text-[10px] font-semibold border rounded-lg p-1 sm:p-1.5 focus:outline-hidden transition-all shrink-0 cursor-pointer ${
+                              item.resolvedLang === 'vi' 
+                                ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100/50' 
+                                : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-150/50'
+                            }`}
+                            value={item.selectedLang}
+                            onChange={(e) => handleRowLangChange(item.id, e.target.value as LanguageCode | 'auto')}
+                          >
+                            <option value="auto">
+                              🔮 {item.detectedLang === 'vi' ? '🇻🇳 Auto' : '🇺🇸 Auto'}
+                            </option>
+                            <option value="en">🇺🇸 EN-Voice</option>
+                            <option value="vi">🇻🇳 VI-Voice</option>
+                          </select>
+                        </div>
+                      );
+
+                      if (rowLayoutMode === 'below') {
+                        // Spacious layout option (Buttons below text sentence, full line space on top)
+                        return (
+                          <div
+                            key={item.id}
+                            id={`draggable-row-${item.id}`}
+                            draggable={!isEditing}
+                            onDragStart={(e) => handleDragStart(e, index)}
+                            onDragEnd={(e) => handleDragEnd(e)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDrop={(e) => handleDropRow(e, index)}
+                            className={`group/row border rounded-xl p-3 flex flex-col gap-2.5 text-left transition-all relative ${
+                              isItemPlaying 
+                                ? 'bg-indigo-50/70 border-indigo-350 ring-2 ring-indigo-500/10 shadow-xs' 
+                                : isBeingDragged
+                                  ? 'bg-indigo-55/20 border-dashed border-indigo-300 opacity-40'
+                                  : 'bg-white border-slate-200 hover:border-slate-300 shadow-3xs'
+                            } ${
+                              isOverThisRow 
+                                ? 'border-indigo-400 ring-2 ring-indigo-600/10 scale-[1.01]' 
+                                : ''
+                            }`}
+                          >
+                            {/* Horizontal text layer with delete option */}
+                            <div className="flex items-center justify-between gap-4 min-w-0">
+                              {renderLeftElements()}
+
+                              <button
+                                id={`delete-row-btn-${item.id}`}
+                                onClick={() => handleDeleteRow(item.id)}
+                                type="button"
+                                className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                                title="Xoá dòng khỏi danh sách"
+                              >
+                                <Trash className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Separator */}
+                            <hr className="border-slate-100" />
+
+                            {/* Bottom configurations bar */}
+                            <div className="flex items-center">
+                              {renderConfigElements()}
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        // Compact side-by-side layout option
+                        return (
+                          <div
+                            key={item.id}
+                            id={`draggable-row-${item.id}`}
+                            draggable={!isEditing}
+                            onDragStart={(e) => handleDragStart(e, index)}
+                            onDragEnd={(e) => handleDragEnd(e)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDrop={(e) => handleDropRow(e, index)}
+                            className={`group/row border rounded-xl py-2 px-3 flex items-center justify-between gap-3 text-left transition-all relative ${
+                              isItemPlaying 
+                                ? 'bg-indigo-50/70 border-indigo-300 ring-2 ring-indigo-500/20 shadow-xs' 
+                                : isBeingDragged
+                                  ? 'bg-indigo-55/20 border-dashed border-indigo-300 opacity-40'
+                                  : 'bg-white border-slate-200 hover:border-slate-300 shadow-3xs'
+                            } ${
+                              isOverThisRow 
+                                ? 'border-indigo-400 ring-2 ring-indigo-600/10 scale-[1.01]' 
+                                : ''
+                            }`}
+                          >
+                            {renderLeftElements()}
+
+                            <div className="flex items-center space-x-2 shrink-0">
+                              {renderConfigElements()}
+
+                              <button
+                                id={`delete-row-btn-${item.id}`}
+                                onClick={() => handleDeleteRow(item.id)}
+                                type="button"
+                                className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                                title="Xoá dòng khỏi danh sách"
+                              >
+                                <Trash className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+                    })
+                  )}
+                </AnimatePresence>
+              </div>
+
+            </div>
+
+            {/* Instruction workflow summary tips */}
+            <div id="classroom-drill-card" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row gap-4 items-start">
+              <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600 shrink-0">
+                <HelpCircle className="w-5 h-5" />
+              </div>
+              <div className="text-left text-xs text-slate-500 leading-relaxed">
+                <h4 className="font-bold text-slate-900 text-sm mb-1.5">Cách tạo buổi thi chính tả (Spelling/Dictation Drill) hiệu quả:</h4>
+                <ol className="list-decimal list-inside space-y-1 sm:space-y-1.5">
+                  <li>Cài số lần lặp (<strong className="text-slate-700">Lặp</strong>) cho mỗi câu là <strong className="text-indigo-650">2 hoặc 3 lần</strong>.</li>
+                  <li>Bật nút tắt <strong className="text-indigo-600">Tự động chuyển dòng kế tiếp</strong> ở bảng trái và set thời gian nghỉ khoảng <strong className="text-slate-700">3 hoặc 4 giây</strong>.</li>
+                  <li>Click nút <strong className="text-slate-800">Phát chuỗi luyện tập (Play)</strong>. Hệ thống sẽ đọc câu 1, lặp lại nó 2 lần, đợi 3 giây cho học sinh viết rồi tự động phát câu 2 mượt mà tuyệt đối!</li>
+                </ol>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </main>
+    </div>
+  );
+}
