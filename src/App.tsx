@@ -25,7 +25,10 @@ import {
   Monitor,
   Key,
   Eye,
-  EyeOff
+  EyeOff,
+  Link,
+  Unlink,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode } from './types';
@@ -777,6 +780,61 @@ export default function App() {
       handleStopAll();
     }
     setSpeechList(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleJoinWithNext = (index: number) => {
+    if (index >= speechList.length - 1) return;
+    const newSetId = `set-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    setSpeechList(prev => {
+      const next = [...prev];
+      const item1 = next[index];
+      const item2 = next[index + 1];
+      next[index] = { ...item1, setId: newSetId };
+      next[index + 1] = { ...item2, setId: newSetId };
+      return next;
+    });
+  };
+
+  const handleUngroupSet = (setId: string) => {
+    setSpeechList(prev => prev.map(item => {
+      if (item.setId === setId) {
+        const { setId: _, ...rest } = item;
+        return rest;
+      }
+      return item;
+    }));
+  };
+
+  const handleDuplicateSet = (setId: string) => {
+    const itemsInSet = speechList.filter(item => item.setId === setId);
+    if (itemsInSet.length === 0) return;
+
+    // Create a new unique set ID so the duplicated set is fully independent
+    const newSetId = `set-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+
+    const duplicates: SpeechItem[] = itemsInSet.map(item => ({
+      ...item,
+      id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 5)}-dup`,
+      setId: newSetId
+    }));
+
+    setSpeechList(prev => {
+      let lastIndex = -1;
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].setId === setId) {
+          lastIndex = i;
+          break;
+        }
+      }
+
+      if (lastIndex === -1) {
+        return [...prev, ...duplicates];
+      }
+
+      const result = [...prev];
+      result.splice(lastIndex + 1, 0, ...duplicates);
+      return result;
+    });
   };
 
   // Generate speech starting from row index zero
@@ -1587,6 +1645,45 @@ export default function App() {
                       const isBeingDragged = draggedIndex === index;
                       const isOverThisRow = dragOverIndex === index && draggedIndex !== index;
 
+                      const isSetStart = item.setId ? (index === 0 || speechList[index - 1].setId !== item.setId) : false;
+                      const isSetEnd = item.setId ? (index === speechList.length - 1 || speechList[index + 1].setId !== item.setId) : false;
+
+                      // Style variants for contiguous sets
+                      let customRoundedStyle = 'rounded-xl';
+                      let customBorderStyle = isItemPlaying 
+                        ? 'bg-indigo-50/70 border-indigo-350 ring-2 ring-indigo-500/10 shadow-xs' 
+                        : isBeingDragged
+                          ? 'bg-indigo-55/20 border-dashed border-indigo-300 opacity-40'
+                          : 'bg-white border-slate-200 hover:border-slate-350 shadow-3xs';
+
+                      if (item.setId) {
+                        const setBorder = isItemPlaying
+                          ? 'border-indigo-405 ring-2 ring-indigo-500/10 shadow-xs'
+                          : isOverThisRow
+                            ? 'border-indigo-450 ring-2 ring-indigo-600/15'
+                            : isBeingDragged
+                              ? 'border-dashed border-indigo-300 opacity-40'
+                              : 'border-indigo-200 hover:border-indigo-300 shadow-3xs';
+
+                        const setBg = isItemPlaying
+                          ? 'bg-indigo-50/60'
+                          : 'bg-indigo-50/15 hover:bg-indigo-50/25';
+
+                        customBorderStyle = `${setBorder} ${setBg}`;
+
+                        if (isSetStart && isSetEnd) {
+                          customRoundedStyle = 'rounded-b-xl rounded-t-none border-t-0';
+                        } else if (isSetStart) {
+                          customRoundedStyle = 'rounded-none border-t-0 border-b-0';
+                        } else if (isSetEnd) {
+                          customRoundedStyle = 'rounded-b-xl rounded-t-none';
+                        } else {
+                          customRoundedStyle = 'rounded-none border-b-0';
+                        }
+                      } else if (isOverThisRow) {
+                        customBorderStyle = 'border-indigo-400 ring-2 ring-indigo-600/10 scale-[1.01] bg-white';
+                      }
+
                       // 1. Left elements (Grip, Index, Play speaker button, Text word inline edit, Repeating wave indicator)
                       const renderLeftElements = () => (
                         <div className="flex items-center space-x-2.5 min-w-0 flex-1">
@@ -1599,6 +1696,9 @@ export default function App() {
                             <span className="text-[10px] font-mono font-bold w-4 text-center">
                               {index + 1}
                             </span>
+                            {item.setId && (
+                              <Link className="w-3 h-3 text-indigo-500 shrink-0 select-none" title="Đã gom nhóm thành Set song ngữ" />
+                            )}
                           </div>
 
                           {/* Speaker action key */}
@@ -1797,89 +1897,151 @@ export default function App() {
                       if (rowLayoutMode === 'below') {
                         // Spacious layout option (Buttons below text sentence, full line space on top)
                         return (
-                          <div
-                            key={item.id}
-                            id={`draggable-row-${item.id}`}
-                            draggable={!isEditing}
-                            onDragStart={(e) => handleDragStart(e, index)}
-                            onDragEnd={(e) => handleDragEnd(e)}
-                            onDragOver={(e) => handleDragOver(e, index)}
-                            onDrop={(e) => handleDropRow(e, index)}
-                            className={`group/row border rounded-xl p-3 flex flex-col gap-2.5 text-left transition-all relative ${
-                              isItemPlaying 
-                                ? 'bg-indigo-50/70 border-indigo-350 ring-2 ring-indigo-500/10 shadow-xs' 
-                                : isBeingDragged
-                                  ? 'bg-indigo-55/20 border-dashed border-indigo-300 opacity-40'
-                                  : 'bg-white border-slate-200 hover:border-slate-300 shadow-3xs'
-                            } ${
-                              isOverThisRow 
-                                ? 'border-indigo-400 ring-2 ring-indigo-600/10 scale-[1.01]' 
-                                : ''
-                            }`}
-                          >
-                            {/* Horizontal text layer with delete option */}
-                            <div className="flex items-center justify-between gap-4 min-w-0">
-                              {renderLeftElements()}
+                          <React.Fragment key={item.id}>
+                            {isSetStart && (
+                              <div className="bg-indigo-50/65 border border-indigo-200 border-b-0 rounded-t-xl px-4 py-2 flex items-center justify-between mt-3 shadow-3xs relative select-none">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                                  <span className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-widest flex items-center gap-1">
+                                    🔗 Set song ngữ song hành
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleDuplicateSet(item.setId!)}
+                                    type="button"
+                                    className="text-[10px] font-extrabold text-indigo-750 bg-white hover:bg-indigo-100 border border-indigo-250/70 rounded-md px-2 py-0.7 flex items-center gap-1 transition shadow-3xs cursor-pointer active:scale-95"
+                                    title="Nhân bản nguyên Set này xuống dưới để nghe song ngữ 2 lần"
+                                  >
+                                    <Copy className="w-3 h-3 text-indigo-500" /> Nhân đôi Set
+                                  </button>
+                                  <button
+                                    onClick={() => handleUngroupSet(item.setId!)}
+                                    type="button"
+                                    className="text-[10px] font-extrabold text-slate-500 bg-white hover:bg-slate-100 border border-slate-200 rounded-md px-2 py-0.7 flex items-center gap-1 transition shadow-3xs cursor-pointer active:scale-95"
+                                    title="Rã Set này thành các câu đơn độc lập"
+                                  >
+                                    <Unlink className="w-3 h-3 text-slate-400" /> Rã Set
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            <div
+                              id={`draggable-row-${item.id}`}
+                              draggable={!isEditing}
+                              onDragStart={(e) => handleDragStart(e, index)}
+                              onDragEnd={(e) => handleDragEnd(e)}
+                              onDragOver={(e) => handleDragOver(e, index)}
+                              onDrop={(e) => handleDropRow(e, index)}
+                              className={`group/row border p-3 flex flex-col gap-2.5 text-left transition-all relative ${customRoundedStyle} ${customBorderStyle}`}
+                            >
+                              {/* Horizontal text layer with delete option */}
+                              <div className="flex items-center justify-between gap-4 min-w-0">
+                                {renderLeftElements()}
 
-                              <button
-                                id={`delete-row-btn-${item.id}`}
-                                onClick={() => handleDeleteRow(item.id)}
-                                type="button"
-                                className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                                title="Xoá dòng khỏi danh sách"
-                              >
-                                <Trash className="w-3.5 h-3.5" />
-                              </button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {!item.setId && index < speechList.length - 1 && (
+                                    <button
+                                      onClick={() => handleJoinWithNext(index)}
+                                      type="button"
+                                      className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-lg transition shrink-0 cursor-pointer flex items-center justify-center w-7 h-7"
+                                      title="Gộp câu này & câu tiếp theo thành Set Song Ngữ"
+                                    >
+                                      <Link className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+
+                                  <button
+                                    id={`delete-row-btn-${item.id}`}
+                                    onClick={() => handleDeleteRow(item.id)}
+                                    type="button"
+                                    className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                                    title="Xoá dòng khỏi danh sách"
+                                  >
+                                    <Trash className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Separator */}
+                              <hr className="border-slate-100" />
+
+                              {/* Bottom configurations bar */}
+                              <div className="flex items-center">
+                                {renderConfigElements()}
+                              </div>
                             </div>
-
-                            {/* Separator */}
-                            <hr className="border-slate-100" />
-
-                            {/* Bottom configurations bar */}
-                            <div className="flex items-center">
-                              {renderConfigElements()}
-                            </div>
-                          </div>
+                          </React.Fragment>
                         );
                       } else {
                         // Compact side-by-side layout option
                         return (
-                          <div
-                            key={item.id}
-                            id={`draggable-row-${item.id}`}
-                            draggable={!isEditing}
-                            onDragStart={(e) => handleDragStart(e, index)}
-                            onDragEnd={(e) => handleDragEnd(e)}
-                            onDragOver={(e) => handleDragOver(e, index)}
-                            onDrop={(e) => handleDropRow(e, index)}
-                            className={`group/row border rounded-xl py-2 px-3 flex items-center justify-between gap-3 text-left transition-all relative ${
-                              isItemPlaying 
-                                ? 'bg-indigo-50/70 border-indigo-300 ring-2 ring-indigo-500/20 shadow-xs' 
-                                : isBeingDragged
-                                  ? 'bg-indigo-55/20 border-dashed border-indigo-300 opacity-40'
-                                  : 'bg-white border-slate-200 hover:border-slate-300 shadow-3xs'
-                            } ${
-                              isOverThisRow 
-                                ? 'border-indigo-400 ring-2 ring-indigo-600/10 scale-[1.01]' 
-                                : ''
-                            }`}
-                          >
-                            {renderLeftElements()}
+                          <React.Fragment key={item.id}>
+                            {isSetStart && (
+                              <div className="bg-indigo-50/65 border border-indigo-200 border-b-0 rounded-t-xl px-4 py-2 flex items-center justify-between mt-3 shadow-3xs relative select-none">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                                  <span className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-widest flex items-center gap-1">
+                                    🔗 Set song ngữ song hành
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleDuplicateSet(item.setId!)}
+                                    type="button"
+                                    className="text-[10px] font-extrabold text-indigo-750 bg-white hover:bg-indigo-100 border border-indigo-250/70 rounded-md px-2 py-0.7 flex items-center gap-1 transition shadow-3xs cursor-pointer active:scale-95"
+                                    title="Nhân bản nguyên Set này xuống dưới để nghe song ngữ 2 lần"
+                                  >
+                                    <Copy className="w-3 h-3 text-indigo-500" /> Nhân đôi Set
+                                  </button>
+                                  <button
+                                    onClick={() => handleUngroupSet(item.setId!)}
+                                    type="button"
+                                    className="text-[10px] font-extrabold text-slate-500 bg-white hover:bg-slate-100 border border-slate-200 rounded-md px-2 py-0.7 flex items-center gap-1 transition shadow-3xs cursor-pointer active:scale-95"
+                                    title="Rã Set này thành các câu đơn độc lập"
+                                  >
+                                    <Unlink className="w-3 h-3 text-slate-400" /> Rã Set
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            <div
+                              id={`draggable-row-${item.id}`}
+                              draggable={!isEditing}
+                              onDragStart={(e) => handleDragStart(e, index)}
+                              onDragEnd={(e) => handleDragEnd(e)}
+                              onDragOver={(e) => handleDragOver(e, index)}
+                              onDrop={(e) => handleDropRow(e, index)}
+                              className={`group/row border py-2 px-3 flex items-center justify-between gap-3 text-left transition-all relative ${customRoundedStyle} ${customBorderStyle}`}
+                            >
+                              {renderLeftElements()}
 
-                            <div className="flex items-center space-x-2 shrink-0">
-                              {renderConfigElements()}
+                              <div className="flex items-center space-x-2 shrink-0">
+                                {renderConfigElements()}
 
-                              <button
-                                id={`delete-row-btn-${item.id}`}
-                                onClick={() => handleDeleteRow(item.id)}
-                                type="button"
-                                className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition shrink-0 cursor-pointer"
-                                title="Xoá dòng khỏi danh sách"
-                              >
-                                <Trash className="w-3.5 h-3.5" />
-                              </button>
+                                {!item.setId && index < speechList.length - 1 && (
+                                  <button
+                                    onClick={() => handleJoinWithNext(index)}
+                                    type="button"
+                                    className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-lg transition shrink-0 cursor-pointer flex items-center justify-center w-7 h-7"
+                                    title="Gộp câu này & câu tiếp theo thành Set Song Ngữ"
+                                  >
+                                    <Link className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+
+                                <button
+                                  id={`delete-row-btn-${item.id}`}
+                                  onClick={() => handleDeleteRow(item.id)}
+                                  type="button"
+                                  className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition shrink-0 cursor-pointer"
+                                  title="Xoá dòng khỏi danh sách"
+                                >
+                                  <Trash className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
-                          </div>
+                          </React.Fragment>
                         );
                       }
                     })

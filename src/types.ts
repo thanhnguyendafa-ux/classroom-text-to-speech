@@ -13,6 +13,7 @@ export interface SpeechItem {
   repeats: number; // Number of times to repeat this line
   delaySec?: number; // High-precision pause wait time in seconds (e.g. 1.5, 3)
   speed?: number; // Multiplier speed rate (e.g. 0.3, 0.4 ... up to 1.5)
+  setId?: string; // Optional ID grouping multiple items into a single bilingual set
 }
 
 export interface VoiceOption {
