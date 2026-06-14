@@ -97,6 +97,20 @@ export default function App() {
   const [selectedPremiumVoiceJa, setSelectedPremiumVoiceJa] = useState<string>('Zephyr');
   const [selectedPremiumVoiceKo, setSelectedPremiumVoiceKo] = useState<string>('Kore');
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<any>(null);
+  const lastNodesRef = useRef<any>(null);
+
+  const clearWebAudioNodes = () => {
+    if (lastNodesRef.current) {
+      try {
+        lastNodesRef.current.source.disconnect();
+        lastNodesRef.current.gain.disconnect();
+      } catch (e) {
+        console.error("Lỗi khi giải phóng Web Audio:", e);
+      }
+      lastNodesRef.current = null;
+    }
+  };
   
   // Active playing item tracker
   const [playingItemId, setPlayingItemId] = useState<string | null>(null);
@@ -368,6 +382,7 @@ export default function App() {
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
     }
+    clearWebAudioNodes();
     clearWaitTimers();
 
     let currentIteration = 1;
@@ -393,7 +408,7 @@ export default function App() {
         const utterance = new SpeechSynthesisUtterance(item.text);
         utteranceRef.current = utterance; // Keep active to avoid Garbage Collector drops
         utterance.rate = item.speed !== undefined ? item.speed : speed;
-        utterance.volume = volume;
+        utterance.volume = Math.min(1.0, volume);
 
         const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
         let targetLang = 'en-US';
@@ -543,7 +558,37 @@ export default function App() {
           const audio = new Audio(audioUrl);
           currentAudioRef.current = audio;
           audio.playbackRate = item.speed !== undefined ? item.speed : speed;
-          audio.volume = volume;
+
+          // Apply audio volume booster using Web Audio Gain Node if volume is > 1.0
+          if (volume > 1.0) {
+            try {
+              if (!audioContextRef.current) {
+                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+              }
+              const ctx = audioContextRef.current;
+              if (ctx.state === 'suspended') {
+                ctx.resume();
+              }
+              
+              clearWebAudioNodes();
+
+              const source = ctx.createMediaElementSource(audio);
+              const gainNode = ctx.createGain();
+              
+              audio.volume = 1.0; // Max normal volume on element
+              gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+              
+              source.connect(gainNode);
+              gainNode.connect(ctx.destination);
+              
+              lastNodesRef.current = { source, gain: gainNode };
+            } catch (err) {
+              console.error("Web Audio API volume boost error:", err);
+              audio.volume = 1.0;
+            }
+          } else {
+            audio.volume = volume;
+          }
 
           audio.onplay = () => {
             setPlayingItemId(item.id);
@@ -672,6 +717,7 @@ export default function App() {
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
     }
+    clearWebAudioNodes();
     clearWaitTimers();
     activePlayingIdRef.current = null;
     setPlayingItemId(null);
@@ -1065,7 +1111,15 @@ export default function App() {
                 <div>
                   <div className="flex justify-between items-center mb-1.5">
                     <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Âm lượng đọc (Volume):</span>
-                    <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{Math.round(volume * 100)}%</span>
+                    <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded transition-all duration-300 ${
+                      volume > 1.1 
+                        ? 'text-rose-600 bg-rose-50 ring-1 ring-rose-250 animate-pulse' 
+                        : volume > 1.0 
+                          ? 'text-amber-600 bg-amber-50 ring-1 ring-amber-200' 
+                          : 'text-indigo-600 bg-indigo-50'
+                    }`}>
+                      {Math.round(volume * 100)}% {volume > 1.0 && '🚀 Booster'}
+                    </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className="text-[10px] text-slate-400">Tắt (0%)</span>
@@ -1073,14 +1127,19 @@ export default function App() {
                       id="volume-input-slider"
                       type="range"
                       min="0.0"
-                      max="1.0"
+                      max="2.0"
                       step="0.05"
                       value={volume}
                       onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
                       className="flex-1 accent-indigo-600 h-1.5 bg-slate-100 rounded-lg cursor-pointer"
                     />
-                    <span className="text-[10px] text-slate-400">Lớn (100%)</span>
+                    <span className="text-[10px] text-slate-400">Cực đại (200%)</span>
                   </div>
+                  {volume > 1.0 && (
+                    <p className="text-[9px] text-rose-500 font-medium mt-1 leading-relaxed">
+                      💡 Mẹo: Âm lượng &gt; 100% (Khuyếch đại Web Audio) hoạt động tối ưu nhất với giọng Premium (Gemini API).
+                    </p>
+                  )}
                 </div>
 
                 <hr className="border-slate-100" />
