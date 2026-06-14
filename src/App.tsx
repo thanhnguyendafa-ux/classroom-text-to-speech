@@ -28,7 +28,9 @@ import {
   EyeOff,
   Link,
   Unlink,
-  Copy
+  Copy,
+  Download,
+  Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode } from './types';
@@ -106,6 +108,7 @@ export default function App() {
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<any>(null);
   const lastNodesRef = useRef<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const clearWebAudioNodes = () => {
     if (lastNodesRef.current) {
@@ -340,6 +343,101 @@ export default function App() {
       }
       return item;
     }));
+  };
+
+  // Export speechList to portable JSON file
+  const handleExportData = () => {
+    if (speechList.length === 0) {
+      alert("Danh sách câu đang trống, không có gì để xuất.");
+      return;
+    }
+    try {
+      const dataStr = JSON.stringify({
+        version: "classroom-speech-v1",
+        exportedAt: new Date().toISOString(),
+        items: speechList
+      }, null, 2);
+      
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      
+      // Create a nice file name based on local date
+      const dateStr = new Date().toLocaleDateString('vi-VN').replace(/\//g, '-');
+      link.download = `giao-an-luyen-phat-am-${dateStr}.json`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Xuất dữ liệu thất bại. Có lỗi xảy ra.");
+    }
+  };
+
+  // Import speechList from chosen JSON file
+  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const fileContent = event.target?.result as string;
+        const parsed = JSON.parse(fileContent);
+
+        // Try validation
+        let itemsToImport: SpeechItem[] = [];
+        if (Array.isArray(parsed)) {
+          // If the exported file was just a raw array
+          itemsToImport = parsed;
+        } else if (parsed && Array.isArray(parsed.items)) {
+          // If the exported file is wrapped in our metadata format
+          itemsToImport = parsed.items;
+        } else {
+          throw new Error("Định dạng file không chính thức hoặc bị hỏng.");
+        }
+
+        if (itemsToImport.length === 0) {
+          alert("File rỗng hoặc không chứa câu thoại hợp lệ.");
+          return;
+        }
+
+        // Clean & sanitize items (assign new random IDs if they are duplicate or missing to avoid React key conflicts)
+        const sanitizedItems: SpeechItem[] = itemsToImport.map(item => {
+          return {
+            id: item.id || `row-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            text: item.text || "",
+            lang: item.lang || "auto",
+            resolvedLang: item.resolvedLang || "en",
+            repeats: typeof item.repeats === 'number' ? item.repeats : 1,
+            delaySec: typeof item.delaySec === 'number' ? item.delaySec : 2,
+            speed: typeof item.speed === 'number' ? item.speed : 1.0,
+            setId: item.setId || undefined,
+            imageUrl: item.imageUrl || undefined
+          };
+        });
+
+        setSpeechList(sanitizedItems);
+        
+        // Also update the raw text area with the imported texts for display synchronization
+        const rawImportText = sanitizedItems.map(it => it.text).join('\n');
+        setRawText(rawImportText);
+
+        alert(`Nhập thành công ${sanitizedItems.length} câu thoại từ file backup! Tất cả thiết lập, thời gian chờ nghỉ (delay), số lần lặp và hình ảnh gán sẵn đã được khôi phục nguyên vẹn.`);
+      } catch (err: any) {
+        console.error(err);
+        alert(`Không thể đọc file: ${err.message || "Định dạng JSON không hợp lệ."}`);
+      } finally {
+        // Reset the file input so the user can import the same file again if desired
+        if (e.target) {
+          e.target.value = '';
+        }
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Helper function to detect language of a given line
@@ -1600,14 +1698,45 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center flex-wrap gap-2">
+                  {/* Import Button (Always available) */}
+                  <button
+                    id="import-list-trigger"
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs font-bold bg-white border border-slate-250 text-slate-700 hover:bg-slate-50 py-1.5 px-3 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-3xs"
+                    title="Nhập và phục hồi bài luyện tập từ file backup đã lưu (.json)"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-indigo-655" />
+                    <span>Nhập File Backup</span>
+                  </button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImportData}
+                    accept=".json"
+                    className="hidden"
+                  />
+
                   {speechList.length > 0 && (
                     <>
+                      {/* Export Button */}
+                      <button
+                        id="export-list-trigger"
+                        type="button"
+                        onClick={handleExportData}
+                        className="text-xs font-bold bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100/60 py-1.5 px-3 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-3xs"
+                        title="Xuất cấu hình bài tập kèm thông số nghỉ dừng, số lần lặp, vận tốc, link hình ảnh đã tối ưu ra máy cá nhân (.json)"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Xuất File Backup</span>
+                      </button>
+
                       {/* Play All Drill Mode trigger button */}
                       <button
                         id="play-all-drill-trigger"
                         onClick={triggerPlaylistDrill}
-                        className="text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 py-1.5 px-3 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                        className="text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 py-1.5 px-3 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-3xs"
                         title={autoAdvance ? "Liên tục phát các dòng" : "Phát từ câu đầu tiên"}
                       >
                         <Play className="w-3.5 h-3.5 fill-indigo-700" />
@@ -1627,7 +1756,7 @@ export default function App() {
                       <button
                         id="clear-list-trigger"
                         onClick={handleClearAll}
-                        className="text-xs font-bold bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100/50 py-1.5 px-2.5 rounded-lg transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                        className="text-xs font-bold bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100/50 py-1.5 px-2.5 rounded-lg transition active:scale-95 flex items-center gap-1 cursor-pointer shadow-3xs"
                         title="Xoá hết danh sách câu"
                       >
                         <Trash2 className="w-3.5 h-3.5 text-rose-500" />
