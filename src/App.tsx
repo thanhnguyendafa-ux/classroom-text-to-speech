@@ -30,12 +30,14 @@ import {
   Unlink,
   Copy,
   Download,
-  Upload
+  Upload,
+  Share2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode } from './types';
 import ImageSearchModal from './components/ImageSearchModal';
 import TheaterPlayer from './components/TheaterPlayer';
+import ShareModal from './components/ShareModal';
 
 // Pre-defined educational templates for teachers and students
 const TEMPLATES = [
@@ -79,6 +81,7 @@ export default function App() {
   // Image & Theater Mode States
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
   const [isImageSearchModalOpen, setIsImageSearchModalOpen] = useState<boolean>(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [selectedItemForImageSearch, setSelectedItemForImageSearch] = useState<SpeechItem | null>(null);
   const [volume, setVolume] = useState<number>(() => {
     if (typeof window !== 'undefined') {
@@ -334,6 +337,66 @@ export default function App() {
         window.speechSynthesis.cancel();
       }
     };
+  }, []);
+
+  const [shareLoading, setShareLoading] = useState<boolean>(false);
+
+  // Load shared playlist configurations on app mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const shareId = params.get('share');
+    if (!shareId) return;
+
+    const loadSharedPlaylist = async () => {
+      setShareLoading(true);
+      try {
+        const res = await fetch(`/api/share-playlist/${shareId}`);
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Không thể tìm thấy liên kết chia sẻ.");
+        }
+        const data = await res.json();
+        
+        // Populate state values
+        if (Array.isArray(data.speechList)) {
+          setSpeechList(data.speechList);
+          setRawText(data.speechList.map((item: any) => item.text).join('\n'));
+        }
+        if (typeof data.speed === 'number') {
+          setSpeed(data.speed);
+        }
+        if (typeof data.volume === 'number') {
+          setVolume(data.volume);
+        }
+        if (typeof data.autoAdvance === 'boolean') {
+          setAutoAdvance(data.autoAdvance);
+        }
+        if (typeof data.timeBetweenLines === 'number') {
+          setTimeBetweenLines(data.timeBetweenLines);
+        }
+        if (data.playlistLoopMode === 'once' || data.playlistLoopMode === 'infinite') {
+          handlePlaylistLoopModeChange(data.playlistLoopMode);
+        }
+        if (data.engineMode === 'browser' || data.engineMode === 'premium') {
+          setEngineMode(data.engineMode);
+        }
+
+        // Clean the address bar parameters perfectly without full-reloading
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+
+        // Alert user
+        alert("🎉 Đã tải thành công chuỗi bài học luyện tiếng được chia sẻ công khai!");
+      } catch (err: any) {
+        console.error("Shared playlist loading error:", err);
+        alert(`Không thể tải bài tập chia sẻ: ${err.message || "Rất tiếc, đã có lỗi xảy ra."}`);
+      } finally {
+        setShareLoading(false);
+      }
+    };
+
+    loadSharedPlaylist();
   }, []);
 
   // Helper to assign cover images dynamically
@@ -1772,6 +1835,18 @@ export default function App() {
 
                   {speechList.length > 0 && (
                     <>
+                      {/* Public Sharing Button */}
+                      <button
+                        id="share-list-trigger"
+                        type="button"
+                        onClick={() => setIsShareModalOpen(true)}
+                        className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 px-3.5 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-3xs"
+                        title="Tạo liên kết chia sẻ công khai bài học này với đầy đủ cài đặt, tốc độ, hình hình minh họa của bạn"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span>Chia sẻ liên kết</span>
+                      </button>
+
                       {/* Export Button */}
                       <button
                         id="export-list-trigger"
@@ -2386,6 +2461,19 @@ export default function App() {
         }}
         item={selectedItemForImageSearch}
         onAssignImage={handleAssignImage}
+      />
+
+      {/* Share Playlist Modal */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        speechList={speechList}
+        speed={speed}
+        volume={volume}
+        autoAdvance={autoAdvance}
+        timeBetweenLines={timeBetweenLines}
+        playlistLoopMode={playlistLoopMode}
+        engineMode={engineMode}
       />
 
       {/* Cinematic Theater/Movie Practice Board Overlay */}

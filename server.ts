@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -192,6 +193,103 @@ app.post("/api/tts", async (req, res) => {
   } catch (err: any) {
     console.error("TTS Premium API Error:", err);
     res.status(500).json({ error: err.message || "Lỗi xử lý giọng nói AI" });
+  }
+});
+
+// Workspace Share Playlists local file persistence manager
+const DATA_DIR = path.join(process.cwd(), "data");
+const PLAYLISTS_FILE = path.join(DATA_DIR, "shared_playlists.json");
+
+// Loaded in-memory cache
+let inMemoryPlaylists: Record<string, any> = {};
+
+function loadPlaylistsFromFile(): Record<string, any> {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (fs.existsSync(PLAYLISTS_FILE)) {
+      const content = fs.readFileSync(PLAYLISTS_FILE, "utf-8");
+      return JSON.parse(content);
+    }
+  } catch (err) {
+    console.error("Error reading shared playlists file:", err);
+  }
+  return {};
+}
+
+function savePlaylistToFile(shareId: string, data: any) {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const current = loadPlaylistsFromFile();
+    current[shareId] = data;
+    fs.writeFileSync(PLAYLISTS_FILE, JSON.stringify(current, null, 2), "utf-8");
+    inMemoryPlaylists[shareId] = data;
+  } catch (err) {
+    console.error("Error saving playlist data to file:", err);
+  }
+}
+
+// Helper to generate reliable short ID
+function generateShortId(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let result = "";
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+// Endpoint to publish / share a custom playlist
+app.post("/api/share-playlist", (req, res) => {
+  try {
+    const playlistData = req.body;
+    if (!playlistData || !Array.isArray(playlistData.speechList)) {
+      res.status(400).json({ error: "Dữ liệu cấu hình bài tập không hợp lệ." });
+      return;
+    }
+
+    const shareId = generateShortId();
+    const payload = {
+      ...playlistData,
+      createdAt: new Date().toISOString()
+    };
+
+    savePlaylistToFile(shareId, payload);
+
+    res.json({ id: shareId });
+  } catch (err: any) {
+    console.error("Error publishing shared playlist:", err);
+    res.status(500).json({ error: err.message || "Không thể tạo liên kết chia sẻ." });
+  }
+});
+
+// Endpoint to retrieve a shared playlist configuration
+app.get("/api/share-playlist/:id", (req, res) => {
+  try {
+    const shareId = req.params.id;
+    
+    // Check in-memory first, fallback to file load
+    let playlist = inMemoryPlaylists[shareId];
+    if (!playlist) {
+      const allFromFile = loadPlaylistsFromFile();
+      playlist = allFromFile[shareId];
+      if (playlist) {
+        inMemoryPlaylists[shareId] = playlist;
+      }
+    }
+
+    if (!playlist) {
+      res.status(404).json({ error: "Không tìm thấy chuỗi luyện tập này hoặc liên kết đã hết hạn." });
+      return;
+    }
+
+    res.json(playlist);
+  } catch (err: any) {
+    console.error("Error loading shared playlist:", err);
+    res.status(500).json({ error: err.message || "Không thể tải bài tập chia sẻ." });
   }
 });
 
