@@ -40,6 +40,8 @@ interface TheaterPlayerProps {
   autoAdvance: boolean;
   onAutoAdvanceChange: (val: boolean) => void;
   engineMode: 'browser' | 'premium';
+  playlistLoopMode: 'once' | 'infinite';
+  onPlaylistLoopModeChange: (val: 'once' | 'infinite') => void;
 }
 
 export default function TheaterPlayer({
@@ -61,6 +63,8 @@ export default function TheaterPlayer({
   autoAdvance,
   onAutoAdvanceChange,
   engineMode,
+  playlistLoopMode,
+  onPlaylistLoopModeChange,
 }: TheaterPlayerProps) {
   if (!isOpen) return null;
 
@@ -286,6 +290,39 @@ export default function TheaterPlayer({
                   />
                 </button>
               </div>
+
+              {/* Playlist continuous repeat loop toggle */}
+              {autoAdvance && (
+                <div className="bg-slate-900/60 border border-slate-900 rounded-xl p-1.5 px-3 flex items-center space-x-2">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Hết danh sách:</span>
+                  <div className="flex bg-slate-950 rounded-lg p-0.5 border border-slate-850">
+                    <button
+                      type="button"
+                      onClick={() => onPlaylistLoopModeChange('once')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                        playlistLoopMode === 'once'
+                          ? 'bg-indigo-600 text-white'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                      title="Phát xong toàn bộ câu thì dừng lại"
+                    >
+                      🎯 Phát 1 lần
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onPlaylistLoopModeChange('infinite')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer flex items-center gap-1 ${
+                        playlistLoopMode === 'infinite'
+                          ? 'bg-amber-600 text-white animate-pulse-subtle'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                      title="Phát xong toàn bộ câu thì tự lặp lại vô hạn từ đầu"
+                    >
+                      🔁 Lặp vô hạn
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Default Stay delay configuration */}
               {autoAdvance && (

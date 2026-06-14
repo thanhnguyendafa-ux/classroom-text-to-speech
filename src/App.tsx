@@ -191,6 +191,20 @@ export default function App() {
   // Auto progression configuration
   const [autoAdvance, setAutoAdvance] = useState<boolean>(true);
   const [timeBetweenLines, setTimeBetweenLines] = useState<number>(2.0); // Default pause time in seconds
+  const [playlistLoopMode, setPlaylistLoopMode] = useState<'once' | 'infinite'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('playlistLoopMode');
+      return (saved === 'infinite' || saved === 'once') ? saved : 'once';
+    }
+    return 'once';
+  });
+
+  const handlePlaylistLoopModeChange = (mode: 'once' | 'infinite') => {
+    setPlaylistLoopMode(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('playlistLoopMode', mode);
+    }
+  };
 
   // Inline editing row state
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -407,11 +421,15 @@ export default function App() {
 
         // Clean & sanitize items (assign new random IDs if they are duplicate or missing to avoid React key conflicts)
         const sanitizedItems: SpeechItem[] = itemsToImport.map(item => {
+          const detected = item.detectedLang || handleDetectLanguage(item.text || "");
+          const selected = item.selectedLang || "auto";
+          const resolved = item.resolvedLang || (selected === 'auto' ? detected : selected);
           return {
             id: item.id || `row-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             text: item.text || "",
-            lang: item.lang || "auto",
-            resolvedLang: item.resolvedLang || "en",
+            detectedLang: detected,
+            selectedLang: selected,
+            resolvedLang: resolved,
             repeats: typeof item.repeats === 'number' ? item.repeats : 1,
             delaySec: typeof item.delaySec === 'number' ? item.delaySec : 2,
             speed: typeof item.speed === 'number' ? item.speed : 1.0,
@@ -792,9 +810,14 @@ export default function App() {
   const handleAutoAdvanceToNext = (currentId: string) => {
     const list = speechListRef.current;
     const currentIndex = list.findIndex(item => item.id === currentId);
-    if (currentIndex !== -1 && currentIndex + 1 < list.length) {
-      const nextItem = list[currentIndex + 1];
-      handleSpeakItem(nextItem);
+    if (currentIndex !== -1) {
+      if (currentIndex + 1 < list.length) {
+        const nextItem = list[currentIndex + 1];
+        handleSpeakItem(nextItem);
+      } else if (playlistLoopMode === 'infinite' && list.length > 0) {
+        const nextItem = list[0];
+        handleSpeakItem(nextItem);
+      }
     }
   };
 
@@ -1328,6 +1351,35 @@ export default function App() {
                       <span className="text-[10px] text-slate-400 block mt-2 text-left leading-relaxed">
                         * Bạn cũng có thể điều chỉnh thời gian nghỉ riêng biệt từng câu (bằng nút <strong className="text-slate-500">Nghỉ</strong>) trực tiếp trên từng thẻ dòng bên phải!
                       </span>
+
+                      {/* Chế độ lặp lại toàn bộ chuỗi */}
+                      <div className="pt-2.5 mt-2.5 border-t border-slate-200">
+                        <span className="text-[10px] font-bold text-slate-600 block mb-1.5 uppercase tracking-wide">Khi đọc xong tất cả các câu:</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handlePlaylistLoopModeChange('once')}
+                            className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer ${
+                              playlistLoopMode === 'once'
+                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-3xs'
+                                : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            <span>🎯 Phát 1 lần rồi dừng</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePlaylistLoopModeChange('infinite')}
+                            className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer ${
+                              playlistLoopMode === 'infinite'
+                                ? 'bg-amber-50 border-amber-200 text-amber-705 shadow-3xs'
+                                : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            <span>🔁 Lặp lại vô hạn chuỗi</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2358,6 +2410,8 @@ export default function App() {
         autoAdvance={autoAdvance}
         onAutoAdvanceChange={setAutoAdvance}
         engineMode={engineMode}
+        playlistLoopMode={playlistLoopMode}
+        onPlaylistLoopModeChange={handlePlaylistLoopModeChange}
       />
     </div>
   );
