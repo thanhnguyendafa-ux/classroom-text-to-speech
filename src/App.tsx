@@ -32,6 +32,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode } from './types';
+import ImageSearchModal from './components/ImageSearchModal';
+import TheaterPlayer from './components/TheaterPlayer';
 
 // Pre-defined educational templates for teachers and students
 const TEMPLATES = [
@@ -71,6 +73,11 @@ export default function App() {
   
   const [speechList, setSpeechList] = useState<SpeechItem[]>([]);
   const [speed, setSpeed] = useState<number>(1.0);
+
+  // Image & Theater Mode States
+  const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
+  const [isImageSearchModalOpen, setIsImageSearchModalOpen] = useState<boolean>(false);
+  const [selectedItemForImageSearch, setSelectedItemForImageSearch] = useState<SpeechItem | null>(null);
   const [volume, setVolume] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('speechVolume');
@@ -311,6 +318,29 @@ export default function App() {
       }
     };
   }, []);
+
+  // Helper to assign cover images dynamically
+  const handleAssignImage = (imageUrl: string) => {
+    if (!selectedItemForImageSearch) return;
+    setSpeechList(prev => prev.map(item => {
+      if (item.id === selectedItemForImageSearch.id) {
+        return { ...item, imageUrl };
+      }
+      return item;
+    }));
+    setSelectedItemForImageSearch(null);
+  };
+
+  const handleClearImage = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSpeechList(prev => prev.map(item => {
+      if (item.id === id) {
+        const { imageUrl, ...rest } = item;
+        return rest;
+      }
+      return item;
+    }));
+  };
 
   // Helper function to detect language of a given line
   const handleDetectLanguage = (line: string): LanguageCode => {
@@ -886,6 +916,7 @@ export default function App() {
   // Generate speech starting from row index zero
   const triggerPlaylistDrill = () => {
     if (speechList.length > 0) {
+      setIsTheaterMode(true);
       handleSpeakItem(speechList[0]);
     }
   };
@@ -1760,6 +1791,40 @@ export default function App() {
                             )}
                           </div>
 
+                          {/* Image thumbnail placeholder slot */}
+                          <div 
+                            onClick={() => {
+                              setSelectedItemForImageSearch(item);
+                              setIsImageSearchModalOpen(true);
+                            }}
+                            className="w-12 h-12 rounded-lg bg-slate-50 border border-slate-200 overflow-hidden shrink-0 flex flex-col items-center justify-center relative cursor-pointer hover:border-indigo-400 group/thumb shadow-3xs transition-all"
+                            title="Nhấp để tìm kiếm hoặc chèn hình ảnh gán cho câu này"
+                          >
+                            {item.imageUrl ? (
+                              <>
+                                <img 
+                                  src={item.imageUrl} 
+                                  className="w-full h-full object-cover" 
+                                  alt="word cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleClearImage(item.id, e)}
+                                  className="absolute -top-1 -right-1 p-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full hidden group-hover/thumb:block shadow-xs scale-90 cursor-pointer z-10 animate-fade-in"
+                                  title="Xoá ảnh"
+                                >
+                                  <X className="w-2.5 h-2.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center text-slate-400 group-hover/thumb:text-indigo-600 transition">
+                                <Plus className="w-3.5 h-3.5" />
+                                <span className="text-[8px] font-extrabold uppercase tracking-tight mt-0.5">Tìm ảnh</span>
+                              </div>
+                            )}
+                          </div>
+
                           {/* Speaker action key */}
                           <button
                             id={`trigger-btn-${item.id}`}
@@ -2130,6 +2195,41 @@ export default function App() {
         </div>
 
       </main>
+
+      {/* Modern Search & Assign Image Modal */}
+      <ImageSearchModal
+        isOpen={isImageSearchModalOpen}
+        onClose={() => {
+          setIsImageSearchModalOpen(false);
+          setSelectedItemForImageSearch(null);
+        }}
+        item={selectedItemForImageSearch}
+        onAssignImage={handleAssignImage}
+      />
+
+      {/* Cinematic Theater/Movie Practice Board Overlay */}
+      <TheaterPlayer
+        isOpen={isTheaterMode}
+        onClose={() => setIsTheaterMode(false)}
+        speechList={speechList}
+        playingItemId={playingItemId}
+        playingState={playingState}
+        currentRepeatIndex={currentRepeatIndex}
+        waitingState={waitingState}
+        volume={volume}
+        speed={speed}
+        onVolumeChange={handleVolumeChange}
+        onSpeedChange={(val) => {
+          setSpeed(val);
+        }}
+        onPlayItem={handleSpeakItem}
+        onStop={handleStopAll}
+        timeBetweenLines={timeBetweenLines}
+        onTimeBetweenLinesChange={setTimeBetweenLines}
+        autoAdvance={autoAdvance}
+        onAutoAdvanceChange={setAutoAdvance}
+        engineMode={engineMode}
+      />
     </div>
   );
 }

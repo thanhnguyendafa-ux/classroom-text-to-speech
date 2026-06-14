@@ -69,6 +69,44 @@ function writeString(view: DataView, offset: number, string: string) {
 // Request parsers
 app.use(express.json());
 
+// Unsplash NAPI image search endpoint
+app.get("/api/search-images", async (req, res) => {
+  try {
+    const query = req.query.q;
+    if (!query || typeof query !== "string") {
+      res.json({ results: [] });
+      return;
+    }
+
+    const searchUrl = `https://unsplash.com/napi/search/photos?query=${encodeURIComponent(query)}&per_page=12`;
+    const response = await fetch(searchUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Unsplash NAPI returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const photos = data.results || [];
+
+    const results = photos.map((photo: any) => ({
+      id: photo.id,
+      url: photo.urls?.regular || photo.urls?.small,
+      thumb: photo.urls?.thumb || photo.urls?.small,
+      author: photo.user?.name || "Unsplash Photo",
+      authorUrl: photo.user?.links?.html || "https://unsplash.com"
+    }));
+
+    res.json({ results });
+  } catch (err: any) {
+    console.error("Image search error:", err);
+    res.status(500).json({ error: err.message || "Failed to search images" });
+  }
+});
+
 // Premium TTS proxy endpoint
 app.post("/api/tts", async (req, res) => {
   try {

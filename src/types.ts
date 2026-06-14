@@ -14,6 +14,7 @@ export interface SpeechItem {
   delaySec?: number; // High-precision pause wait time in seconds (e.g. 1.5, 3)
   speed?: number; // Multiplier speed rate (e.g. 0.3, 0.4 ... up to 1.5)
   setId?: string; // Optional ID grouping multiple items into a single bilingual set
+  imageUrl?: string; // Associated image URL for display during theater play
 }
 
 export interface VoiceOption {
