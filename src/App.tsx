@@ -74,7 +74,7 @@ const VIETNAMESE_DIACRITICS_REGEX = /[àáảãạâầấẩẫậăằắẳ�
 
 export default function App() {
   const [rawText, setRawText] = useState<string>(
-    'popcorn\nI like popcorn\nCon thích bắp rang\nflower\nbông hoa nhài thơm ngát\nwelcome to classroom\nChào mừng thầy cô và các học sinh'
+    'popcorn ;3 /1.5\nbắp rang\nI like popcorn\nCon thích bắp rang /1\nflower\nbông hoa nhài thơm ngát ;2\nwelcome to classroom\nChào mừng thầy cô và các học sinh ;3 /4'
   );
   
   const [speechList, setSpeechList] = useState<SpeechItem[]>([]);
@@ -392,7 +392,11 @@ export default function App() {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const shareId = params.get('share');
-    if (!shareId) return;
+    if (!shareId) {
+      // Auto-create initial playlist with the default raw text
+      handleCreateList();
+      return;
+    }
 
     const loadSharedPlaylist = async () => {
       setShareLoading(true);
@@ -573,6 +577,38 @@ export default function App() {
     reader.readAsText(file);
   };
 
+  // Helper function to extract custom codes /seconds and ;repeats from text lines
+  const parseLineSymbols = (
+    rawLine: string,
+    defaultRepeats: number = 1,
+    defaultDelay: number = 2.0
+  ) => {
+    let cleanText = rawLine;
+    let repeats = defaultRepeats;
+    let delaySec = defaultDelay;
+
+    // Pattern for /seconds (can be float or integer)
+    const delayRegex = /\/\s*(\d+(?:\.\d+)?)\b/;
+    const delayMatch = cleanText.match(delayRegex);
+    if (delayMatch) {
+      delaySec = parseFloat(delayMatch[1]);
+      cleanText = cleanText.replace(delayRegex, '').trim();
+    }
+
+    // Pattern for ;repeats (integer)
+    const repeatRegex = /;\s*(\d+)\b/;
+    const repeatMatch = cleanText.match(repeatRegex);
+    if (repeatMatch) {
+      repeats = parseInt(repeatMatch[1], 10);
+      cleanText = cleanText.replace(repeatRegex, '').trim();
+    }
+
+    // Clean extra whitespace resulting from stripping
+    cleanText = cleanText.replace(/\s+/g, ' ').trim();
+
+    return { cleanText, repeats, delaySec };
+  };
+
   // Helper function to detect language of a given line
   const handleDetectLanguage = (line: string): LanguageCode => {
     const trimmed = line.trim();
@@ -586,19 +622,22 @@ export default function App() {
   };
 
   // Create the main interactive speaker list
-  const handleCreateList = () => {
-    const lines = rawText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  function handleCreateList(textOverride?: string) {
+    const sourceText = typeof textOverride === 'string' ? textOverride : rawText;
+    const lines = sourceText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     
-    const newList: SpeechItem[] = lines.map((text, idx) => {
-      const detected = handleDetectLanguage(text);
+    const newList: SpeechItem[] = lines.map((lineText, idx) => {
+      // Parse custom symbols like /3 (delay) and ;2 (repeats)
+      const { cleanText, repeats, delaySec } = parseLineSymbols(lineText, 1, timeBetweenLines);
+      const detected = handleDetectLanguage(cleanText);
       return {
         id: `row-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
-        text: text,
+        text: cleanText,
         detectedLang: detected,
         selectedLang: 'auto',
         resolvedLang: detected,
-        repeats: 1, // default loop setting is once
-        delaySec: 2.0, // default wait of 2.0 seconds after reading
+        repeats: repeats,
+        delaySec: delaySec,
         speed: speed // default speed multiplier
       };
     });
@@ -613,24 +652,26 @@ export default function App() {
 
     setSpeechList(newList);
     handleStopAll();
-  };
+  }
 
   // Add single custom row
   const handleAddSingleRow = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRowText.trim()) return;
 
-    const detected = handleDetectLanguage(newRowText.trim());
+    // Parse symbols from the text if provided in the quick action form
+    const { cleanText, repeats, delaySec } = parseLineSymbols(newRowText.trim(), newRowRepeats, newRowDelay);
+    const detected = handleDetectLanguage(cleanText);
     const resolved: LanguageCode = newRowLang === 'auto' ? detected : newRowLang;
 
     const newItem: SpeechItem = {
       id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      text: newRowText.trim(),
+      text: cleanText,
       detectedLang: detected,
       selectedLang: newRowLang,
       resolvedLang: resolved,
-      repeats: newRowRepeats,
-      delaySec: newRowDelay,
+      repeats: repeats,
+      delaySec: delaySec,
       speed: speed
     };
 
@@ -1007,6 +1048,7 @@ export default function App() {
   // Apply templates
   const handleApplyTemplate = (content: string) => {
     setRawText(content);
+    handleCreateList(content);
   };
 
   // Modify individual repeats configuration
@@ -1078,14 +1120,18 @@ export default function App() {
 
     setSpeechList(prev => prev.map(item => {
       if (item.id === id) {
-        const newText = editingText.trim();
-        const detected = handleDetectLanguage(newText);
+        const rawNewText = editingText.trim();
+        // Parse custom speed and repetition codes if typed during manual edit
+        const { cleanText, repeats, delaySec } = parseLineSymbols(rawNewText, item.repeats, item.delaySec);
+        const detected = handleDetectLanguage(cleanText);
         const resolved = item.selectedLang === 'auto' ? detected : item.selectedLang;
         return {
           ...item,
-          text: newText,
+          text: cleanText,
           detectedLang: detected,
-          resolvedLang: resolved
+          resolvedLang: resolved,
+          repeats: repeats,
+          delaySec: delaySec
         };
       }
       return item;
