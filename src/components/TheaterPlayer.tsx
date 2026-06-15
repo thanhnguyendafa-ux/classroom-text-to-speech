@@ -18,7 +18,9 @@ import {
   MicOff,
   Circle,
   HelpCircle,
-  AlertTriangle
+  AlertTriangle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { SpeechItem, LanguageCode } from '../types';
 
@@ -85,6 +87,24 @@ export default function TheaterPlayer({
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [onlyCurrentTab, setOnlyCurrentTab] = React.useState<boolean>(true);
   const [showRecordingHelp, setShowRecordingHelp] = React.useState<boolean>(false);
+  const [hideControls, setHideControls] = React.useState<boolean>(false);
+
+  // Keyboard shortcut to toggle UI controls quickly (using 'h' or 'H')
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === 'h' || e.key === 'H') {
+        setHideControls(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   // Recording refs
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
@@ -407,8 +427,26 @@ export default function TheaterPlayer({
       {/* LEFT SECTION: MAIN CINEMA STAGE & PLAYER SCREEN */}
       <div className="flex-1 flex flex-col h-full bg-slate-950 relative">
         
+        {/* Floating toggle back button when controls are hidden */}
+        {hideControls && (
+          <div className="absolute top-4 right-4 z-50 flex items-center gap-2 select-none">
+            <span className="text-[10px] text-slate-500 font-mono bg-slate-950/80 border border-slate-900/60 px-2 py-1 rounded-lg backdrop-blur-xs">
+              Mẹo: Phím <strong className="text-indigo-300 font-extrabold font-mono">H</strong> để Ẩn / Hiện
+            </span>
+            <button
+              onClick={() => setHideControls(false)}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900/90 border border-slate-800 hover:bg-slate-850 hover:border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:text-white transition shadow-xl cursor-pointer backdrop-blur-md opacity-40 hover:opacity-100 duration-200"
+              title="Hiện lại toàn bộ nút và bảng điều khiển (Hoặc bấm phím H)"
+            >
+              <Eye className="w-4 h-4 text-indigo-400" />
+              <span>Hiện Giao Diện</span>
+            </button>
+          </div>
+        )}
+        
         {/* Header Ribbon bar */}
-        <div className="h-14 sm:h-16 px-4 flex items-center justify-between border-b border-slate-900 bg-slate-950/90 z-20 gap-4">
+        {!hideControls && (
+          <div className="h-14 sm:h-16 px-4 flex items-center justify-between border-b border-slate-900 bg-slate-950/90 z-20 gap-4">
           <div className="flex items-center space-x-2 shrink-0">
             <div className="p-1.5 bg-indigo-600 rounded-lg text-white hidden sm:block">
               <Film className="w-5 h-5" />
@@ -594,6 +632,15 @@ export default function TheaterPlayer({
           </div>
 
           <button
+            onClick={() => setHideControls(true)}
+            className="flex items-center space-x-1 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-indigo-950 hover:border-indigo-900 rounded-xl text-xs font-bold text-slate-300 transition cursor-pointer shrink-0"
+            title="Ẩn giao diện điều khiển để tập trung quay video đẹp hơn (Bấm phím 'H' để khôi phục)"
+          >
+            <EyeOff className="w-4 h-4 text-indigo-400" />
+            <span className="hidden sm:inline">Ẩn Giao Diện</span>
+          </button>
+
+          <button
             onClick={handleCloseClick}
             className="flex items-center space-x-1 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-rose-950 hover:border-rose-900 rounded-xl text-xs font-bold text-slate-300 transition cursor-pointer shrink-0"
             title="Thoát chế độ rạp chiếu phim"
@@ -602,6 +649,7 @@ export default function TheaterPlayer({
             <span className="hidden sm:inline">Thoát Rạp Chiếu</span>
           </button>
         </div>
+        )}
 
         {/* Error notification banner */}
         {errorMessage && (
@@ -683,36 +731,41 @@ export default function TheaterPlayer({
             </div>
 
             {/* Quick floating indicators */}
-            <div className="absolute top-4 left-4 flex gap-2">
-              <span className="bg-black/60 border border-white/10 text-slate-300 px-3 py-1 text-xs font-mono rounded-lg flex items-center gap-1.5 backdrop-blur-xs">
-                {activeIndex !== -1 ? `${activeIndex + 1} / ${speechList.length}` : '—'}
-              </span>
-              <span className={`px-2.5 py-1 text-xs font-bold rounded-lg ${
-                activeItem?.resolvedLang === 'vi' 
-                  ? 'bg-rose-600/80 border border-rose-500/50 text-white' 
-                  : 'bg-indigo-650/80 border border-indigo-500/50 text-white'
-              }`}>
-                {activeItem?.resolvedLang === 'vi' ? '🇻🇳 VI Voice' : '🇺🇸 EN Voice'}
-              </span>
-            </div>
+            {!hideControls && (
+              <>
+                <div className="absolute top-4 left-4 flex gap-2">
+                  <span className="bg-black/60 border border-white/10 text-slate-300 px-3 py-1 text-xs font-mono rounded-lg flex items-center gap-1.5 backdrop-blur-xs">
+                    {activeIndex !== -1 ? `${activeIndex + 1} / ${speechList.length}` : '—'}
+                  </span>
+                  <span className={`px-2.5 py-1 text-xs font-bold rounded-lg ${
+                    activeItem?.resolvedLang === 'vi' 
+                      ? 'bg-rose-600/80 border border-rose-500/50 text-white' 
+                      : 'bg-indigo-650/80 border border-indigo-500/50 text-white'
+                  }`}>
+                    {activeItem?.resolvedLang === 'vi' ? '🇻🇳 VI Voice' : '🇺🇸 EN Voice'}
+                  </span>
+                </div>
 
-            <div className="absolute top-4 right-4 flex gap-2">
-              {engineMode === 'premium' ? (
-                <span className="bg-amber-600 border border-amber-500/40 text-white px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg animate-pulse">
-                  💎 Active: Premium Voice (Gemini AI)
-                </span>
-              ) : (
-                <span className="bg-slate-900 border border-slate-800 text-slate-400 px-2.5 py-0.5 text-[10px] font-semibold rounded-lg">
-                  🌐 Active: Brower Engine
-                </span>
-              )}
-            </div>
+                <div className="absolute top-4 right-4 flex gap-2">
+                  {engineMode === 'premium' ? (
+                    <span className="bg-amber-600 border border-amber-500/40 text-white px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg animate-pulse">
+                      💎 Active: Premium Voice (Gemini AI)
+                    </span>
+                  ) : (
+                    <span className="bg-slate-900 border border-slate-800 text-slate-400 px-2.5 py-0.5 text-[10px] font-semibold rounded-lg">
+                      🌐 Active: Brower Engine
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
 
           </div>
         </div>
 
         {/* BOTTOM INTEGRATED CONTROLS PARAMETERS ROW */}
-        <div className="px-5 py-4 bg-slate-950 border-t border-slate-900 flex flex-col space-y-4 z-20">
+        {!hideControls && (
+          <div className="px-5 py-4 bg-slate-950 border-t border-slate-900 flex flex-col space-y-4 z-20">
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             {/* Control Group 1: Navigation keys */}
@@ -876,11 +929,13 @@ export default function TheaterPlayer({
             </div>
           </div>
         </div>
+        )}
 
       </div>
 
       {/* RIGHT SIDEBAR: EXQUISITE PLAYLIST COLUMN */}
-      <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-slate-900 bg-slate-900 overflow-y-auto shrink-0 flex flex-col h-1/3 md:h-full z-30">
+      {!hideControls && (
+        <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-slate-900 bg-slate-900 overflow-y-auto shrink-0 flex flex-col h-1/3 md:h-full z-30">
         
         {/* Playlist Header */}
         <div className="p-4 bg-slate-950 border-b border-slate-900 flex items-center justify-between shrink-0">
@@ -969,6 +1024,7 @@ export default function TheaterPlayer({
         </div>
 
       </div>
+      )}
 
     </div>
   );
