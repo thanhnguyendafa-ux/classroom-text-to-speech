@@ -193,6 +193,20 @@ export default function App() {
 
   // Auto progression configuration
   const [autoAdvance, setAutoAdvance] = useState<boolean>(true);
+  const [autoGroupSet, setAutoGroupSet] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('autoGroupSet') === 'true';
+    }
+    return false;
+  });
+
+  const handleAutoGroupSetChange = (checked: boolean) => {
+    setAutoGroupSet(checked);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('autoGroupSet', String(checked));
+    }
+  };
+
   const [timeBetweenLines, setTimeBetweenLines] = useState<number>(2.0); // Default pause time in seconds
   const [playlistLoopMode, setPlaylistLoopMode] = useState<'once' | 'infinite'>(() => {
     if (typeof window !== 'undefined') {
@@ -550,6 +564,14 @@ export default function App() {
         speed: speed // default speed multiplier
       };
     });
+
+    if (autoGroupSet) {
+      for (let i = 0; i < newList.length - 1; i += 2) {
+        const newSetId = `set-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`;
+        newList[i].setId = newSetId;
+        newList[i + 1].setId = newSetId;
+      }
+    }
 
     setSpeechList(newList);
     handleStopAll();
@@ -1220,6 +1242,26 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Auto Group toggle option */}
+              <div id="auto-group-toggle-container" className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                <div className="flex flex-col pr-2">
+                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Link className="w-3.5 h-3.5 text-indigo-500 rotate-45" />
+                    Tự động ghép 2 dòng thành 1 Set
+                  </span>
+                  <span className="text-[10px] text-slate-500 mt-0.5">Hai dòng liên tiếp sẽ được gộp chung thành một cặp để thao tác & sao chép cùng lúc</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoGroupSet}
+                    onChange={(e) => handleAutoGroupSetChange(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
               </div>
 
               {/* Build interactive board keys */}
