@@ -79,6 +79,7 @@ export default function TheaterPlayer({
   const [recordResolution, setRecordResolution] = React.useState<'480p' | '720p' | '1080p'>('720p');
   const [includeMic, setIncludeMic] = React.useState<boolean>(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [onlyCurrentTab, setOnlyCurrentTab] = React.useState<boolean>(true);
 
   // Recording refs
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
@@ -191,15 +192,26 @@ export default function TheaterPlayer({
         }
       }
 
-      // Display capture stream
-      const displayStream = await (navigator.mediaDevices as any).getDisplayMedia({
+      // Display capture stream with optional preferCurrentTab parameter to bypass chrome blank list bug
+      const displayConstraints: any = {
         video: {
           width: { ideal: width },
           height: { ideal: height },
           frameRate: { ideal: 30 }
         },
-        audio: true
-      });
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      };
+
+      if (onlyCurrentTab) {
+        displayConstraints.preferCurrentTab = true;
+        displayConstraints.selfBrowserSurface = "include";
+      }
+
+      const displayStream = await (navigator.mediaDevices as any).getDisplayMedia(displayConstraints);
       streamRef.current = displayStream;
 
       // Make sure we stop everything if the system stops screen-record
@@ -217,12 +229,16 @@ export default function TheaterPlayer({
         const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtxClass && (displayStream.getAudioTracks().length > 0 || (includeMic && micStream))) {
           const audioCtx = new AudioCtxClass();
+          if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+          }
           const dest = audioCtx.createMediaStreamDestination();
           let attached = false;
 
           if (displayStream.getAudioTracks().length > 0) {
             const displaySource = audioCtx.createMediaStreamSource(displayStream);
             displaySource.connect(dest);
+            displaySource.connect(audioCtx.destination); // <-- Connect to destination so the user can actually hear playing slides / premium voices!
             attached = true;
           }
 
@@ -490,12 +506,49 @@ export default function TheaterPlayer({
                       </button>
                     </div>
 
+                    {/* Prefer Current Tab Toggle Switch */}
+                    <div className="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-850">
+                      <div className="space-y-0.5 pr-2">
+                        <span className="font-bold text-slate-200 block flex items-center gap-1">
+                          <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                          Ưu tiên quay Thẻ này
+                        </span>
+                        <span className="text-[10px] text-slate-400 leading-tight block">
+                          Tự động ghi hình thẻ hiện tại để tránh lỗi màn hình trắng trống danh sách của Edge/Chrome.
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setOnlyCurrentTab(!onlyCurrentTab)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                          onlyCurrentTab ? 'bg-indigo-650' : 'bg-slate-800'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition duration-100 ease-in-out ${
+                            onlyCurrentTab ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
                     {/* Quick helper Tip reminder */}
-                    <div className="text-[10px] text-slate-400 bg-slate-950/30 p-2.5 rounded-xl flex gap-1.5 leading-relaxed">
-                      <HelpCircle className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                      <span>
-                        Khi chọn nguồn quay, ưu tiên chọn mục <strong>"Thẻ Chrome" (Trang này)</strong> và tích vào nút <strong>"Chia sẻ âm thanh hệ thống"</strong> ở dưới góc để ghi âm giọng nói chất lượng nhất.
-                      </span>
+                    <div className="text-[10px] text-slate-350 bg-slate-950/50 p-3 rounded-xl space-y-2 leading-relaxed border border-slate-850/55">
+                      <div className="flex items-start gap-1.5 font-bold text-indigo-400 text-[11px] mb-1">
+                        <HelpCircle className="w-4 h-4 shrink-0" />
+                        <span>Mẹo thu âm thanh & Sửa lỗi</span>
+                      </div>
+                      <ul className="list-disc pl-4 space-y-1 text-slate-400 text-[10.5px]">
+                        <li>
+                          <strong>Tránh màn hình trắng:</strong> Hãy giữ bật nút <strong className="text-indigo-300">"Ưu tiên quay Thẻ này"</strong>. Khi hộp thoại trình duyệt hiện lên, bạn chỉ cần bấm nút <strong className="text-white">Chia sẻ</strong> là xong!
+                        </li>
+                        <li>
+                          <strong>Bật âm thanh:</strong> Hãy luôn tích chọn ô <strong>"Đồng thời chia sẻ âm thanh của thẻ"</strong> (hoặc <strong>"Also share tab audio"</strong>) ở góc dưới bên trái của hộp thoại trình duyệt để thu giọng kỹ thuật số.
+                        </li>
+                        <li>
+                          <strong>Lưu ý Giọng đọc (TTS):</strong> Giọng đọc <em>Mặc định (Trình duyệt)</em> phát qua loa thật của máy tính, nên muốn thu âm được thì bạn <strong className="text-emerald-400">bắt buộc phải bật nút "Ghi Microphone"</strong> phía trên. Nếu dùng giọng <em>Premium AI (Gemini)</em>, hệ thống tự động thu trực tiếp không cần micro!
+                        </li>
+                      </ul>
                     </div>
 
                     {/* Main action triggers */}
