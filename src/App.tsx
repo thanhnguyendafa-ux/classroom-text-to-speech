@@ -1641,13 +1641,13 @@ Chào mừng thầy cô và các học sinh ;3 /4`;
                 Chỉ cần copy lệnh dưới đây và dán vào ChatGPT (hoặc Claude/Gemini) để nhận về một danh sách từ vựng song ngữ chuẩn định dạng cho ứng dụng này.
               </p>
 
-              <div className="bg-slate-900/95 border border-slate-805 rounded-xl p-3 relative group">
-                <pre className="text-[10px] font-mono text-slate-350 whitespace-pre-wrap max-h-36 overflow-y-auto leading-relaxed scrollbar-thin text-left">
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 relative group">
+                <pre className="text-[10.5px] font-mono text-indigo-100 whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed scrollbar-thin text-left select-all">
                   {GPT_PROMPT_TEMPLATE}
                 </pre>
-                <div className="absolute bottom-2 right-2 opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none">
-                  <span className="text-[9px] font-mono text-slate-400 bg-slate-950/80 px-1.5 py-0.5 rounded">
-                    Bấm nút trên để copy nhanh
+                <div className="absolute bottom-2 right-2 opacity-60 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <span className="text-[9px] font-mono text-slate-300 bg-slate-900/90 px-1.5 py-0.5 rounded border border-slate-800">
+                    Bấm nút ở trên để copy nhanh
                   </span>
                 </div>
               </div>
