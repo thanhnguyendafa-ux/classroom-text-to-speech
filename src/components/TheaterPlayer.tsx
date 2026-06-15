@@ -48,6 +48,8 @@ interface TheaterPlayerProps {
   engineMode: 'browser' | 'premium';
   playlistLoopMode: 'once' | 'infinite';
   onPlaylistLoopModeChange: (val: 'once' | 'infinite') => void;
+  useUniversalImage?: boolean;
+  universalImageUrl?: string;
 }
 
 export default function TheaterPlayer({
@@ -71,6 +73,8 @@ export default function TheaterPlayer({
   engineMode,
   playlistLoopMode,
   onPlaylistLoopModeChange,
+  useUniversalImage = false,
+  universalImageUrl = '',
 }: TheaterPlayerProps) {
   // Recording states
   const [isRecording, setIsRecording] = React.useState<boolean>(false);
@@ -356,6 +360,8 @@ export default function TheaterPlayer({
   const activeItem = speechList.find(item => item.id === playingItemId) || speechList[0];
   const activeIndex = speechList.findIndex(item => item.id === playingItemId);
 
+  const activeImageUrl = (useUniversalImage && universalImageUrl) ? universalImageUrl : activeItem?.imageUrl;
+
   // Handle play previous
   const handlePrev = () => {
     if (speechList.length === 0) return;
@@ -595,10 +601,10 @@ export default function TheaterPlayer({
         {/* VIDEOTHEQUE CANVAS / VIEWPORT STAGE */}
         <div className="flex-1 relative flex items-center justify-center p-4 min-h-0 bg-slate-1000 z-10 select-none">
           {/* Blur background layer behind active slide image */}
-          {activeItem?.imageUrl ? (
+          {activeImageUrl ? (
             <div className="absolute inset-0 overflow-hidden pointer-events-none select-none">
               <img 
-                src={activeItem.imageUrl} 
+                src={activeImageUrl} 
                 alt="blurred bg"
                 className="w-full h-full object-cover blur-2xl opacity-20 scale-110"
                 referrerPolicy="no-referrer"
@@ -611,11 +617,11 @@ export default function TheaterPlayer({
             
             {/* Slide screen area */}
             <div className="flex-1 w-full h-full relative flex items-center justify-center p-4">
-              {activeItem?.imageUrl ? (
+              {activeImageUrl ? (
                 /* Cinematic Image scale layer */
                 <img
-                  src={activeItem.imageUrl}
-                  alt={activeItem.text}
+                  src={activeImageUrl}
+                  alt={activeItem ? activeItem.text : "Chủ đề"}
                   className="max-w-full max-h-[75%] object-contain rounded-xl shadow-xl transition-all duration-300"
                   referrerPolicy="no-referrer"
                 />
@@ -869,7 +875,8 @@ export default function TheaterPlayer({
         <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
           {speechList.map((item, idx) => {
             const isPlaying = playingItemId === item.id;
-            const hasCover = !!item.imageUrl;
+            const itemImageUrl = (useUniversalImage && universalImageUrl) ? universalImageUrl : item.imageUrl;
+            const hasCover = !!itemImageUrl;
 
             return (
               <button
@@ -885,7 +892,7 @@ export default function TheaterPlayer({
                 <div className="w-11 h-11 rounded-lg bg-slate-800 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center relative shadow-3xs">
                   {hasCover ? (
                     <img
-                      src={item.imageUrl}
+                      src={itemImageUrl}
                       alt="cover thumbnail"
                       className="w-full h-full object-cover transition group-hover:scale-105"
                       referrerPolicy="no-referrer"

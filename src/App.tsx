@@ -31,7 +31,9 @@ import {
   Copy,
   Download,
   Upload,
-  Share2
+  Share2,
+  Image as ImageIcon,
+  Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode } from './types';
@@ -204,6 +206,36 @@ export default function App() {
     setAutoGroupSet(checked);
     if (typeof window !== 'undefined') {
       localStorage.setItem('autoGroupSet', String(checked));
+    }
+  };
+
+  const [useUniversalImage, setUseUniversalImage] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('useUniversalImage') === 'true';
+    }
+    return false;
+  });
+
+  const [universalImageUrl, setUniversalImageUrl] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('universalImageUrl') || '';
+    }
+    return '';
+  });
+
+  const [isSearchingUniversalImage, setIsSearchingUniversalImage] = useState<boolean>(false);
+
+  const handleUseUniversalImageChange = (checked: boolean) => {
+    setUseUniversalImage(checked);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('useUniversalImage', String(checked));
+    }
+  };
+
+  const handleUniversalImageUrlChange = (url: string) => {
+    setUniversalImageUrl(url);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('universalImageUrl', url);
     }
   };
 
@@ -415,6 +447,12 @@ export default function App() {
 
   // Helper to assign cover images dynamically
   const handleAssignImage = (imageUrl: string) => {
+    if (isSearchingUniversalImage) {
+      handleUniversalImageUrlChange(imageUrl);
+      setIsSearchingUniversalImage(false);
+      setSelectedItemForImageSearch(null);
+      return;
+    }
     if (!selectedItemForImageSearch) return;
     setSpeechList(prev => prev.map(item => {
       if (item.id === selectedItemForImageSearch.id) {
@@ -1785,6 +1823,97 @@ export default function App() {
               </div>
             </div>
 
+            {/* Unified Background Theme Configurations (Optional) */}
+            <div id="universal-theme-box" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs hover:border-slate-350 transition-colors duration-200">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <ImageIcon className="w-4.5 h-4.5 text-indigo-600" />
+                  Ảnh nền đồng nhất chuỗi học
+                </h3>
+                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full uppercase">Optional</span>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <div className="flex flex-col pr-2">
+                    <span className="text-xs font-bold text-slate-700">Đồng nhất ảnh minh họa</span>
+                    <span className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                      Áp dụng 1 ảnh nền/chủ đề duy nhất cho tất cả các câu khi trình chiếu
+                    </span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={useUniversalImage}
+                      onChange={(e) => handleUseUniversalImageChange(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
+                </div>
+
+                {useUniversalImage && (
+                  <div className="space-y-2 animate-fade-in text-left">
+                    <label htmlFor="universal-img-url" className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
+                      URL hình ảnh chủ đề hoặc ảnh chụp
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        id="universal-img-url"
+                        type="text"
+                        placeholder="Dán URL hình hoặc click Tìm ảnh..."
+                        className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-hidden text-slate-705 font-sans"
+                        value={universalImageUrl}
+                        onChange={(e) => handleUniversalImageUrlChange(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSearchingUniversalImage(true);
+                          setSelectedItemForImageSearch({
+                            id: 'universal',
+                            text: 'Background template model scenery',
+                            lang: 'auto',
+                            resolvedLang: 'en',
+                            repeats: 1,
+                            delaySec: 2.0
+                          });
+                          setIsImageSearchModalOpen(true);
+                        }}
+                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 text-xs px-3 py-2 rounded-lg transition shrink-0 cursor-pointer flex items-center justify-center gap-1"
+                        title="Tìm ảnh đẹp từ kho ảnh của ứng dụng"
+                      >
+                        <Search className="w-3.5 h-3.5" />
+                        Tìm ảnh
+                      </button>
+                    </div>
+
+                    {universalImageUrl && (
+                      <div className="relative mt-2 rounded-xl overflow-hidden aspect-[16/6] border border-slate-200 group/uimg">
+                        <img
+                          src={universalImageUrl}
+                          alt="Universal Theme Background"
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleUniversalImageUrlChange('')}
+                          className="absolute top-1 right-1 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full opacity-90 transition shadow-xs cursor-pointer"
+                          title="Xoá ảnh nền đồng nhất"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                    <span className="text-[10px] text-slate-400 block mt-1 leading-relaxed">
+                      * Khi bật, mọi hình minh họa riêng lẻ của các câu sẽ tạm thời được thay thế bằng hình ảnh này trong chế độ rạp chiếu phim (Cinema Mode) của bạn.
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Instruction on Chrome High-Quality Voice Activation */}
             <div id="chrome-voice-info-card" className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 text-xs text-emerald-800 space-y-2">
               <div className="flex items-center space-x-2 text-emerald-900 font-bold">
@@ -2542,6 +2671,8 @@ export default function App() {
         engineMode={engineMode}
         playlistLoopMode={playlistLoopMode}
         onPlaylistLoopModeChange={handlePlaylistLoopModeChange}
+        useUniversalImage={useUniversalImage}
+        universalImageUrl={universalImageUrl}
       />
     </div>
   );
