@@ -40,6 +40,7 @@ import { SpeechItem, LanguageCode } from './types';
 import ImageSearchModal from './components/ImageSearchModal';
 import TheaterPlayer from './components/TheaterPlayer';
 import ShareModal from './components/ShareModal';
+import LessonLibrary from './components/LessonLibrary';
 
 // Pre-defined educational templates for teachers and students
 const TEMPLATES = [
@@ -1596,13 +1597,69 @@ Chào mừng thầy cô và các học sinh ;3 /4`;
                 <button
                   id="clear-input-trigger"
                   onClick={() => setRawText('')}
-                  className="bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 font-semibold text-xs px-3 rounded-xl transition flex items-center justify-center cursor-pointer"
+                  className="bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 font-semibold text-xs px-3 rounded-xl transition flex-shrink-0 flex items-center justify-center cursor-pointer"
                   title="Xoá trống vùng nhập"
                 >
                   <RotateCcw className="w-4 h-4" />
                 </button>
               </div>
             </div>
+
+            {/* Local Lesson & Folder Library Panel */}
+            <LessonLibrary 
+              currentRawText={rawText} 
+              currentSpeechList={speechList}
+              currentSettings={{
+                speed,
+                timeBetweenLines,
+                rowLayoutMode,
+                engineMode,
+                selectedPremiumVoiceEn,
+                selectedPremiumVoiceVi,
+                selectedEnVoiceName,
+                selectedViVoiceName,
+                autoGroupSet,
+                setMultiplier,
+                useUniversalImage,
+                universalImageUrl
+              }}
+              onLoadLesson={(lesson) => {
+                // 1. Restore raw text editor
+                setRawText(lesson.rawText);
+                
+                // 2. Restore all configurations
+                if (lesson.settings) {
+                  const s = lesson.settings as any;
+                  if (typeof s.speed === 'number') setSpeed(s.speed);
+                  if (typeof s.timeBetweenLines === 'number') setTimeBetweenLines(s.timeBetweenLines);
+                  if (typeof s.rowLayoutMode === 'string') setRowLayoutMode(s.rowLayoutMode);
+                  if (typeof s.engineMode === 'string') setEngineMode(s.engineMode);
+                  if (typeof s.selectedPremiumVoiceEn === 'string') setSelectedPremiumVoiceEn(s.selectedPremiumVoiceEn);
+                  if (typeof s.selectedPremiumVoiceVi === 'string') setSelectedPremiumVoiceVi(s.selectedPremiumVoiceVi);
+                  if (typeof s.selectedPremiumVoiceZhCn === 'string') setSelectedPremiumVoiceZhCn(s.selectedPremiumVoiceZhCn);
+                  if (typeof s.selectedPremiumVoiceZhTw === 'string') setSelectedPremiumVoiceZhTw(s.selectedPremiumVoiceZhTw);
+                  if (typeof s.selectedPremiumVoiceJa === 'string') setSelectedPremiumVoiceJa(s.selectedPremiumVoiceJa);
+                  if (typeof s.selectedPremiumVoiceKo === 'string') setSelectedPremiumVoiceKo(s.selectedPremiumVoiceKo);
+                  if (typeof s.selectedEnVoiceName === 'string') setSelectedEnVoiceName(s.selectedEnVoiceName);
+                  if (typeof s.selectedViVoiceName === 'string') setSelectedViVoiceName(s.selectedViVoiceName);
+                  if (typeof s.selectedZhCnVoiceName === 'string') setSelectedZhCnVoiceName(s.selectedZhCnVoiceName);
+                  if (typeof s.selectedZhTwVoiceName === 'string') setSelectedZhTwVoiceName(s.selectedZhTwVoiceName);
+                  if (typeof s.selectedJaVoiceName === 'string') setSelectedJaVoiceName(s.selectedJaVoiceName);
+                  if (typeof s.selectedKoVoiceName === 'string') setSelectedKoVoiceName(s.selectedKoVoiceName);
+                  if (typeof s.autoGroupSet === 'boolean') handleAutoGroupSetChange(s.autoGroupSet);
+                  if (typeof s.setMultiplier === 'number') handleSetMultiplierChange(s.setMultiplier);
+                  if (typeof s.useUniversalImage === 'boolean') handleUseUniversalImageChange(s.useUniversalImage);
+                  if (typeof s.universalImageUrl === 'string') handleUniversalImageUrlChange(s.universalImageUrl);
+                }
+
+                // 3. Restore list of cards & its custom images
+                if (Array.isArray(lesson.speechList) && lesson.speechList.length > 0) {
+                  setSpeechList(lesson.speechList);
+                } else {
+                  handleCreateList(lesson.rawText);
+                }
+              }}
+            />
 
             {/* ChatGPT Prompt Builder Helper Card */}
             <div id="gpt-prompt-helper-box" className="bg-gradient-to-br from-indigo-50 to-pink-50 border border-indigo-200/60 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:border-indigo-300 transition-colors">
