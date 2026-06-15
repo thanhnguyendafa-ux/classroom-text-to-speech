@@ -142,6 +142,15 @@ export default function App() {
   const waitTimerRef = useRef<any>(null);
   const waitIntervalRef = useRef<any>(null);
 
+  // Manual pause, resume and stop states
+  const [isManualPaused, setIsManualPaused] = useState<boolean>(false);
+  const isSpeechSynthesisPausedRef = useRef<boolean>(false);
+  const isPremiumAudioPausedRef = useRef<boolean>(false);
+  const pausedCountdownSecRef = useRef<number>(0);
+  const pausedCountdownTypeRef = useRef<'repeat' | 'advance' | null>(null);
+  const pausedCountdownItemIdRef = useRef<string | null>(null);
+  const resumeCallbackRef = useRef<(() => void) | null>(null);
+
   const clearWaitTimers = () => {
     if (waitTimerRef.current) {
       clearTimeout(waitTimerRef.current);
@@ -160,6 +169,9 @@ export default function App() {
       onComplete();
       return;
     }
+
+    // Capture completion callback for pausing
+    resumeCallbackRef.current = onComplete;
 
     setWaitingState({ isWaiting: true, remainingSec: sec, itemId, type });
 
@@ -185,7 +197,11 @@ export default function App() {
 
     waitTimerRef.current = setTimeout(() => {
       clearWaitTimers();
-      onComplete();
+      if (resumeCallbackRef.current) {
+        const cb = resumeCallbackRef.current;
+        resumeCallbackRef.current = null;
+        cb();
+      }
     }, sec * 1000);
   };
 
@@ -695,6 +711,13 @@ export default function App() {
     clearWebAudioNodes();
     clearWaitTimers();
 
+    setIsManualPaused(false);
+    isSpeechSynthesisPausedRef.current = false;
+    isPremiumAudioPausedRef.current = false;
+    pausedCountdownSecRef.current = 0;
+    pausedCountdownTypeRef.current = null;
+    pausedCountdownItemIdRef.current = null;
+
     let currentIteration = 1;
     const maxIterations = item.repeats || 1;
     activePlayingIdRef.current = item.id;
@@ -1038,6 +1061,108 @@ export default function App() {
     setPlayingItemId(null);
     setCurrentRepeatIndex(0);
     setPlayingState('idle');
+    setIsManualPaused(false);
+    isSpeechSynthesisPausedRef.current = false;
+    isPremiumAudioPausedRef.current = false;
+    pausedCountdownSecRef.current = 0;
+    pausedCountdownTypeRef.current = null;
+    pausedCountdownItemIdRef.current = null;
+    resumeCallbackRef.current = null;
+  };
+
+  const handleGlobalPause = () => {
+    if (playingState === 'idle' || isManualPaused) return;
+
+    setIsManualPaused(true);
+
+    // Case 1: Active speech is playing
+    if (playingState === 'playing') {
+      if (engineMode === 'browser') {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.pause();
+          isSpeechSynthesisPausedRef.current = true;
+        }
+      } else {
+        if (currentAudioRef.current) {
+          currentAudioRef.current.pause();
+          isPremiumAudioPausedRef.current = true;
+        }
+      }
+    }
+    // Case 2: In a countdown timer delay (repeat countdown or auto advance countdown)
+    else if (playingState === 'paused' && waitingState.isWaiting) {
+      pausedCountdownSecRef.current = waitingState.remainingSec;
+      pausedCountdownTypeRef.current = waitingState.type;
+      pausedCountdownItemIdRef.current = waitingState.itemId;
+      
+      // Stop the timers but preserve resumeCallbackRef
+      if (waitTimerRef.current) {
+        clearTimeout(waitTimerRef.current);
+        waitTimerRef.current = null;
+      }
+      if (waitIntervalRef.current) {
+        clearInterval(waitIntervalRef.current);
+        waitIntervalRef.current = null;
+      }
+      setWaitingState(prev => ({ ...prev, isWaiting: false }));
+    }
+  };
+
+  const handleGlobalResume = () => {
+    if (!isManualPaused) return;
+
+    setIsManualPaused(false);
+
+    // Case 1: Voice was playing before pause
+    if (isSpeechSynthesisPausedRef.current) {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.resume();
+        isSpeechSynthesisPausedRef.current = false;
+        setPlayingState('playing');
+      }
+    } else if (isPremiumAudioPausedRef.current) {
+      if (currentAudioRef.current) {
+        currentAudioRef.current.play().catch(err => {
+          console.error("Failed to resume Premium Audio:", err);
+        });
+        isPremiumAudioPausedRef.current = false;
+        setPlayingState('playing');
+      }
+    }
+    // Case 2: In a countdown delay when paused
+    else if (pausedCountdownSecRef.current > 0 && resumeCallbackRef.current) {
+      const remaining = pausedCountdownSecRef.current;
+      const type = pausedCountdownTypeRef.current!;
+      const itemId = pausedCountdownItemIdRef.current!;
+
+      pausedCountdownSecRef.current = 0;
+      pausedCountdownTypeRef.current = null;
+      pausedCountdownItemIdRef.current = null;
+
+      setPlayingState('paused');
+      startCountdown(remaining, type, () => {
+        if (resumeCallbackRef.current) {
+          const cb = resumeCallbackRef.current;
+          resumeCallbackRef.current = null;
+          cb();
+        }
+      }, itemId);
+    }
+  };
+
+  const handleGlobalPlay = () => {
+    if (playingState !== 'idle') {
+      if (isManualPaused) {
+        handleGlobalResume();
+      }
+      return;
+    }
+
+    // Start playing the currently selected/active item or the first item
+    if (speechList.length > 0) {
+      const activeItem = speechList.find(item => item.id === playingItemId) || speechList[0];
+      handleSpeakItem(activeItem);
+    }
   };
 
   const handleClearAll = () => {
@@ -2719,6 +2844,9 @@ export default function App() {
         onPlaylistLoopModeChange={handlePlaylistLoopModeChange}
         useUniversalImage={useUniversalImage}
         universalImageUrl={universalImageUrl}
+        isManualPaused={isManualPaused}
+        onPause={handleGlobalPause}
+        onPlay={handleGlobalPlay}
       />
     </div>
   );

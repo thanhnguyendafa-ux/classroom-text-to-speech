@@ -2,6 +2,7 @@ import React from 'react';
 import { 
   Play, 
   Pause, 
+  Square,
   Volume2, 
   VolumeX, 
   SkipBack, 
@@ -52,6 +53,9 @@ interface TheaterPlayerProps {
   onPlaylistLoopModeChange: (val: 'once' | 'infinite') => void;
   useUniversalImage?: boolean;
   universalImageUrl?: string;
+  isManualPaused?: boolean;
+  onPause?: () => void;
+  onPlay?: () => void;
 }
 
 export default function TheaterPlayer({
@@ -77,6 +81,9 @@ export default function TheaterPlayer({
   onPlaylistLoopModeChange,
   useUniversalImage = false,
   universalImageUrl = '',
+  isManualPaused = false,
+  onPause = () => {},
+  onPlay = () => {},
 }: TheaterPlayerProps) {
   // Recording states
   const [isRecording, setIsRecording] = React.useState<boolean>(false);
@@ -409,18 +416,6 @@ export default function TheaterPlayer({
     onPlayItem(speechList[targetIndex]);
   };
 
-  // Handle play/pause toggle
-  const handlePlayPause = () => {
-    if (playingState === 'playing') {
-      onStop();
-    } else {
-      // Speak current active item or start first one
-      onPlayItem(activeItem || speechList[0]);
-    }
-  };
-
-  const isCurrentItemPlaying = playingItemId === activeItem?.id && playingState === 'playing';
-
   return (
     <div className="fixed inset-0 bg-slate-950 z-50 overflow-hidden flex flex-col md:flex-row font-sans text-slate-100">
       
@@ -715,7 +710,11 @@ export default function TheaterPlayer({
                   {/* Local playing micro badges */}
                   {playingItemId === activeItem?.id && (
                     <div className="flex items-center justify-center space-x-1.5 mt-2 text-xs font-mono">
-                      {waitingState.isWaiting ? (
+                      {isManualPaused ? (
+                        <span className="text-amber-400 font-extrabold bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-md animate-pulse uppercase text-[10px]">
+                          ⏸️ Đang tạm dừng
+                        </span>
+                      ) : waitingState.isWaiting ? (
                         <span className="text-amber-400 font-extrabold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md animate-pulse">
                           ⏱️ {waitingState.type === 'repeat' ? 'Chờ lặp' : 'Chờ chuyển câu'}: {waitingState.remainingSec}s
                         </span>
@@ -769,8 +768,10 @@ export default function TheaterPlayer({
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             {/* Control Group 1: Navigation keys */}
-            <div className="flex items-center space-x-3 justify-center sm:justify-start">
+            <div className="flex items-center space-x-2.5 justify-center sm:justify-start">
+              {/* Back button */}
               <button
+                type="button"
                 onClick={handlePrev}
                 disabled={speechList.length <= 1}
                 className="p-2.5 bg-slate-900 border border-slate-850 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
@@ -779,24 +780,50 @@ export default function TheaterPlayer({
                 <SkipBack className="w-4 h-4 fill-current" />
               </button>
 
+              {/* Play Tổng Button */}
               <button
-                onClick={handlePlayPause}
+                type="button"
+                onClick={onPlay}
                 disabled={speechList.length === 0}
-                className={`p-4 rounded-full flex items-center justify-center transition-all ${
-                  isCurrentItemPlaying
-                    ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/10'
-                    : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-600/10'
-                } cursor-pointer`}
-                title={isCurrentItemPlaying ? "Tạm ngưng giọng đọc" : "Bắt đầu phát âm"}
+                className={`p-3.5 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                  (playingState === 'playing' || (playingState === 'paused' && !isManualPaused))
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 scale-105 border border-emerald-400/30'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-indigo-100 hover:text-white shadow-md hover:shadow-indigo-600/10'
+                }`}
+                title="Play Tổng - Bắt đầu đọc hoặc tiếp tục tiến trình"
               >
-                {isCurrentItemPlaying ? (
-                  <Pause className="w-5 h-5 fill-current" />
-                ) : (
-                  <Play className="w-5 h-5 fill-current ml-0.5" />
-                )}
+                <Play className="w-4.5 h-4.5 fill-current ml-0.5" />
               </button>
 
+              {/* Pause Tổng Button */}
               <button
+                type="button"
+                onClick={onPause}
+                disabled={playingState === 'idle' || isManualPaused}
+                className={`p-3 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                  isManualPaused
+                    ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/30 animate-pulse border border-amber-400/40'
+                    : 'bg-slate-900 hover:bg-slate-800 border border-slate-850 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:pointer-events-none'
+                }`}
+                title="Pause Tổng - Tạm ngưng phát âm hoặc dừng đếm ngược"
+              >
+                <Pause className="w-4 h-4 fill-current" />
+              </button>
+
+              {/* Stop Button */}
+              <button
+                type="button"
+                onClick={onStop}
+                disabled={playingState === 'idle' && !isManualPaused}
+                className="p-3 bg-rose-600 hover:bg-rose-700 text-white border border-rose-500/20 rounded-full transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer flex items-center justify-center shadow-md hover:shadow-rose-500/15"
+                title="Stop / Dừng bộ phát - Khôi phục trạng thái ban đầu"
+              >
+                <Square className="w-4 h-4 fill-current text-white" />
+              </button>
+
+              {/* Next button */}
+              <button
+                type="button"
                 onClick={handleNext}
                 disabled={speechList.length <= 1}
                 className="p-2.5 bg-slate-900 border border-slate-850 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
