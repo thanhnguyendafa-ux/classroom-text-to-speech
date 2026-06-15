@@ -44,9 +44,9 @@ import ShareModal from './components/ShareModal';
 // Pre-defined educational templates for teachers and students
 const TEMPLATES = [
   {
-    title: 'Bilingual Fruits',
-    description: 'Danh sách từ vựng song ngữ Anh - Việt đơn giản cho bé.',
-    content: 'apple\ntáo tây\nbanana\nchuối chín\norange\ncam sành\nwatermelon\ndưa hấu đỏ'
+    title: 'Bilingual Popcorn',
+    description: 'Bộ từ vựng & hội thoại song ngữ Anh - Việt mẫu khi vào app.',
+    content: 'popcorn ;3 /4\nbắp rang\nI like popcorn\nCon thích bắp rang /1\nflower\nbông hoa nhài thơm ngát ;2\nwelcome to classroom\nChào mừng thầy cô và các học sinh ;3 /4'
   },
   {
     title: 'Vietnamese Accent & Diacritics',
@@ -74,7 +74,7 @@ const VIETNAMESE_DIACRITICS_REGEX = /[àáảãạâầấẩẫậăằắẳ�
 
 export default function App() {
   const [rawText, setRawText] = useState<string>(
-    'popcorn ;3 /1.5\nbắp rang\nI like popcorn\nCon thích bắp rang /1\nflower\nbông hoa nhài thơm ngát ;2\nwelcome to classroom\nChào mừng thầy cô và các học sinh ;3 /4'
+    'popcorn ;3 /4\nbắp rang\nI like popcorn\nCon thích bắp rang /1\nflower\nbông hoa nhài thơm ngát ;2\nwelcome to classroom\nChào mừng thầy cô và các học sinh ;3 /4'
   );
   
   const [speechList, setSpeechList] = useState<SpeechItem[]>([]);
@@ -222,6 +222,54 @@ export default function App() {
     setAutoGroupSet(checked);
     if (typeof window !== 'undefined') {
       localStorage.setItem('autoGroupSet', String(checked));
+    }
+  };
+
+  const [setMultiplier, setSetMultiplier] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const val = localStorage.getItem('setMultiplier');
+      return val ? parseInt(val, 10) : 1;
+    }
+    return 1;
+  });
+
+  const handleSetMultiplierChange = (val: number) => {
+    setSetMultiplier(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('setMultiplier', String(val));
+    }
+  };
+
+  const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
+
+  const GPT_PROMPT_TEMPLATE = `Hãy đóng vai một giáo viên ngoại ngữ soạn giáo án song ngữ đạt chuẩn. Hãy tạo cho tôi danh sách từ vựng/mẫu câu theo chủ đề song ngữ ANH - VIỆT (tiếng Anh lẻ chẵn tiếng Việt) có cấu trúc đặc biệt để nạp vào ứng dụng luyện đọc.
+
+Yêu cầu định dạng nghiêm ngặt:
+1. Danh sách gồm các cặp dòng xen kẽ: Dòng tiếng Anh lẻ (1, 3, 5,...) và Dòng tiếng Việt chẵn (2, 4, 6,...).
+2. Viết liền nhau, không để trống giữa cặp và dòng kế tiếp.
+3. Mỗi cặp dòng là một set học.
+4. Có thể định dạng mở rộng ở cuối câu nếu muốn:
+   - Thêm ';X' (với X là số lần lặp, ví dụ: ';2' hoặc ';3').
+   - Thêm '/Y' (với Y là khoảng nghỉ giây sau câu đó, ví dụ: '/4' hoặc '/1.5').
+
+Hãy soạn cho tôi bài học với chủ đề bất kì gồm các từ vựng/mẫu câu chuẩn định dạng sau, định dạng đầu ra chỉ chứa danh sách dòng chữ, không cần giải thích thêm:
+popcorn ;3 /4
+bắp rang
+I like popcorn
+Con thích bắp rang /1
+flower
+bông hoa nhài thơm ngát ;2
+welcome to classroom
+Chào mừng thầy cô và các học sinh ;3 /4`;
+
+  const handleCopyGPTPrompt = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(GPT_PROMPT_TEMPLATE).then(() => {
+        setCopiedPrompt(true);
+        setTimeout(() => setCopiedPrompt(false), 2000);
+      }).catch(err => {
+        console.error("Failed to copy GPT Prompt:", err);
+      });
     }
   };
 
@@ -642,28 +690,63 @@ export default function App() {
     const sourceText = typeof textOverride === 'string' ? textOverride : rawText;
     const lines = sourceText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     
-    const newList: SpeechItem[] = lines.map((lineText, idx) => {
-      // Parse custom symbols like /3 (delay) and ;2 (repeats)
+    // First map all raw lines to structured helper item objects
+    const parsedLines = lines.map((lineText) => {
       const { cleanText, repeats, delaySec } = parseLineSymbols(lineText, 1, timeBetweenLines);
       const detected = handleDetectLanguage(cleanText);
       return {
-        id: `row-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
         text: cleanText,
         detectedLang: detected,
-        selectedLang: 'auto',
+        selectedLang: 'auto' as const,
         resolvedLang: detected,
         repeats: repeats,
         delaySec: delaySec,
-        speed: speed // default speed multiplier
+        speed: speed
       };
     });
 
+    const newList: SpeechItem[] = [];
+    let itemIdx = 0;
+
     if (autoGroupSet) {
-      for (let i = 0; i < newList.length - 1; i += 2) {
-        const newSetId = `set-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`;
-        newList[i].setId = newSetId;
-        newList[i + 1].setId = newSetId;
+      const M = Math.max(1, setMultiplier);
+      // Group consecutive parsed lines as pairs
+      for (let i = 0; i < parsedLines.length - 1; i += 2) {
+        const item1 = parsedLines[i];
+        const item2 = parsedLines[i + 1];
+
+        // Duplicate each set pair M times sequentially
+        for (let m = 0; m < M; m++) {
+          const newSetId = `set-${Date.now()}-${i}-m${m}-${Math.random().toString(36).substr(2, 5)}`;
+          newList.push({
+            ...item1,
+            id: `row-${Date.now()}-${itemIdx++}-${Math.random().toString(36).substr(2, 5)}`,
+            setId: newSetId
+          });
+          newList.push({
+            ...item2,
+            id: `row-${Date.now()}-${itemIdx++}-${Math.random().toString(36).substr(2, 5)}`,
+            setId: newSetId
+          });
+        }
       }
+
+      // Handle odd leftover line
+      if (parsedLines.length % 2 !== 0) {
+        const oddItem = parsedLines[parsedLines.length - 1];
+        newList.push({
+          ...oddItem,
+          id: `row-${Date.now()}-${itemIdx++}-${Math.random().toString(36).substr(2, 5)}`
+        });
+      }
+    } else {
+      // Normal single row creation
+      parsedLines.forEach((item, idx) => {
+        newList.push({
+          ...item,
+          id: `row-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`
+        });
+      });
     }
 
     setSpeechList(newList);
@@ -1454,30 +1537,57 @@ export default function App() {
               </div>
 
               {/* Auto Group toggle option */}
-              <div id="auto-group-toggle-container" className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                <div className="flex flex-col pr-2">
-                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Link className="w-3.5 h-3.5 text-indigo-500 rotate-45" />
-                    Tự động ghép 2 dòng thành 1 Set
-                  </span>
-                  <span className="text-[10px] text-slate-500 mt-0.5">Hai dòng liên tiếp sẽ được gộp chung thành một cặp để thao tác & sao chép cùng lúc</span>
+              {/* Auto Group toggle option */}
+              <div id="auto-group-toggle-container" className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col pr-2">
+                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 justify-start">
+                      <Link className="w-3.5 h-3.5 text-indigo-500 rotate-45" />
+                      Tự động ghép 2 dòng thành 1 Set
+                    </span>
+                    <span className="text-[10px] text-slate-500 mt-0.5 max-w-xs text-left">Hai dòng liên tiếp sẽ được gộp chung thành một cặp để thao tác & sao chép cùng lúc</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={autoGroupSet}
+                      onChange={(e) => handleAutoGroupSetChange(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                  </label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={autoGroupSet}
-                    onChange={(e) => handleAutoGroupSetChange(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                </label>
+
+                {autoGroupSet && (
+                  <div className="pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-xs animate-fadeIn">
+                    <span className="font-semibold text-slate-600 flex items-center gap-1">
+                      ⚡ Số lần lặp/sao chép mỗi Set khi tạo:
+                    </span>
+                    <div className="flex bg-slate-200 p-0.5 rounded-lg border border-slate-200/50">
+                      {[1, 2, 3, 4].map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => handleSetMultiplierChange(num)}
+                          className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                            setMultiplier === num
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-300/40'
+                          }`}
+                        >
+                          x{num}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Build interactive board keys */}
               <div id="creator-actions-row" className="mt-5 pt-4 border-t border-slate-100 flex gap-2">
                 <button
                   id="create-list-trigger"
-                  onClick={handleCreateList}
+                  onClick={() => handleCreateList()}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Volume2 className="w-4 h-4" />
@@ -1491,6 +1601,55 @@ export default function App() {
                 >
                   <RotateCcw className="w-4 h-4" />
                 </button>
+              </div>
+            </div>
+
+            {/* ChatGPT Prompt Builder Helper Card */}
+            <div id="gpt-prompt-helper-box" className="bg-gradient-to-br from-indigo-50 to-pink-50 border border-indigo-200/60 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:border-indigo-300 transition-colors">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-xl pointer-events-none" />
+              <div className="absolute -bottom-6 -left-6 w-16 h-16 bg-pink-500/5 rounded-full blur-md pointer-events-none" />
+              
+              <div className="flex items-center justify-between mb-3 relative">
+                <h3 className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-1.5 justify-start">
+                  <Sparkles className="w-4 h-4 text-pink-500 animate-pulse" />
+                  Mẫu Prompt ChatGPT Tạo Bài Tập
+                </h3>
+                <button
+                  type="button"
+                  onClick={handleCopyGPTPrompt}
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 cursor-pointer select-none ${
+                    copiedPrompt 
+                      ? 'bg-emerald-500 text-white border-emerald-500 shadow-xs scale-105' 
+                      : 'bg-white text-indigo-600 border-indigo-100 hover:bg-indigo-50 hover:border-indigo-300'
+                  }`}
+                >
+                  {copiedPrompt ? (
+                    <>
+                      <Check className="w-3 h-3" />
+                      Đã sao chép!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" />
+                      Sao chép Prompt
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-600 leading-relaxed mb-3">
+                Chỉ cần copy lệnh dưới đây và dán vào ChatGPT (hoặc Claude/Gemini) để nhận về một danh sách từ vựng song ngữ chuẩn định dạng cho ứng dụng này.
+              </p>
+
+              <div className="bg-slate-900/95 border border-slate-805 rounded-xl p-3 relative group">
+                <pre className="text-[10px] font-mono text-slate-350 whitespace-pre-wrap max-h-36 overflow-y-auto leading-relaxed scrollbar-thin text-left">
+                  {GPT_PROMPT_TEMPLATE}
+                </pre>
+                <div className="absolute bottom-2 right-2 opacity-50 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <span className="text-[9px] font-mono text-slate-400 bg-slate-950/80 px-1.5 py-0.5 rounded">
+                    Bấm nút trên để copy nhanh
+                  </span>
+                </div>
               </div>
             </div>
 
