@@ -446,7 +446,7 @@ export default function TheaterPlayer({
 
                 {/* Popover Settings Dropdown Panel */}
                 {showRecordConfig && (
-                  <div className="absolute top-12 left-1/2 -translate-x-1/2 w-72 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-2xl z-50 text-left font-sans text-slate-200 text-xs space-y-3.5">
+                  <div className="absolute top-12 left-1/2 -translate-x-1/2 w-72 max-h-[calc(100vh-80px)] overflow-y-auto bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-2xl z-50 text-left font-sans text-slate-200 text-xs space-y-3.5 pb-5">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                       <span className="font-extrabold text-white text-sm flex items-center gap-1.5">
                         <Video className="w-4 h-4 text-indigo-400" />
