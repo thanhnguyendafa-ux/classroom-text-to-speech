@@ -84,6 +84,7 @@ export default function TheaterPlayer({
   const [includeMic, setIncludeMic] = React.useState<boolean>(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [onlyCurrentTab, setOnlyCurrentTab] = React.useState<boolean>(true);
+  const [showRecordingHelp, setShowRecordingHelp] = React.useState<boolean>(false);
 
   // Recording refs
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
@@ -231,42 +232,48 @@ export default function TheaterPlayer({
 
       try {
         const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtxClass && (displayStream.getAudioTracks().length > 0 || (includeMic && micStream))) {
+        const displayAudioTracks = displayStream.getAudioTracks();
+        const micAudioTracks = includeMic && micStream ? micStream.getAudioTracks() : [];
+        
+        const hasDisplayAudio = displayAudioTracks.length > 0;
+        const hasMicAudio = micAudioTracks.length > 0;
+
+        if (AudioCtxClass && hasDisplayAudio && hasMicAudio) {
+          // If we have BOTH systemic tab audio AND microphone, we must mix them using AudioContext
           const audioCtx = new AudioCtxClass();
           if (audioCtx.state === 'suspended') {
             await audioCtx.resume();
           }
           const dest = audioCtx.createMediaStreamDestination();
-          let attached = false;
+          
+          // Connect tab audio source
+          const displaySource = audioCtx.createMediaStreamSource(displayStream);
+          displaySource.connect(dest);
+          displaySource.connect(audioCtx.destination); // Route to speakers so the user can still hear in real-time
 
-          if (displayStream.getAudioTracks().length > 0) {
-            const displaySource = audioCtx.createMediaStreamSource(displayStream);
-            displaySource.connect(dest);
-            displaySource.connect(audioCtx.destination); // <-- Connect to destination so the user can actually hear playing slides / premium voices!
-            attached = true;
-          }
+          // Connect microphone source
+          const micSource = audioCtx.createMediaStreamSource(micStream!);
+          micSource.connect(dest);
 
-          if (includeMic && micStream && micStream.getAudioTracks().length > 0) {
-            const micSource = audioCtx.createMediaStreamSource(micStream);
-            micSource.connect(dest);
-            attached = true;
-          }
-
-          if (attached) {
-            const mixedTrack = dest.stream.getAudioTracks()[0];
-            combinedStream.addTrack(mixedTrack);
-          }
+          // Use the mixed output track
+          const mixedTrack = dest.stream.getAudioTracks()[0];
+          combinedStream.addTrack(mixedTrack);
         } else {
-          if (displayStream.getAudioTracks().length > 0) {
-            combinedStream.addTrack(displayStream.getAudioTracks()[0]);
-          } else if (micStream && micStream.getAudioTracks().length > 0) {
-            combinedStream.addTrack(micStream.getAudioTracks()[0]);
+          // Fallback: If only one audio stream is present, add it directly to bypass AudioContext limitations completely!
+          if (hasDisplayAudio) {
+            combinedStream.addTrack(displayAudioTracks[0]);
+          } else if (hasMicAudio) {
+            combinedStream.addTrack(micAudioTracks[0]);
           }
         }
       } catch (mixError) {
-        console.warn("Audio Context coupling failed, falling back to basic stream:", mixError);
-        if (displayStream.getAudioTracks().length > 0) {
-          combinedStream.addTrack(displayStream.getAudioTracks()[0]);
+        console.warn("Audio Context coupling failed, falling back to basic stream direct tracks:", mixError);
+        const displayAudioTracks = displayStream.getAudioTracks();
+        const micAudioTracks = includeMic && micStream ? micStream.getAudioTracks() : [];
+        if (displayAudioTracks.length > 0) {
+          combinedStream.addTrack(displayAudioTracks[0]);
+        } else if (micAudioTracks.length > 0) {
+          combinedStream.addTrack(micAudioTracks[0]);
         }
       }
 
@@ -538,29 +545,44 @@ export default function TheaterPlayer({
                       </button>
                     </div>
 
-                    {/* Quick helper Tip reminder */}
-                    <div className="text-[10px] text-slate-350 bg-slate-950/50 p-3 rounded-xl space-y-2 leading-relaxed border border-slate-850/55">
-                      <div className="flex items-start gap-1.5 font-bold text-indigo-400 text-[11px] mb-1">
-                        <HelpCircle className="w-4 h-4 shrink-0" />
-                        <span>Mẹo thu âm thanh & Sửa lỗi</span>
-                      </div>
-                      <ul className="list-disc pl-4 space-y-1 text-slate-400 text-[10.5px]">
-                        <li>
-                          <strong>Tránh màn hình trắng:</strong> Hãy giữ bật nút <strong className="text-indigo-300">"Ưu tiên quay Thẻ này"</strong>. Khi hộp thoại trình duyệt hiện lên, bạn chỉ cần bấm nút <strong className="text-white">Chia sẻ</strong> là xong!
-                        </li>
-                        <li>
-                          <strong>Bật âm thanh:</strong> Hãy luôn tích chọn ô <strong>"Đồng thời chia sẻ âm thanh của thẻ"</strong> (hoặc <strong>"Also share tab audio"</strong>) ở góc dưới bên trái của hộp thoại trình duyệt để thu giọng kỹ thuật số.
-                        </li>
-                        <li>
-                          <strong>Lưu ý Giọng đọc (TTS):</strong> Giọng đọc <em>Mặc định (Trình duyệt)</em> phát qua loa thật của máy tính, nên muốn thu âm được thì bạn <strong className="text-emerald-400">bắt buộc phải bật nút "Ghi Microphone"</strong> phía trên. Nếu dùng giọng <em>Premium AI (Gemini)</em>, hệ thống tự động thu trực tiếp không cần micro!
-                        </li>
-                      </ul>
+                    {/* Quick helper Tip reminder - Collapsible to avoid squishing the recording button */}
+                    <div className="text-[10px] text-slate-350 bg-slate-950/50 rounded-xl border border-slate-850/55 overflow-hidden transition-all duration-200">
+                      <button
+                        type="button"
+                        onClick={() => setShowRecordingHelp(!showRecordingHelp)}
+                        className="w-full flex items-center justify-between p-2.5 font-bold text-indigo-400 text-[11px] hover:bg-slate-950/80 transition cursor-pointer"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>Mẹo âm thanh & Cách sửa lỗi</span>
+                        </div>
+                        <span className="text-slate-500 font-mono text-[9px] shrink-0">
+                          {showRecordingHelp ? "ẨN ▲" : "XEM ▼"}
+                        </span>
+                      </button>
+                      
+                      {showRecordingHelp && (
+                        <ul className="list-disc pl-5 pr-3 pb-3 space-y-1.5 text-slate-400 text-[10px] border-t border-slate-850/50 pt-2 bg-slate-950/20">
+                          <li>
+                            <strong>Tránh màn hình trắng:</strong> Nên giữ bật <em>"Ưu tiên quay Thẻ này"</em>. Khi hộp thoại Chrome hiện, chỉ cần click nút <strong>Chia sẻ</strong>.
+                          </li>
+                          <li>
+                            <strong>Bật âm thanh:</strong> Hãy tích chọn <u>"Đồng thời chia sẻ âm thanh của thẻ"</u> (Also share tab audio) ở góc dưới hộp thoại trình duyệt.
+                          </li>
+                          <li>
+                            <strong>Lưu ý Browser TTS:</strong> Giọng đọc mặc định trình duyệt phát qua loa ngoài máy tính độc lập. Vì vậy, để thu được tiếng, bạn <strong>bắt buộc phải bật nút "Ghi Microphone"</strong> phía trên.
+                          </li>
+                          <li>
+                            <strong>Dành cho Premium AI (Gemini):</strong> Hệ thống tự động thu âm thanh trực tiếp cực chuẩn, không cần dùng Microphone!
+                          </li>
+                        </ul>
+                      )}
                     </div>
 
                     {/* Main action triggers */}
                     <button
                       onClick={handleStartRecording}
-                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-650/10 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-650/10 flex items-center justify-center gap-1.5 transition cursor-pointer hover:scale-[1.02] active:scale-95"
                     >
                       <Circle className="w-3 h-3 fill-rose-500 text-rose-500 animate-pulse bg-transparent rounded-full" />
                       Bắt đầu Ghi hình
@@ -616,13 +638,13 @@ export default function TheaterPlayer({
           <div className="w-full max-w-4xl aspect-video bg-slate-950 rounded-2xl overflow-hidden shadow-2xl border border-slate-900/60 relative flex flex-col items-center justify-center">
             
             {/* Slide screen area */}
-            <div className="flex-1 w-full h-full relative flex items-center justify-center p-4">
+            <div className="flex-1 w-full h-full relative flex items-center justify-center">
               {activeImageUrl ? (
-                /* Cinematic Image scale layer */
+                /* Cinematic Image scale layer - Full bleed stretch */
                 <img
                   src={activeImageUrl}
                   alt={activeItem ? activeItem.text : "Chủ đề"}
-                  className="max-w-full max-h-[75%] object-contain rounded-xl shadow-xl transition-all duration-300"
+                  className="absolute inset-0 w-full h-full object-cover transition-all duration-300"
                   referrerPolicy="no-referrer"
                 />
               ) : (
