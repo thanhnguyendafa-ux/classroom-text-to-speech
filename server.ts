@@ -1,296 +1,70 @@
 import express from "express";
 import path from "path";
-import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import {
+  searchImages,
+  generateTextToSpeech,
+  createSharedPlaylist,
+  getSharedPlaylist,
+} from "./src/server/handlers";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
 
-// Initialize GoogleGenAI SDK with key
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = new GoogleGenAI({
-  apiKey: apiKey,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
-
-// Helper function to attach 44-byte standard WAV container headers to 16-bit PCM 24kHz stream
-function encodeWAV(pcmBuffer: Buffer, sampleRate = 24000): Buffer {
-  const buffer = new ArrayBuffer(44 + pcmBuffer.length);
-  const view = new DataView(buffer);
-
-  // RIFF identifier
-  writeString(view, 0, 'RIFF');
-  // File length
-  view.setUint32(4, 36 + pcmBuffer.length, true);
-  // RIFF type
-  writeString(view, 8, 'WAVE');
-  // Format chunk identifier
-  writeString(view, 12, 'fmt ');
-  // Format chunk length
-  view.setUint32(16, 16, true);
-  // Sample format (raw PCM)
-  view.setUint16(20, 1, true); // 1 = PCM (Integer)
-  // Channel count
-  view.setUint16(22, 1, true); // Mono
-  // Sample rate
-  view.setUint32(24, sampleRate, true);
-  // Byte rate (sample rate * block align)
-  view.setUint32(28, sampleRate * 2, true);
-  // Block align (channel count * bytes per sample)
-  view.setUint16(32, 2, true); // 2 bytes per sample (16-bit mono)
-  // Bits per sample
-  view.setUint16(34, 16, true); // 16-bit
-  // Data chunk identifier
-  writeString(view, 36, 'data');
-  // Data chunk length
-  view.setUint32(40, pcmBuffer.length, true);
-
-  // Write PCM audio bytes
-  const pcmArray = new Uint8Array(pcmBuffer);
-  const wavArray = new Uint8Array(buffer);
-  wavArray.set(pcmArray, 44);
-
-  return Buffer.from(wavArray);
-}
-
-function writeString(view: DataView, offset: number, string: string) {
-  for (let i = 0; i < string.length; i++) {
-    view.setUint8(offset + i, string.charCodeAt(i));
-  }
-}
-
-// Request parsers
 app.use(express.json());
 
-// Unsplash NAPI image search endpoint
+// 1. Unsplash Image Search
 app.get("/api/search-images", async (req, res) => {
   try {
-    const query = req.query.q;
-    if (!query || typeof query !== "string") {
-      res.json({ results: [] });
-      return;
-    }
-
-    const searchUrl = `https://unsplash.com/napi/search/photos?query=${encodeURIComponent(query)}&per_page=12`;
-    const response = await fetch(searchUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Unsplash NAPI returned status ${response.status}`);
-    }
-
-    const data = await response.json();
-    const photos = data.results || [];
-
-    const results = photos.map((photo: any) => ({
-      id: photo.id,
-      url: photo.urls?.regular || photo.urls?.small,
-      thumb: photo.urls?.thumb || photo.urls?.small,
-      author: photo.user?.name || "Unsplash Photo",
-      authorUrl: photo.user?.links?.html || "https://unsplash.com"
-    }));
-
-    res.json({ results });
+    const q = req.query.q;
+    const query = typeof q === "string" ? q : "";
+    const result = await searchImages(query);
+    res.json(result);
   } catch (err: any) {
     console.error("Image search error:", err);
     res.status(500).json({ error: err.message || "Failed to search images" });
   }
 });
 
-// Premium TTS proxy endpoint
+// 2. High-performance Gemini TTS
 app.post("/api/tts", async (req, res) => {
   try {
     const { text, voice, lang, userApiKey } = req.body;
-
-    if (!text || typeof text !== "string") {
-      res.status(400).json({ error: "Text content is required" });
-      return;
-    }
-
-    // Use user-supplied key only. We have completely disabled fallback to server's key to protect developer quota.
-    const keyToUse = (userApiKey && typeof userApiKey === "string" && userApiKey.trim() !== "")
-      ? userApiKey.trim()
-      : null;
-
-    if (!keyToUse) {
-      res.status(400).json({ 
-        error: "Vui lòng nhập Gemini API Key của riêng bạn trong cột Cấu hình bên trái để sử dụng giọng đọc Premium AI." 
-      });
-      return;
-    }
-
-    // Determine GoogleGenAI instance using the user-supplied key
-    const aiInstance = new GoogleGenAI({
-      apiKey: keyToUse,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
-
-    // Structure appropriate trigger prompt according to language choice
-    let steeringPrompt = text;
-    if (lang === "vi") {
-      steeringPrompt = `Say in natural, perfect Vietnamese with appropriate accent, tone, and pacing: ${text}`;
-    } else if (lang === "zh-cn") {
-      steeringPrompt = `Say in natural, perfect Mandarin Chinese (Simplified character mode) with appropriate tone and pacing: ${text}`;
-    } else if (lang === "zh-tw") {
-      steeringPrompt = `Say in natural, perfect Traditional Mandarin Chinese (Traditional character/Taiwan/Hong Kong style) with appropriate tone and pacing: ${text}`;
-    } else if (lang === "ja") {
-      steeringPrompt = `Say in perfect natural Japanese with perfect accentuation and natural rhythm: ${text}`;
-    } else if (lang === "ko") {
-      steeringPrompt = `Say in perfect natural Korean with appropriate pronunciation, rhythm, and intonation: ${text}`;
-    } else {
-      steeringPrompt = `Say in natural, standard native English with appropriate pacing: ${text}`;
-    }
-
-    const chosenVoice = voice || "Kore";
-
-    // Call Gemini 3.1 TTS model
-    const response = await aiInstance.models.generateContent({
-      model: "gemini-3.1-flash-tts-preview",
-      contents: [{ parts: [{ text: steeringPrompt }] }],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: chosenVoice }
-          }
-        }
-      }
-    });
-
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
-    if (!base64Audio) {
-      res.status(500).json({ error: "Thất bại khi lấy dữ liệu âm thanh từ động cơ AI" });
-      return;
-    }
-
-    const pcmBuffer = Buffer.from(base64Audio, "base64");
-    const wavBuffer = encodeWAV(pcmBuffer, 24000);
-    const wavBase64 = wavBuffer.toString("base64");
-
-    res.json({
-      audioUrl: `data:audio/wav;base64,${wavBase64}`
-    });
-
+    const result = await generateTextToSpeech({ text, voice, lang, userApiKey });
+    res.json(result);
   } catch (err: any) {
     console.error("TTS Premium API Error:", err);
     res.status(500).json({ error: err.message || "Lỗi xử lý giọng nói AI" });
   }
 });
 
-// Workspace Share Playlists local file persistence manager
-const DATA_DIR = path.join(process.cwd(), "data");
-const PLAYLISTS_FILE = path.join(DATA_DIR, "shared_playlists.json");
-
-// Loaded in-memory cache
-let inMemoryPlaylists: Record<string, any> = {};
-
-function loadPlaylistsFromFile(): Record<string, any> {
+// 3. Share custom playlist
+app.post("/api/share-playlist", async (req, res) => {
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    if (fs.existsSync(PLAYLISTS_FILE)) {
-      const content = fs.readFileSync(PLAYLISTS_FILE, "utf-8");
-      return JSON.parse(content);
-    }
-  } catch (err) {
-    console.error("Error reading shared playlists file:", err);
-  }
-  return {};
-}
-
-function savePlaylistToFile(shareId: string, data: any) {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    const current = loadPlaylistsFromFile();
-    current[shareId] = data;
-    fs.writeFileSync(PLAYLISTS_FILE, JSON.stringify(current, null, 2), "utf-8");
-    inMemoryPlaylists[shareId] = data;
-  } catch (err) {
-    console.error("Error saving playlist data to file:", err);
-  }
-}
-
-// Helper to generate reliable short ID
-function generateShortId(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let result = "";
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
-
-// Endpoint to publish / share a custom playlist
-app.post("/api/share-playlist", (req, res) => {
-  try {
-    const playlistData = req.body;
-    if (!playlistData || !Array.isArray(playlistData.speechList)) {
-      res.status(400).json({ error: "Dữ liệu cấu hình bài tập không hợp lệ." });
-      return;
-    }
-
-    const shareId = generateShortId();
-    const payload = {
-      ...playlistData,
-      createdAt: new Date().toISOString()
-    };
-
-    savePlaylistToFile(shareId, payload);
-
-    res.json({ id: shareId });
+    const result = await createSharedPlaylist(req.body);
+    res.json(result);
   } catch (err: any) {
     console.error("Error publishing shared playlist:", err);
     res.status(500).json({ error: err.message || "Không thể tạo liên kết chia sẻ." });
   }
 });
 
-// Endpoint to retrieve a shared playlist configuration
-app.get("/api/share-playlist/:id", (req, res) => {
+// 4. Retrieve custom playlist by ID
+app.get("/api/share-playlist/:id", async (req, res) => {
   try {
     const shareId = req.params.id;
-    
-    // Check in-memory first, fallback to file load
-    let playlist = inMemoryPlaylists[shareId];
-    if (!playlist) {
-      const allFromFile = loadPlaylistsFromFile();
-      playlist = allFromFile[shareId];
-      if (playlist) {
-        inMemoryPlaylists[shareId] = playlist;
-      }
-    }
-
-    if (!playlist) {
-      res.status(404).json({ error: "Không tìm thấy chuỗi luyện tập này hoặc liên kết đã hết hạn." });
-      return;
-    }
-
-    res.json(playlist);
+    const result = await getSharedPlaylist(shareId);
+    res.json(result);
   } catch (err: any) {
     console.error("Error loading shared playlist:", err);
-    res.status(500).json({ error: err.message || "Không thể tải bài tập chia sẻ." });
+    res.status(404).json({ error: err.message || "Không tìm thấy chuỗi luyện tập này." });
   }
 });
 
-// Mount Vite middleware or serve static files in production
+// Serve frontend assets / boot Vite middleware
 async function start() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -299,10 +73,10 @@ async function start() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 

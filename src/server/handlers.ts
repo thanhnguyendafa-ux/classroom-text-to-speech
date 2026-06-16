@@ -1,0 +1,213 @@
+import { GoogleGenAI } from "@google/genai";
+import { PlaylistStorageManager, PlaylistPayload } from "./storage";
+
+// Helper function to attach 44-byte standard WAV container headers to 16-bit PCM 24kHz stream
+function encodeWAV(pcmBuffer: Buffer, sampleRate = 24000): Buffer {
+  const buffer = new ArrayBuffer(44 + pcmBuffer.length);
+  const view = new DataView(buffer);
+
+  // RIFF identifier
+  writeString(view, 0, 'RIFF');
+  // File length
+  view.setUint32(4, 36 + pcmBuffer.length, true);
+  // RIFF type
+  writeString(view, 8, 'WAVE');
+  // Format chunk identifier
+  writeString(view, 12, 'fmt ');
+  // Format chunk length
+  view.setUint32(16, 16, true);
+  // Sample format (raw PCM)
+  view.setUint16(20, 1, true); // 1 = PCM (Integer)
+  // Channel count
+  view.setUint16(22, 1, true); // Mono
+  // Sample rate
+  view.setUint32(24, sampleRate, true);
+  // Byte rate (sample rate * block align)
+  view.setUint32(28, sampleRate * 2, true);
+  // Block align (channel count * bytes per sample)
+  view.setUint16(32, 2, true); // 2 bytes per sample (16-bit mono)
+  // Bits per sample
+  view.setUint16(34, 16, true); // 16-bit
+  // Data chunk identifier
+  writeString(view, 36, 'data');
+  // Data chunk length
+  view.setUint32(40, pcmBuffer.length, true);
+
+  // Write PCM audio bytes
+  const pcmArray = new Uint8Array(pcmBuffer);
+  const wavArray = new Uint8Array(buffer);
+  wavArray.set(pcmArray, 44);
+
+  return Buffer.from(wavArray);
+}
+
+function writeString(view: DataView, offset: number, string: string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+// Helper to generate reliable short ID
+function generateShortId(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let result = "";
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+/**
+ * Image Search Business Logic
+ */
+export async function searchImages(query: string | undefined): Promise<{ results: any[] }> {
+  if (!query || typeof query !== "string" || !query.trim()) {
+    return { results: [] };
+  }
+
+  const searchUrl = `https://unsplash.com/napi/search/photos?query=${encodeURIComponent(query.trim())}&per_page=12`;
+  const response = await fetch(searchUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Unsplash NAPI returned status ${response.status}`);
+  }
+
+  const data = await response.json();
+  const photos = data.results || [];
+
+  const results = photos.map((photo: any) => ({
+    id: photo.id,
+    url: photo.urls?.regular || photo.urls?.small,
+    thumb: photo.urls?.thumb || photo.urls?.small,
+    author: photo.user?.name || "Unsplash Photo",
+    authorUrl: photo.user?.links?.html || "https://unsplash.com"
+  }));
+
+  return { results };
+}
+
+/**
+ * Text-to-Speech (TTS) Business Logic
+ */
+export async function generateTextToSpeech(payload: {
+  text: string;
+  voice?: string;
+  lang?: string;
+  userApiKey?: string;
+}): Promise<{ audioUrl: string }> {
+  const { text, voice, lang, userApiKey } = payload;
+
+  if (!text || typeof text !== "string") {
+    throw new Error("Nội dung văn bản thoại (text) là bắt buộc.");
+  }
+
+  // Use user-supplied key only. Fallback disabled to protect developer quota.
+  const keyToUse = (userApiKey && typeof userApiKey === "string" && userApiKey.trim() !== "")
+    ? userApiKey.trim()
+    : null;
+
+  if (!keyToUse) {
+    throw new Error("Vui lòng nhập Gemini API Key của riêng bạn trong cột Cấu hình bên trái để sử dụng giọng đọc Premium AI.");
+  }
+
+  // Initialize GoogleGenAI instance with the client key
+  const aiInstance = new GoogleGenAI({
+    apiKey: keyToUse,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
+
+  // Structuring appropriate triggers for languages
+  let steeringPrompt = text;
+  if (lang === "vi") {
+    steeringPrompt = `Say in natural, perfect Vietnamese with appropriate accent, tone, and pacing: ${text}`;
+  } else if (lang === "zh-cn") {
+    steeringPrompt = `Say in natural, perfect Mandarin Chinese (Simplified character mode) with appropriate tone and pacing: ${text}`;
+  } else if (lang === "zh-tw") {
+    steeringPrompt = `Say in natural, perfect Traditional Mandarin Chinese (Traditional character/Taiwan/Hong Kong style) with appropriate tone and pacing: ${text}`;
+  } else if (lang === "ja") {
+    steeringPrompt = `Say in perfect natural Japanese with perfect accentuation and natural rhythm: ${text}`;
+  } else if (lang === "ko") {
+    steeringPrompt = `Say in perfect natural Korean with appropriate pronunciation, rhythm, and intonation: ${text}`;
+  } else {
+    steeringPrompt = `Say in natural, standard native English with appropriate pacing: ${text}`;
+  }
+
+  const chosenVoice = voice || "Kore";
+
+  // Call Gemini 3.1 TTS model
+  const response = await aiInstance.models.generateContent({
+    model: "gemini-3.1-flash-tts-preview",
+    contents: [{ parts: [{ text: steeringPrompt }] }],
+    config: {
+      responseModalities: ["AUDIO"],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: chosenVoice }
+        }
+      }
+    }
+  });
+
+  const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+  if (!base64Audio) {
+    throw new Error("Thất bại khi lấy dữ liệu âm thanh từ động cơ AI. Hãy thử lại hoặc kiểm tra lại Key Gemini của bạn.");
+  }
+
+  const pcmBuffer = Buffer.from(base64Audio, "base64");
+  const wavBuffer = encodeWAV(pcmBuffer, 24000);
+  const wavBase64 = wavBuffer.toString("base64");
+
+  return {
+    audioUrl: `data:audio/wav;base64,${wavBase64}`
+  };
+}
+
+/**
+ * Share Playlist Business Logic - Save Custom Lesson Playlist
+ */
+export async function createSharedPlaylist(playlistBody: any): Promise<{ id: string }> {
+  if (!playlistBody || !Array.isArray(playlistBody.speechList)) {
+    throw new Error("Dữ liệu cấu hình bài tập không hợp lệ.");
+  }
+
+  const shareId = generateShortId();
+  const payload: PlaylistPayload = {
+    speechList: playlistBody.speechList,
+    speed: typeof playlistBody.speed === "number" ? playlistBody.speed : 1,
+    volume: typeof playlistBody.volume === "number" ? playlistBody.volume : 0.8,
+    autoAdvance: typeof playlistBody.autoAdvance === "boolean" ? playlistBody.autoAdvance : true,
+    timeBetweenLines: typeof playlistBody.timeBetweenLines === "number" ? playlistBody.timeBetweenLines : 0,
+    playlistLoopMode: playlistBody.playlistLoopMode === "infinite" ? "infinite" : "once",
+    engineMode: playlistBody.engineMode === "premium" ? "premium" : "browser",
+    createdAt: new Date().toISOString()
+  };
+
+  await PlaylistStorageManager.savePlaylist(shareId, payload);
+  return { id: shareId };
+}
+
+/**
+ * Share Playlist Business Logic - Retrieve Saved Custom Lesson Playlist
+ */
+export async function getSharedPlaylist(shareId: string | undefined): Promise<PlaylistPayload> {
+  if (!shareId || typeof shareId !== "string" || !shareId.trim()) {
+    throw new Error("Mã chia sẻ không hợp lệ.");
+  }
+
+  const playlist = await PlaylistStorageManager.getPlaylist(shareId.trim());
+
+  if (!playlist) {
+    throw new Error("Không tìm thấy chuỗi luyện tập này hoặc liên kết đã hết hạn.");
+  }
+
+  return playlist;
+}
