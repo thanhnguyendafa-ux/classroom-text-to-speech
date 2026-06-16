@@ -2199,9 +2199,20 @@ Chào mừng thầy cô và các học sinh ;3 /4`;
                             )}
                           </button>
                         </div>
-                        <p className="text-[9px] text-slate-450 mt-1.5 leading-relaxed">
-                          * <strong>Cam kết bảo mật</strong>: Key được lưu an toàn trên máy của bạn (localStorage), không lưu trữ trái phép trên máy chủ.
-                        </p>
+                        <div className="flex justify-between items-center mt-2">
+                          <p className="text-[9px] text-slate-450 leading-relaxed max-w-[75%]">
+                            * Key chỉ lưu trong trình duyệt này. Không nên dùng trên máy công cộng.
+                          </p>
+                          {userGeminiApiKey && (
+                            <button
+                              type="button"
+                              onClick={() => handleApiKeyChange("")}
+                              className="text-[9px] font-extrabold text-rose-650 hover:text-rose-800 hover:underline cursor-pointer bg-none border-none p-0 shrink-0"
+                            >
+                              Xóa Key
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </>
                   )}

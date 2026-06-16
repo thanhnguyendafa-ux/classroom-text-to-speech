@@ -1,7 +1,8 @@
 import { generateTextToSpeech } from "../src/server/handlers";
+import { getClientIp, ttsLimiter } from "../src/server/rateLimiter";
 
 export default async function handler(req: any, res: any) {
-  // Enable CORS
+  // CORS Headers
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
@@ -17,6 +18,16 @@ export default async function handler(req: any, res: any) {
 
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method Not Allowed" });
+    return;
+  }
+
+  // Rate Limiting on Serverless context
+  const ip = getClientIp(req);
+  const limitState = ttsLimiter.consume(ip);
+  if (!limitState.success) {
+    res.status(429).json({
+      error: "Bạn đang dịch giọng nói quá nhanh. Vui lòng chậm lại một lát."
+    });
     return;
   }
 

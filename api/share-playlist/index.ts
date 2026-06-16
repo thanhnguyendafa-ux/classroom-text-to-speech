@@ -1,4 +1,5 @@
 import { createSharedPlaylist } from "../../src/server/handlers";
+import { getClientIp, sharePlaylistLimiter } from "../../src/server/rateLimiter";
 
 export default async function handler(req: any, res: any) {
   // CORS Headers
@@ -17,6 +18,16 @@ export default async function handler(req: any, res: any) {
 
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method Not Allowed" });
+    return;
+  }
+
+  // Rate Limiting on Serverless context
+  const ip = getClientIp(req);
+  const limitState = sharePlaylistLimiter.consume(ip);
+  if (!limitState.success) {
+    res.status(429).json({
+      error: "Bạn đang tạo liên kết chia sẻ quá nhanh. Vui lòng đợi một lát."
+    });
     return;
   }
 

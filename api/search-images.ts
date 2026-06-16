@@ -1,4 +1,5 @@
 import { searchImages } from "../src/server/handlers";
+import { getClientIp, imageSearchLimiter } from "../src/server/rateLimiter";
 
 export default async function handler(req: any, res: any) {
   // CORS Headers
@@ -17,6 +18,16 @@ export default async function handler(req: any, res: any) {
 
   if (req.method !== "GET") {
     res.status(405).json({ error: "Method Not Allowed" });
+    return;
+  }
+
+  // Rate Limiting on Serverless context
+  const ip = getClientIp(req);
+  const limitState = imageSearchLimiter.consume(ip);
+  if (!limitState.success) {
+    res.status(429).json({
+      error: "Bạn đang tìm kiếm ảnh quá nhanh. Vui lòng thử lại sau 1 phút."
+    });
     return;
   }
 

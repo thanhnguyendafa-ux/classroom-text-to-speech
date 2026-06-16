@@ -1,5 +1,7 @@
+import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import { PlaylistStorageManager, PlaylistPayload } from "./storage";
+import { validatePlaylistPayload } from "./validation";
 
 // Helper function to attach 44-byte standard WAV container headers to 16-bit PCM 24kHz stream
 function encodeWAV(pcmBuffer: Buffer, sampleRate = 24000): Buffer {
@@ -47,14 +49,13 @@ function writeString(view: DataView, offset: number, string: string) {
   }
 }
 
-// Helper to generate reliable short ID
+/**
+ * Helper to generate a cryptographically secure, high-entropy,
+ * completely unguessable, url-safe short ID.
+ */
 function generateShortId(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let result = "";
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+  // 6 secure random bytes produce 8 base64url characters
+  return crypto.randomBytes(6).toString("base64url");
 }
 
 /**
@@ -65,15 +66,18 @@ export async function searchImages(query: string | undefined): Promise<{ results
     return { results: [] };
   }
 
-  const searchUrl = `https://unsplash.com/napi/search/photos?query=${encodeURIComponent(query.trim())}&per_page=12`;
+  // Safe substring to prevent extremely long queries
+  const sanitizedQuery = query.trim().substring(0, 100);
+
+  const searchUrl = `https://unsplash.com/napi/search/photos?query=${encodeURIComponent(sanitizedQuery)}&per_page=12`;
   const response = await fetch(searchUrl, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/437.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/437.36"
     }
   });
 
   if (!response.ok) {
-    throw new Error(`Unsplash NAPI returned status ${response.status}`);
+    throw new Error(`Unsplash API returned standard status: ${response.status}`);
   }
 
   const data = await response.json();
@@ -101,11 +105,14 @@ export async function generateTextToSpeech(payload: {
 }): Promise<{ audioUrl: string }> {
   const { text, voice, lang, userApiKey } = payload;
 
-  if (!text || typeof text !== "string") {
+  if (!text || typeof text !== "string" || !text.trim()) {
     throw new Error("Nội dung văn bản thoại (text) là bắt buộc.");
   }
 
-  // Use user-supplied key only. Fallback disabled to protect developer quota.
+  // Enforce a strict text length threshold per request on raw generation
+  const trimmedText = text.trim().substring(0, 1000);
+
+  // Require user-supplied key for all transactions. Server-key fallback disabled.
   const keyToUse = (userApiKey && typeof userApiKey === "string" && userApiKey.trim() !== "")
     ? userApiKey.trim()
     : null;
@@ -114,7 +121,7 @@ export async function generateTextToSpeech(payload: {
     throw new Error("Vui lòng nhập Gemini API Key của riêng bạn trong cột Cấu hình bên trái để sử dụng giọng đọc Premium AI.");
   }
 
-  // Initialize GoogleGenAI instance with the client key
+  // Initialize GoogleGenAI instance using the client's provided key
   const aiInstance = new GoogleGenAI({
     apiKey: keyToUse,
     httpOptions: {
@@ -125,24 +132,24 @@ export async function generateTextToSpeech(payload: {
   });
 
   // Structuring appropriate triggers for languages
-  let steeringPrompt = text;
+  let steeringPrompt = trimmedText;
   if (lang === "vi") {
-    steeringPrompt = `Say in natural, perfect Vietnamese with appropriate accent, tone, and pacing: ${text}`;
+    steeringPrompt = `Say in natural, perfect Vietnamese with appropriate accent, tone, and pacing: ${trimmedText}`;
   } else if (lang === "zh-cn") {
-    steeringPrompt = `Say in natural, perfect Mandarin Chinese (Simplified character mode) with appropriate tone and pacing: ${text}`;
+    steeringPrompt = `Say in natural, perfect Mandarin Chinese (Simplified character mode) with appropriate tone and pacing: ${trimmedText}`;
   } else if (lang === "zh-tw") {
-    steeringPrompt = `Say in natural, perfect Traditional Mandarin Chinese (Traditional character/Taiwan/Hong Kong style) with appropriate tone and pacing: ${text}`;
+    steeringPrompt = `Say in natural, perfect Traditional Mandarin Chinese (Traditional character/Taiwan/Hong Kong style) with appropriate tone and pacing: ${trimmedText}`;
   } else if (lang === "ja") {
-    steeringPrompt = `Say in perfect natural Japanese with perfect accentuation and natural rhythm: ${text}`;
+    steeringPrompt = `Say in perfect natural Japanese with perfect accentuation and natural rhythm: ${trimmedText}`;
   } else if (lang === "ko") {
-    steeringPrompt = `Say in perfect natural Korean with appropriate pronunciation, rhythm, and intonation: ${text}`;
+    steeringPrompt = `Say in perfect natural Korean with appropriate pronunciation, rhythm, and intonation: ${trimmedText}`;
   } else {
-    steeringPrompt = `Say in natural, standard native English with appropriate pacing: ${text}`;
+    steeringPrompt = `Say in natural, standard native English with appropriate pacing: ${trimmedText}`;
   }
 
   const chosenVoice = voice || "Kore";
 
-  // Call Gemini 3.1 TTS model
+  // Call Gemini 3.1 tts-preview model
   const response = await aiInstance.models.generateContent({
     model: "gemini-3.1-flash-tts-preview",
     contents: [{ parts: [{ text: steeringPrompt }] }],
@@ -175,19 +182,18 @@ export async function generateTextToSpeech(payload: {
  * Share Playlist Business Logic - Save Custom Lesson Playlist
  */
 export async function createSharedPlaylist(playlistBody: any): Promise<{ id: string }> {
-  if (!playlistBody || !Array.isArray(playlistBody.speechList)) {
-    throw new Error("Dữ liệu cấu hình bài tập không hợp lệ.");
-  }
+  // Validate request schema and enforce maximum items & length bounds
+  const validated = validatePlaylistPayload(playlistBody);
 
   const shareId = generateShortId();
   const payload: PlaylistPayload = {
-    speechList: playlistBody.speechList,
-    speed: typeof playlistBody.speed === "number" ? playlistBody.speed : 1,
-    volume: typeof playlistBody.volume === "number" ? playlistBody.volume : 0.8,
-    autoAdvance: typeof playlistBody.autoAdvance === "boolean" ? playlistBody.autoAdvance : true,
-    timeBetweenLines: typeof playlistBody.timeBetweenLines === "number" ? playlistBody.timeBetweenLines : 0,
-    playlistLoopMode: playlistBody.playlistLoopMode === "infinite" ? "infinite" : "once",
-    engineMode: playlistBody.engineMode === "premium" ? "premium" : "browser",
+    speechList: validated.speechList,
+    speed: validated.speed,
+    volume: validated.volume,
+    autoAdvance: validated.autoAdvance,
+    timeBetweenLines: validated.timeBetweenLines,
+    playlistLoopMode: validated.playlistLoopMode,
+    engineMode: validated.engineMode,
     createdAt: new Date().toISOString()
   };
 

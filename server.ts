@@ -8,16 +8,32 @@ import {
   createSharedPlaylist,
   getSharedPlaylist,
 } from "./src/server/handlers";
+import {
+  getClientIp,
+  ttsLimiter,
+  imageSearchLimiter,
+  sharePlaylistLimiter,
+} from "./src/server/rateLimiter";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+// Set payload body size limit to prevent oversized request attacks
+app.use(express.json({ limit: "500kb" }));
 
-// 1. Unsplash Image Search
+// 1. Unsplash Image Search with Rate Limiting
 app.get("/api/search-images", async (req, res) => {
+  const ip = getClientIp(req);
+  const rateLimit = imageSearchLimiter.consume(ip);
+  if (!rateLimit.success) {
+    res.status(429).json({
+      error: "Bạn đang tìm kiếm ảnh quá nhanh. Vui lòng thử lại sau 1 phút."
+    });
+    return;
+  }
+
   try {
     const q = req.query.q;
     const query = typeof q === "string" ? q : "";
@@ -29,8 +45,17 @@ app.get("/api/search-images", async (req, res) => {
   }
 });
 
-// 2. High-performance Gemini TTS
+// 2. High-performance Gemini TTS with Rate Limiting
 app.post("/api/tts", async (req, res) => {
+  const ip = getClientIp(req);
+  const rateLimit = ttsLimiter.consume(ip);
+  if (!rateLimit.success) {
+    res.status(429).json({
+      error: "Bạn đang dịch giọng nói quá nhanh. Vui lòng chậm lại một lát."
+    });
+    return;
+  }
+
   try {
     const { text, voice, lang, userApiKey } = req.body;
     const result = await generateTextToSpeech({ text, voice, lang, userApiKey });
@@ -41,8 +66,17 @@ app.post("/api/tts", async (req, res) => {
   }
 });
 
-// 3. Share custom playlist
+// 3. Share custom playlist with Rate Limiting
 app.post("/api/share-playlist", async (req, res) => {
+  const ip = getClientIp(req);
+  const rateLimit = sharePlaylistLimiter.consume(ip);
+  if (!rateLimit.success) {
+    res.status(429).json({
+      error: "Bạn đang tạo liên kết chia sẻ quá nhanh. Vui lòng đợi một lát."
+    });
+    return;
+  }
+
   try {
     const result = await createSharedPlaylist(req.body);
     res.json(result);
@@ -52,7 +86,7 @@ app.post("/api/share-playlist", async (req, res) => {
   }
 });
 
-// 4. Retrieve custom playlist by ID
+// 4. Retrieve custom playlist by ID (No rate limit for views to keep user experience smooth, but lightweight lookup)
 app.get("/api/share-playlist/:id", async (req, res) => {
   try {
     const shareId = req.params.id;
@@ -60,7 +94,7 @@ app.get("/api/share-playlist/:id", async (req, res) => {
     res.json(result);
   } catch (err: any) {
     console.error("Error loading shared playlist:", err);
-    res.status(404).json({ error: err.message || "Không tìm thấy chuỗi luyện tập này." });
+    res.status(404).json({ error: err.message || "Không tìm thấy chuỗi luyện tập này hoặc liên kết đã hết hạn." });
   }
 });
 
