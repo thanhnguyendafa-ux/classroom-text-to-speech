@@ -21,7 +21,9 @@ import {
   HelpCircle,
   AlertTriangle,
   Eye,
-  EyeOff
+  EyeOff,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { SpeechItem, LanguageCode } from '../types';
 
@@ -96,6 +98,7 @@ export default function TheaterPlayer({
   const [onlyCurrentTab, setOnlyCurrentTab] = React.useState<boolean>(true);
   const [showRecordingHelp, setShowRecordingHelp] = React.useState<boolean>(false);
   const [hideControls, setHideControls] = React.useState<boolean>(false);
+  const [isBottomBarCollapsed, setIsBottomBarCollapsed] = React.useState<boolean>(false);
 
   // Keyboard shortcut to toggle UI controls quickly (using 'h' or 'H')
   React.useEffect(() => {
@@ -802,9 +805,38 @@ export default function TheaterPlayer({
           </div>
         </div>
 
+        {/* Toggle Collapse Bottom Bar Handle */}
+        {!hideControls && (
+          <div className={`relative w-full z-30 flex justify-center ${
+            isBottomBarCollapsed ? 'absolute bottom-4 left-0 right-0' : 'h-0 -mt-3.5'
+          }`}>
+            <button
+              type="button"
+              id="toggle-bottom-bar-trigger"
+              onClick={() => setIsBottomBarCollapsed(!isBottomBarCollapsed)}
+              className="px-4 py-1.5 bg-slate-900/95 hover:bg-slate-850 hover:text-indigo-400 border border-slate-800 text-slate-300 rounded-full flex items-center space-x-1.5 text-[11px] font-bold shadow-lg shadow-black/90 transition-all duration-200 cursor-pointer backdrop-blur-md"
+              title={isBottomBarCollapsed ? "Nhấn để kéo lồi bảng nút điều khiển lên" : "Nhấn để thu gọn/ẩn bớt các phím chỉnh xuống dưới"}
+            >
+              {isBottomBarCollapsed ? (
+                <>
+                  <ChevronUp className="w-3.5 h-3.5 text-indigo-400 animate-bounce" />
+                  <span>Bảng điều khiển 🔼</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Thu gọn 🔽</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         {/* BOTTOM INTEGRATED CONTROLS PARAMETERS ROW */}
         {!hideControls && (
-          <div className="px-5 py-4 bg-slate-950 border-t border-slate-900 flex flex-col space-y-4 z-20">
+          <div className={`bg-slate-950 border-t border-slate-900 flex flex-col z-20 transition-all duration-300 ${
+            isBottomBarCollapsed ? 'h-0 py-0 border-t-0 opacity-0 overflow-hidden shrink-0' : 'px-5 py-4 h-auto opacity-100 shrink-0 space-y-4'
+          }`}>
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             {/* Control Group 1: Navigation keys */}
