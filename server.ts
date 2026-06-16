@@ -118,10 +118,10 @@ app.post("/api/tts", async (req, res) => {
       return;
     }
 
-    // Use user-supplied key if provided, else fall back to server's key
+    // Use user-supplied key only. We have completely disabled fallback to server's key to protect developer quota.
     const keyToUse = (userApiKey && typeof userApiKey === "string" && userApiKey.trim() !== "")
       ? userApiKey.trim()
-      : apiKey;
+      : null;
 
     if (!keyToUse) {
       res.status(400).json({ 
@@ -130,18 +130,15 @@ app.post("/api/tts", async (req, res) => {
       return;
     }
 
-    // Determine GoogleGenAI instance
-    let aiInstance = ai;
-    if (keyToUse !== apiKey) {
-      aiInstance = new GoogleGenAI({
-        apiKey: keyToUse,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
+    // Determine GoogleGenAI instance using the user-supplied key
+    const aiInstance = new GoogleGenAI({
+      apiKey: keyToUse,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
         }
-      });
-    }
+      }
+    });
 
     // Structure appropriate trigger prompt according to language choice
     let steeringPrompt = text;
