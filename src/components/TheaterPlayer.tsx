@@ -91,6 +91,7 @@ export default function TheaterPlayer({
   const [showRecordConfig, setShowRecordConfig] = React.useState<boolean>(false);
   const [recordResolution, setRecordResolution] = React.useState<'480p' | '720p' | '1080p'>('720p');
   const [includeMic, setIncludeMic] = React.useState<boolean>(false);
+  const [disableEchoCancellation, setDisableEchoCancellation] = React.useState<boolean>(true);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [onlyCurrentTab, setOnlyCurrentTab] = React.useState<boolean>(true);
   const [showRecordingHelp, setShowRecordingHelp] = React.useState<boolean>(false);
@@ -216,7 +217,18 @@ export default function TheaterPlayer({
       let micStream: MediaStream | null = null;
       if (includeMic) {
         try {
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          try {
+            micStream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                echoCancellation: !disableEchoCancellation,
+                noiseSuppression: !disableEchoCancellation,
+                autoGainControl: true
+              }
+            });
+          } catch (firstTryErr) {
+            console.warn("Direct customizable mic stream constraints failed, falling back to basic audio stream:", firstTryErr);
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          }
           micStreamRef.current = micStream;
         } catch (micErr: any) {
           console.warn("Microphone access is denied, falling back:", micErr);
@@ -232,9 +244,9 @@ export default function TheaterPlayer({
           frameRate: { ideal: 30 }
         },
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
         }
       };
 
@@ -552,6 +564,34 @@ export default function TheaterPlayer({
                       </button>
                     </div>
 
+                    {/* Disable Echo Cancellation for Speaker Captures */}
+                    {includeMic && (
+                      <div className="flex items-center justify-between bg-slate-950/40 p-2.5 rounded-xl border border-emerald-950/40 transition-all animate-fadeIn">
+                        <div className="space-y-0.5 pr-1">
+                          <span className="font-bold text-emerald-300 block flex items-center gap-1.5 text-[11px]">
+                            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                            Tối ưu thu âm Loa Ngoài
+                          </span>
+                          <span className="text-[9.5px] text-slate-350 leading-tight block">
+                            Tắt Khử Vọng (AEC) giúp Mic thu mọi ngoại ngữ phát trên loa máy ổn định, không bị ngắt/mất xen kẽ.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setDisableEchoCancellation(!disableEchoCancellation)}
+                          className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                            disableEchoCancellation ? 'bg-emerald-500' : 'bg-slate-800'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white transition duration-100 ease-in-out ${
+                              disableEchoCancellation ? 'translate-x-3.5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )}
+
                     {/* Prefer Current Tab Toggle Switch */}
                     <div className="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-850">
                       <div className="space-y-0.5 pr-2">
@@ -603,10 +643,10 @@ export default function TheaterPlayer({
                             <strong>Bật âm thanh:</strong> Hãy tích chọn <u>"Đồng thời chia sẻ âm thanh của thẻ"</u> (Also share tab audio) ở góc dưới hộp thoại trình duyệt.
                           </li>
                           <li>
-                            <strong>Lưu ý Browser TTS:</strong> Giọng đọc mặc định trình duyệt phát qua loa ngoài máy tính độc lập. Vì vậy, để thu được tiếng, bạn <strong>bắt buộc phải bật nút "Ghi Microphone"</strong> phía trên.
+                            <strong>Lưu ý Browser TTS:</strong> Giọng đọc mặc định trình duyệt phát ra loa ngoài, không qua luồng âm thanh nội bộ của thẻ. Do đó, để thu được tiếng, bạn <strong>bắt buộc phải bật nút "Ghi Microphone" và bật tùy chọn "Tối ưu thu âm Loa ngoài"</strong> phía trên để tránh việc giải thuật khử vọng (AEC) của trình duyệt triệt tiêu mất giọng Tiếng Trung hoặc Tiếng Việt.
                           </li>
                           <li>
-                            <strong>Dành cho Premium AI (Gemini):</strong> Hệ thống tự động thu âm thanh trực tiếp cực chuẩn, không cần dùng Microphone!
+                            <strong>Dành cho Premium AI (Gemini):</strong> Hệ thống tự động thu âm thanh trực tiếp cực chuẩn từ hệ thống mà không cần bật mic!
                           </li>
                         </ul>
                       )}
