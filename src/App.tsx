@@ -33,7 +33,8 @@ import {
   Upload,
   Share2,
   Image as ImageIcon,
-  Search
+  Search,
+  Radio
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode } from './types';
@@ -41,6 +42,7 @@ import ImageSearchModal from './components/ImageSearchModal';
 import TheaterPlayer from './components/TheaterPlayer';
 import ShareModal from './components/ShareModal';
 import LessonLibrary from './components/LessonLibrary';
+import AudioExportModal from './components/AudioExportModal';
 
 // Pre-defined educational templates for teachers and students
 const TEMPLATES = [
@@ -85,6 +87,7 @@ export default function App() {
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
   const [isImageSearchModalOpen, setIsImageSearchModalOpen] = useState<boolean>(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
+  const [isAudioExportModalOpen, setIsAudioExportModalOpen] = useState<boolean>(false);
   const [selectedItemForImageSearch, setSelectedItemForImageSearch] = useState<SpeechItem | null>(null);
   const [volume, setVolume] = useState<number>(() => {
     if (typeof window !== 'undefined') {
@@ -2554,6 +2557,18 @@ Mời rất thích ăn bắp rang ngon lành.`;
                         <span>Chia sẻ liên kết</span>
                       </button>
 
+                      {/* Export Audio Button */}
+                      <button
+                        id="export-audio-trigger"
+                        type="button"
+                        onClick={() => setIsAudioExportModalOpen(true)}
+                        className="text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100/60 py-1.5 px-3 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-3xs"
+                        title="Xuất bài học thành file âm thanh (MP3, WAV) chất lượng cao"
+                      >
+                        <Radio className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                        <span>Xuất File Nghe MP3</span>
+                      </button>
+
                       {/* Export Button */}
                       <button
                         id="export-list-trigger"
@@ -3212,6 +3227,31 @@ Mời rất thích ăn bắp rang ngon lành.`;
         isManualPaused={isManualPaused}
         onPause={handleGlobalPause}
         onPlay={handleGlobalPlay}
+      />
+
+      {/* Independent Speech/Playlist Audio To MP3/WAV Exporter Overlay */}
+      <AudioExportModal
+        isOpen={isAudioExportModalOpen}
+        onClose={() => setIsAudioExportModalOpen(false)}
+        speechList={speechList}
+        speed={speed}
+        volume={volume}
+        timeBetweenLines={timeBetweenLines}
+        engineMode={engineMode}
+        userGeminiApiKey={userGeminiApiKey}
+        voices={voices}
+        selectedEnVoiceName={selectedEnVoiceName}
+        selectedViVoiceName={selectedViVoiceName}
+        selectedZhCnVoiceName={selectedZhCnVoiceName}
+        selectedZhTwVoiceName={selectedZhTwVoiceName}
+        selectedJaVoiceName={selectedJaVoiceName}
+        selectedKoVoiceName={selectedKoVoiceName}
+        selectedPremiumVoiceEn={selectedPremiumVoiceEn}
+        selectedPremiumVoiceVi={selectedPremiumVoiceVi}
+        selectedPremiumVoiceZhCn={selectedPremiumVoiceZhCn}
+        selectedPremiumVoiceZhTw={selectedPremiumVoiceZhTw}
+        selectedPremiumVoiceJa={selectedPremiumVoiceJa}
+        selectedPremiumVoiceKo={selectedPremiumVoiceKo}
       />
     </div>
   );
