@@ -17,7 +17,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { SpeechItem, LanguageCode } from '../types';
-import * as lamejs from 'lamejs';
+import { encodeMonoMp3 } from '../audio/mp3Encoder';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -74,10 +74,12 @@ export default function AudioExportModal({
   const [selectedRange, setSelectedRange] = useState<'all' | string>('all');
   const [exportEngine, setExportEngine] = useState<'browser' | 'premium'>(engineMode);
   
-  // Custom states matching TheaterPlayer recording setup
-  const [includeMic, setIncludeMic] = useState<boolean>(false);
-  const [disableEchoCancellation, setDisableEchoCancellation] = useState<boolean>(true);
+  // Audio Source selection for browser recording
+  const [audioSource, setAudioSource] = useState<'system' | 'mic'>('system');
   const [onlyCurrentTab, setOnlyCurrentTab] = useState<boolean>(false);
+
+  const includeMic = audioSource === 'mic';
+  const disableEchoCancellation = audioSource === 'system';
   
   // Progress states
   const [status, setStatus] = useState<'idle' | 'processing' | 'recording' | 'success' | 'error'>('idle');
@@ -379,17 +381,23 @@ export default function AudioExportModal({
     chunksRef.current = [];
     
     addLog("Chuẩn bị cơ chế ghi âm SpeechSynthesis của trình duyệt...");
-    addLog("HƯỚNG DẪN BẮT BUỘC: Bạn hãy chọn tab 'Toàn bộ màn hình' (Entire Screen), tích vào ô 'Chia sẻ âm thanh hệ thống' (Share system audio) ở góc trái dưới, rồi chọn Màn hình của bạn.");
+    if (audioSource === 'system') {
+      addLog("HƯỚNG DẪN BẮT BUỘC: Bạn hãy chọn tab 'Toàn bộ màn hình' (Entire Screen), tích vào ô 'Chia sẻ âm thanh hệ thống' (Share system audio) ở góc trái dưới, rồi chọn Màn hình của bạn.");
+    } else {
+      addLog("HƯỚNG DẪN: Máy ghi âm sẽ thu trực tiếp từ Microphone qua loa ngoài. Hãy bật mức loa vừa đủ nghe.");
+    }
 
     try {
       let micStream: MediaStream | null = null;
-      if (includeMic) {
+      let stream: MediaStream | null = null;
+
+      if (audioSource === 'mic') {
         try {
           try {
             micStream = await navigator.mediaDevices.getUserMedia({
               audio: {
-                echoCancellation: !disableEchoCancellation,
-                noiseSuppression: !disableEchoCancellation,
+                echoCancellation: true,
+                noiseSuppression: true,
                 autoGainControl: true
               }
             });
@@ -400,49 +408,54 @@ export default function AudioExportModal({
           micStreamRef.current = micStream;
           addLog("Đã khởi tạo Microphone thành công!");
         } catch (micErr: any) {
-          console.warn("Microphone access is denied, falling back:", micErr);
-          addLog("Không chọn được Microphone ngoài (chưa cắm hoặc chưa cấp quyền).");
+          console.error("Microphone access is denied:", micErr);
+          throw new Error("Không thể truy cập Microphone. Vui lòng cấp quyền Microphone để sử dụng chế độ dự phòng!");
+        }
+      } else {
+        // 1. Capture display stream with optimized entire screen / system audio cues
+        const displayConstraints: any = {
+          video: {
+            displaySurface: "monitor",
+            width: 320,
+            height: 180,
+            frameRate: 10
+          },
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            systemAudio: "include"
+          },
+          selfBrowserSurface: "exclude",
+          monitorTypeSurfaces: "include"
+        };
+
+        if (onlyCurrentTab) {
+          displayConstraints.preferCurrentTab = true;
+          displayConstraints.selfBrowserSurface = "include";
+          delete displayConstraints.video.displaySurface;
+          delete displayConstraints.monitorTypeSurfaces;
+        }
+
+        try {
+          stream = await (navigator.mediaDevices as any).getDisplayMedia(displayConstraints);
+          mediaStreamRef.current = stream;
+        } catch (displayErr: any) {
+          console.error("Display media capturing failed:", displayErr);
+          throw new Error("Bạn đã hủy chia sẻ màn hình / âm thanh hệ thống. Vui lòng bấm thử lại.");
         }
       }
-
-      // 1. Capture display stream with optimized entire screen / system audio cues
-      const displayConstraints: any = {
-        video: {
-          displaySurface: "monitor",
-          width: 320,
-          height: 180,
-          frameRate: 10
-        },
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          systemAudio: "include"
-        },
-        selfBrowserSurface: "exclude",
-        monitorTypeSurfaces: "include"
-      };
-
-      if (onlyCurrentTab) {
-        displayConstraints.preferCurrentTab = true;
-        displayConstraints.selfBrowserSurface = "include";
-        delete displayConstraints.video.displaySurface;
-        delete displayConstraints.monitorTypeSurfaces;
-      }
-
-      const stream = await (navigator.mediaDevices as any).getDisplayMedia(displayConstraints);
-      mediaStreamRef.current = stream;
       
       // 2. Validate audio track selection
-      const displayAudioTracks = stream.getAudioTracks();
-      const micAudioTracks = includeMic && micStream ? micStream.getAudioTracks() : [];
+      const displayAudioTracks = stream ? stream.getAudioTracks() : [];
+      const micAudioTracks = micStream ? micStream.getAudioTracks() : [];
       const hasDisplayAudio = displayAudioTracks.length > 0;
       const hasMicAudio = micAudioTracks.length > 0;
 
-      if (displayAudioTracks.length === 0 && micAudioTracks.length === 0) {
-        stream.getTracks().forEach(t => t.stop());
+      if (!hasDisplayAudio && !hasMicAudio) {
+        if (stream) stream.getTracks().forEach(t => t.stop());
         if (micStream) micStream.getTracks().forEach(t => t.stop());
-        throw new Error("Không bắt được bất kỳ luồng âm thanh hệ thống hoặc loa nào. Vui lòng bấm làm lại, tích vào 'Chia sẻ âm thanh hệ thống' ở góc trái dưới!");
+        throw new Error("Không bắt được nguồn âm thanh nào hợp lệ. Vui lòng thử lại.");
       }
       
       addLog("Khởi tạo bộ thu âm...");
@@ -469,7 +482,6 @@ export default function AudioExportModal({
         const preflightAnalyser = audioCtx.createAnalyser();
         preflightAnalyser.fftSize = 256;
         preflightSource.connect(preflightAnalyser);
-        preflightSource.connect(audioCtx.destination); // Route to physical speakers for audible feedback during preflight
         
         const preflightData = new Uint8Array(preflightAnalyser.frequencyBinCount);
         
@@ -529,10 +541,9 @@ export default function AudioExportModal({
       let analyserNode: AnalyserNode | null = null;
       let analyserDataArray: Uint8Array | null = null;
 
-      if (hasDisplayAudio) {
+      if (hasDisplayAudio && stream) {
         displaySourceNode = audioCtx.createMediaStreamSource(stream);
         displaySourceNode.connect(dest);
-        displaySourceNode.connect(audioCtx.destination); // Route system audio directly to user speakers
         
         analyserNode = audioCtx.createAnalyser();
         analyserNode.fftSize = 256;
@@ -543,6 +554,13 @@ export default function AudioExportModal({
       if (hasMicAudio && micStream) {
         const micSource = audioCtx.createMediaStreamSource(micStream);
         micSource.connect(dest);
+
+        if (!analyserNode) {
+          analyserNode = audioCtx.createAnalyser();
+          analyserNode.fftSize = 256;
+          micSource.connect(analyserNode);
+          analyserDataArray = new Uint8Array(analyserNode.frequencyBinCount);
+        }
       }
       
       // Setup active silence checker loop
@@ -705,16 +723,6 @@ export default function AudioExportModal({
           
           addLog(`Bắt đầu chuyển đổi mã hóa sang MP3 128kbps (Tần số: ${decodedBuffer.sampleRate}Hz)...`);
           
-          const EncoderClass = (lamejs as any).Mp3Encoder || (lamejs as any).default?.Mp3Encoder;
-          if (!EncoderClass) {
-            throw new Error("Không thể tìm thấy lớp mã hóa lamejs.");
-          }
-          
-          const channels = 1; // Mono for voice data
-          const sampleRate = decodedBuffer.sampleRate;
-          const kbps = 128;
-          const mp3encoder = new EncoderClass(channels, sampleRate, kbps);
-          
           const numSamples = decodedBuffer.length;
           const leftChan = decodedBuffer.getChannelData(0);
           const rightChan = decodedBuffer.numberOfChannels > 1 ? decodedBuffer.getChannelData(1) : null;
@@ -736,24 +744,35 @@ export default function AudioExportModal({
             s = Math.max(-1.0, Math.min(1.0, s));
             pcmInt16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
           }
+
+          // Quality gate check: measure peak, RMS, clipping ratio, duration
+          let peak = 0;
+          let sumSquares = 0;
+          let clippingCount = 0;
+          const duration = decodedBuffer.duration;
           
-          // Encode in chunks
-          const mp3Chunks: Uint8Array[] = [];
-          const bufferChunkSize = 1152;
-          for (let offset = 0; offset < numSamples; offset += bufferChunkSize) {
-            const block = pcmInt16.subarray(offset, Math.min(offset + bufferChunkSize, numSamples));
-            const mp3buf = mp3encoder.encodeBuffer(block);
-            if (mp3buf.length > 0) {
-              mp3Chunks.push(mp3buf);
+          for (let i = 0; i < numSamples; i++) {
+            const val = monoFloat[i];
+            const absVal = Math.abs(val);
+            if (absVal > peak) peak = absVal;
+            sumSquares += val * val;
+            if (absVal >= 0.99) { // threshold for clipping
+              clippingCount++;
             }
           }
           
-          const endBuf = mp3encoder.flush();
-          if (endBuf.length > 0) {
-            mp3Chunks.push(endBuf);
+          const rms = Math.sqrt(sumSquares / numSamples);
+          const clippingRatio = clippingCount / numSamples;
+          
+          addLog(`Chất lượng thu âm - Peak: ${peak.toFixed(3)}, RMS: ${rms.toFixed(3)}, Tỷ lệ clipping (rè): ${(clippingRatio * 100).toFixed(1)}%, Thời lượng: ${duration.toFixed(1)} giây.`);
+          
+          if (clippingRatio > 0.05 || (rms > 0.5 && peak > 0.98)) {
+            addLog("⚠️ CẢNH BÁO CHẤT LƯỢNG: Phát hiện tín hiệu âm thanh có hiện tượng rè (clipping) hoặc rú (feedback loop) quá lớn.");
+            addLog("Khuyên dùng: Bạn nên chuyển nguồn thành 'Ghi âm từ trình duyệt (System Audio Only)' và tắt Micro để đạt độ tinh khiết tối ưu.");
           }
           
-          const finalMp3Blob = new Blob(mp3Chunks, { type: 'audio/mpeg' });
+          addLog("Nén dữ liệu PCM sang luồng nén MP3 bằng bộ nén tối ưu...");
+          const finalMp3Blob = encodeMonoMp3(pcmInt16, decodedBuffer.sampleRate, 128);
           const mp3Url = URL.createObjectURL(finalMp3Blob);
           
           setAudioBlobUrl(mp3Url);
@@ -1011,45 +1030,86 @@ export default function AudioExportModal({
                   </div>
                 </div>
 
-                {/* 3. Browser Recording Config Toggle Panel */}
+                {/* 3. Browser Recording Config Source Selection */}
                 {exportEngine === 'browser' && (
-                  <div className="mt-2.5 bg-slate-100/60 border border-slate-200 rounded-xl p-3.5 space-y-2.5 text-xs animate-fade-in">
+                  <div className="mt-2.5 bg-slate-100 border border-slate-200 rounded-xl p-3.5 space-y-3 text-xs animate-fade-in">
                     <span className="font-extrabold text-slate-800 flex items-center gap-1.5">
-                      <Mic className="w-4 h-4 text-indigo-650" />
-                      Cấu hình thu âm (Cơ chế giống hệt quay Video):
+                      <Mic className="w-4 h-4 text-indigo-600" />
+                      Nguồn âm thanh thu âm:
                     </span>
                     
-                    <div className="space-y-2 font-medium">
-                      <label className="flex items-center gap-2 text-[11px] text-slate-700 cursor-pointer select-none">
+                    <div className="space-y-2.5">
+                      {/* Option 1: System Audio Only */}
+                      <div 
+                        onClick={() => setAudioSource('system')}
+                        className={`p-3 rounded-xl border transition cursor-pointer select-none relative flex gap-2.5 items-start ${
+                          audioSource === 'system' 
+                            ? 'border-indigo-600 bg-indigo-50/40 text-indigo-900 shadow-3xs' 
+                            : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
+                        }`}
+                      >
                         <input 
-                          type="checkbox" 
-                          checked={includeMic}
-                          onChange={(e) => setIncludeMic(e.target.checked)}
-                          className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          type="radio" 
+                          name="audioSource" 
+                          checked={audioSource === 'system'} 
+                          onChange={() => setAudioSource('system')} 
+                          className="mt-0.5 w-3.5 h-3.5 text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer"
                         />
-                        <span>Thu cả Microphone ngoài / Loa ngoài <span className="text-[#a15c00] font-extrabold bg-[#fff7ed] px-1 py-0.5 rounded text-[10px] border border-[#ffedd5]">(KHẮC PHỤC ASUS LẶNG TIẾNG)</span></span>
-                      </label>
+                        <div className="text-left font-medium">
+                          <div className="font-extrabold text-[11px] text-slate-800 flex items-center gap-1">
+                            <span>Ghi âm Hệ thống (System Audio Only)</span>
+                            <span className="text-emerald-700 font-extrabold bg-emerald-50 border border-emerald-100 px-1 py-0.2 rounded text-[9px]">Khuyên dùng</span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">Ghi âm kỹ thuật số trực tiếp phát từ trình duyệt. Hoàn toàn tinh khiết, 100% không lẫn tạp âm môi trường và không rè/vọng.</div>
+                        </div>
+                      </div>
 
-                      <label className="flex items-center gap-2 text-[11px] text-slate-700 cursor-pointer select-none">
+                      {/* Option 2: Mic fallback */}
+                      <div 
+                        onClick={() => setAudioSource('mic')}
+                        className={`p-3 rounded-xl border transition cursor-pointer select-none relative flex gap-2.5 items-start ${
+                          audioSource === 'mic' 
+                            ? 'border-amber-600 bg-amber-50/20 text-amber-950 shadow-3xs' 
+                            : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'
+                        }`}
+                      >
                         <input 
-                          type="checkbox" 
-                          checked={disableEchoCancellation}
-                          onChange={(e) => setDisableEchoCancellation(e.target.checked)}
-                          className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          type="radio" 
+                          name="audioSource" 
+                          checked={audioSource === 'mic'} 
+                          onChange={() => setAudioSource('mic')} 
+                          className="mt-0.5 w-3.5 h-3.5 text-amber-600 border-slate-300 focus:ring-amber-500 cursor-pointer"
                         />
-                        <span>Tắt Khử tiếng Vang (Bảo toàn âm thanh gốc TTS phát ra)</span>
-                      </label>
-
-                      <label className="flex items-center gap-2 text-[11px] text-slate-700 cursor-pointer select-none">
-                        <input 
-                          type="checkbox" 
-                          checked={onlyCurrentTab}
-                          onChange={(e) => setOnlyCurrentTab(e.target.checked)}
-                          className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                        />
-                        <span>Chỉ hiển thị chia sẻ Thẻ trình duyệt hiện tại</span>
-                      </label>
+                        <div className="text-left font-medium">
+                          <div className="font-extrabold text-[11px] text-slate-800 flex items-center gap-1">
+                            <span>Microphone (Dự phòng cho máy ko hỗ trợ)</span>
+                            <span className="text-amber-700 font-extrabold bg-amber-50 border border-amber-100 px-1 py-0.2 rounded text-[9px]">Dự phòng</span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">Sử dụng mic của thiết bị để thu lại tiếng loa. Tự động bật Khử tiếng vang (Echo Cancel) và Lọc nhiễu.</div>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Warning if Mic source is selected */}
+                    {audioSource === 'mic' && (
+                      <div className="p-2.5 bg-amber-50 border border-amber-200 text-[#7c2d12] rounded-lg text-[10px] leading-relaxed flex gap-1.5 items-start font-medium animate-fade-in">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <span>Chất lượng âm thanh phụ thuộc vào loa ngoài và Micro của máy bạn, dễ lẫn tiếng ồn môi trường xung quanh.</span>
+                      </div>
+                    )}
+
+                    <hr className="border-slate-200" />
+
+                    {/* Checkbox for onlyCurrentTab */}
+                    <label className="flex items-center gap-2 text-[11px] text-slate-700 cursor-pointer select-none font-semibold">
+                      <input 
+                        type="checkbox" 
+                        checked={onlyCurrentTab}
+                        onChange={(e) => setOnlyCurrentTab(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <span>Chỉ hiển thị chia sẻ Thẻ trình duyệt hiện tại</span>
+                    </label>
                   </div>
                 )}
               </div>
