@@ -17,6 +17,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { SpeechItem, LanguageCode } from '../types';
+import * as lamejs from 'lamejs';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -74,9 +75,9 @@ export default function AudioExportModal({
   const [exportEngine, setExportEngine] = useState<'browser' | 'premium'>(engineMode);
   
   // Custom states matching TheaterPlayer recording setup
-  const [includeMic, setIncludeMic] = useState<boolean>(true);
+  const [includeMic, setIncludeMic] = useState<boolean>(false);
   const [disableEchoCancellation, setDisableEchoCancellation] = useState<boolean>(true);
-  const [onlyCurrentTab, setOnlyCurrentTab] = useState<boolean>(true);
+  const [onlyCurrentTab, setOnlyCurrentTab] = useState<boolean>(false);
   
   // Progress states
   const [status, setStatus] = useState<'idle' | 'processing' | 'recording' | 'success' | 'error'>('idle');
@@ -370,7 +371,7 @@ export default function AudioExportModal({
     chunksRef.current = [];
     
     addLog("Chuẩn bị cơ chế ghi âm SpeechSynthesis của trình duyệt...");
-    addLog("HƯỚNG DẪN: Ở hộp thoại tiếp theo, bạn BẮT BUỘC PHẢI chọn 'Chia sẻ thẻ này' và NHỚ TÍCH CHỌN ô 'Chia sẻ âm thanh thẻ' (Share tab audio) ở góc dưới cùng bên trái.");
+    addLog("HƯỚNG DẪN BẮT BUỘC: Bạn hãy chọn tab 'Toàn bộ màn hình' (Entire Screen), tích vào ô 'Chia sẻ âm thanh hệ thống' (Share system audio) ở góc trái dưới, rồi chọn Màn hình của bạn.");
 
     try {
       let micStream: MediaStream | null = null;
@@ -392,13 +393,14 @@ export default function AudioExportModal({
           addLog("Đã khởi tạo Microphone thành công!");
         } catch (micErr: any) {
           console.warn("Microphone access is denied, falling back:", micErr);
-          addLog("Không chọn được Microphone ngoài (chưa cắm hoặc chưa cấp quyền). Vẫn tiến hành nhưng chỉ ghi âm thanh của máy tính.");
+          addLog("Không chọn được Microphone ngoài (chưa cắm hoặc chưa cấp quyền).");
         }
       }
 
-      // 1. Capture display stream (needs video to pass browser security rules)
+      // 1. Capture display stream with optimized entire screen / system audio cues
       const displayConstraints: any = {
         video: {
+          displaySurface: "monitor",
           width: 320,
           height: 180,
           frameRate: 10
@@ -406,13 +408,18 @@ export default function AudioExportModal({
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
-          autoGainControl: false
-        }
+          autoGainControl: false,
+          systemAudio: "include"
+        },
+        selfBrowserSurface: "exclude",
+        monitorTypeSurfaces: "include"
       };
 
       if (onlyCurrentTab) {
         displayConstraints.preferCurrentTab = true;
         displayConstraints.selfBrowserSurface = "include";
+        delete displayConstraints.video.displaySurface;
+        delete displayConstraints.monitorTypeSurfaces;
       }
 
       const stream = await (navigator.mediaDevices as any).getDisplayMedia(displayConstraints);
@@ -427,13 +434,11 @@ export default function AudioExportModal({
       if (displayAudioTracks.length === 0 && micAudioTracks.length === 0) {
         stream.getTracks().forEach(t => t.stop());
         if (micStream) micStream.getTracks().forEach(t => t.stop());
-        throw new Error("Không bắt được bất kỳ luồng âm thanh nào. Hãy chắc chắn bạn đã tích hợp tùy chọn 'Chia sẻ âm thanh thẻ' (Share tab audio) hoặc bật mic.");
+        throw new Error("Không bắt được bất kỳ luồng âm thanh hệ thống hoặc loa nào. Vui lòng bấm làm lại, tích vào 'Chia sẻ âm thanh hệ thống' ở góc trái dưới!");
       }
       
-      addLog("Đã kết nối thành công các luồng âm thanh đầu vào!");
+      addLog("Khởi tạo bộ thu âm...");
       
-      // Create audio destination so we can route the speech back to headphones/speakers 
-      // preventing silent playback and giving user live feedback!
       const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioCtxClass();
       audioContextRef.current = audioCtx;
@@ -443,45 +448,88 @@ export default function AudioExportModal({
       }
       
       const dest = audioCtx.createMediaStreamDestination();
-      
-      // Set up simple visual peak meter on displayStream
+
+      // ==========================================
+      // STAGE 2: MANDATORY PREFLIGHT CHECK (KIỂM TRA TÍN HIỆU CỨNG)
+      // ==========================================
       if (hasDisplayAudio) {
-        const displaySource = audioCtx.createMediaStreamSource(stream);
-        displaySource.connect(dest);
-        displaySource.connect(audioCtx.destination); // Route to speakers so the user can hear it live!
+        addLog("Đang chạy Preflight check: kiểm tra tín hiệu SpeechSynthesis...");
+        setProgressText("Preflight check: Đang kiểm tra tín hiệu âm thanh...");
         
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        displaySource.connect(analyser);
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        // Setup temporary preflight connections
+        const preflightSource = audioCtx.createMediaStreamSource(stream);
+        const preflightAnalyser = audioCtx.createAnalyser();
+        preflightAnalyser.fftSize = 256;
+        preflightSource.connect(preflightAnalyser);
+        preflightSource.connect(audioCtx.destination); // Route to physical speakers for audible feedback during preflight
         
-        let silenceCheckCounter = 0;
-        const updateVolumePeak = () => {
-          if (isStoppedManuallyRef.current) return;
-          
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i];
-          }
-          const avg = sum / dataArray.length;
-          setSoundLevel(avg);
-          
-          if (avg < 2) {
-            silenceCheckCounter++;
-            if (silenceCheckCounter > 180) {
-              setMicActiveWarning(true);
-            }
-          } else {
-            silenceCheckCounter = 0;
-            setMicActiveWarning(false);
-          }
-          
-          animationFrameRef.current = requestAnimationFrame(updateVolumePeak);
+        const preflightData = new Uint8Array(preflightAnalyser.frequencyBinCount);
+        
+        // Trigger short test utterance
+        const testUtterance = new SpeechSynthesisUtterance("Starting");
+        testUtterance.volume = 1.0;
+        testUtterance.rate = 1.0;
+        testUtterance.lang = "en-US";
+        
+        // Force cancellation and play
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(testUtterance);
+        
+        let detectedSignal = false;
+        let peakLevel = 0;
+        const startTime = Date.now();
+        
+        const checkPreflight = () => {
+          return new Promise<boolean>((resolve) => {
+            const checkTimer = setInterval(() => {
+              preflightAnalyser.getByteFrequencyData(preflightData);
+              let sum = 0;
+              for (let i = 0; i < preflightData.length; i++) {
+                sum += preflightData[i];
+              }
+              const avg = sum / preflightData.length;
+              if (avg > peakLevel) peakLevel = avg;
+              if (avg > 2.0) {
+                detectedSignal = true;
+              }
+              
+              if (Date.now() - startTime >= 2500) {
+                clearInterval(checkTimer);
+                resolve(detectedSignal);
+              }
+            }, 100);
+          });
         };
-        updateVolumePeak();
-      } else {
-        setSoundLevel(5); // Fallback active level
+        
+        const preflightResult = await checkPreflight();
+        window.speechSynthesis.cancel(); // Stop preflight speech
+        
+        // Clean up preflight connections
+        preflightSource.disconnect();
+        
+        if (!preflightResult) {
+          stream.getTracks().forEach(t => t.stop());
+          if (micStream) micStream.getTracks().forEach(t => t.stop());
+          throw new Error(`PREFLIGHT_FAIL: Âm thanh hoàn toàn câm (Độ lớn cực đại: ${peakLevel.toFixed(1)}). Bạn PHẢI chọn mục 'Toàn bộ màn hình' và bật 'Chia sẻ âm thanh hệ thống' để thu được giọng nói.`);
+        }
+        
+        addLog(`Preflight OK! Nhận được tín hiệu âm thanh hệ thống (Cường độ cực đại: ${peakLevel.toFixed(1)}).`);
+      }
+      
+      // Setup permanent live routing
+      let displaySourceNode: MediaStreamAudioSourceNode | null = null;
+      let analyserNode: AnalyserNode | null = null;
+      let analyserDataArray: Uint8Array | null = null;
+
+      if (hasDisplayAudio) {
+        displaySourceNode = audioCtx.createMediaStreamSource(stream);
+        displaySourceNode.connect(dest);
+        displaySourceNode.connect(audioCtx.destination); // Route system audio directly to user speakers
+        
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 256;
+        displaySourceNode.connect(analyserNode);
+        analyserDataArray = new Uint8Array(analyserNode.frequencyBinCount);
       }
 
       if (hasMicAudio && micStream) {
@@ -489,7 +537,67 @@ export default function AudioExportModal({
         micSource.connect(dest);
       }
       
-      // 3. Initialize MediaRecorder on the mixed audio track
+      // Setup active silence checker loop
+      let lastCheckTime = Date.now();
+      let activeSilenceDuration = 0;
+      let warningSilenceCounter = 0;
+
+      const updateVolumePeak = () => {
+        if (isStoppedManuallyRef.current || !analyserNode || !analyserDataArray) return;
+        
+        analyserNode.getByteFrequencyData(analyserDataArray);
+        let sum = 0;
+        for (let i = 0; i < analyserDataArray.length; i++) {
+          sum += analyserDataArray[i];
+        }
+        const avg = sum / analyserDataArray.length;
+        setSoundLevel(avg);
+        
+        const now = Date.now();
+        const delta = (now - lastCheckTime) / 1000;
+        lastCheckTime = now;
+        
+        // Silent gate: if browser currently speaking, but no audio gets captured for 3 seconds, throw error!
+        const isCurrentlySpeaking = window.speechSynthesis.speaking;
+        if (isCurrentlySpeaking) {
+          if (avg < 1.0) {
+            activeSilenceDuration += delta;
+            if (activeSilenceDuration >= 3.0) {
+              addLog("CẢNH BÁO: Tín hiệu âm thanh biến mất khi đang đọc bài!");
+              cancelAllProcesses();
+              setStatus('error');
+              setProgressText("Không thu được tiếng");
+              addLog("LỖI: Trình duyệt bị im lặng hơn 3 giây liên tiếp trong quá trình đọc. Bản ghi bị hủy.");
+              return;
+            }
+          } else {
+            activeSilenceDuration = 0;
+          }
+        } else {
+          activeSilenceDuration = 0;
+        }
+
+        if (avg < 2) {
+          warningSilenceCounter++;
+          if (warningSilenceCounter > 180) {
+            setMicActiveWarning(true);
+          }
+        } else {
+          warningSilenceCounter = 0;
+          setMicActiveWarning(false);
+        }
+        
+        animationFrameRef.current = requestAnimationFrame(updateVolumePeak);
+      };
+
+      if (hasDisplayAudio) {
+        lastCheckTime = Date.now();
+        updateVolumePeak();
+      } else {
+        setSoundLevel(5); // fallback level
+      }
+
+      // 3. Initialize MediaRecorder to capture webm/opus buffer sequentially
       const recorderStream = new MediaStream();
       const mixedTracks = dest.stream.getAudioTracks();
       if (mixedTracks.length > 0) {
@@ -502,7 +610,6 @@ export default function AudioExportModal({
         }
       }
       
-      // Try best supported audio codecs
       let options = { mimeType: 'audio/webm;codecs=opus' };
       if (!MediaRecorder.isTypeSupported(options.mimeType)) {
         options = { mimeType: 'audio/ogg;codecs=opus' };
@@ -511,7 +618,7 @@ export default function AudioExportModal({
         }
       }
       
-      addLog(`Kích hoạt máy ghi âm codec: ${options.mimeType || "Trình duyệt tự định đoạt"}`);
+      addLog(`Kích hoạt máy ghi âm phụ trợ (codec: ${options.mimeType || "mặc định"})`);
       const recorder = new MediaRecorder(recorderStream, options);
       mediaRecorderRef.current = recorder;
       
@@ -521,18 +628,98 @@ export default function AudioExportModal({
         }
       };
       
-      recorder.onstop = () => {
-        addLog("Quá trình chạy kết thúc. Đang lưu giữ tệp thu âm...");
-        if (chunksRef.current.length > 0) {
-          // Wrap as audio blob
-          const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-          const url = URL.createObjectURL(audioBlob);
-          setAudioBlobUrl(url);
-          setStatus('success');
-          addLog("Đã sản xuất file audio thành công! Bạn có thể lưu lại máy.");
-        } else {
+      recorder.onstop = async () => {
+        addLog("Đọc hoàn tất. Tiến hành nén tệp tin mpeg-MP3 thật...");
+        setProgressText("Đang giải nén & nén sang định dạng MP3 thật...");
+        setStatus('processing');
+        
+        if (chunksRef.current.length === 0) {
           setStatus('error');
-          addLog("LỖI: Bản ghi trống không có dữ liệu âm thanh.");
+          addLog("LỖI: Bản ghi rỗng.");
+          return;
+        }
+        
+        try {
+          const webmBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+          const arrayBuffer = await webmBlob.arrayBuffer();
+          
+          // Decode raw audio webm/opus into float32 samples
+          const decodeCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          let decodedBuffer: AudioBuffer;
+          try {
+            decodedBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+          } catch (decErr) {
+            console.error("Failed to decode audio data", decErr);
+            addLog("Không thể giải mã PCM từ bộ nhớ tạm. Lưu trữ trực tiếp dưới dạng WebM làm phương án dự phòng.");
+            const webmUrl = URL.createObjectURL(webmBlob);
+            setAudioBlobUrl(webmUrl);
+            setStatus('success');
+            return;
+          } finally {
+            decodeCtx.close().catch(() => {});
+          }
+          
+          addLog(`Bắt đầu chuyển đổi mã hóa sang MP3 128kbps (Tần số: ${decodedBuffer.sampleRate}Hz)...`);
+          
+          const EncoderClass = (lamejs as any).Mp3Encoder || (lamejs as any).default?.Mp3Encoder;
+          if (!EncoderClass) {
+            throw new Error("Không thể tìm thấy lớp mã hóa lamejs.");
+          }
+          
+          const channels = 1; // Mono for voice data
+          const sampleRate = decodedBuffer.sampleRate;
+          const kbps = 128;
+          const mp3encoder = new EncoderClass(channels, sampleRate, kbps);
+          
+          const numSamples = decodedBuffer.length;
+          const leftChan = decodedBuffer.getChannelData(0);
+          const rightChan = decodedBuffer.numberOfChannels > 1 ? decodedBuffer.getChannelData(1) : null;
+          
+          // Mixed to Mono Float32
+          const monoFloat = new Float32Array(numSamples);
+          if (rightChan) {
+            for (let i = 0; i < numSamples; i++) {
+              monoFloat[i] = (leftChan[i] + rightChan[i]) / 2;
+            }
+          } else {
+            monoFloat.set(leftChan);
+          }
+          
+          // Float32 to Int16
+          const pcmInt16 = new Int16Array(numSamples);
+          for (let i = 0; i < numSamples; i++) {
+            let s = monoFloat[i];
+            s = Math.max(-1.0, Math.min(1.0, s));
+            pcmInt16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          
+          // Encode in chunks
+          const mp3Chunks: Uint8Array[] = [];
+          const bufferChunkSize = 1152;
+          for (let offset = 0; offset < numSamples; offset += bufferChunkSize) {
+            const block = pcmInt16.subarray(offset, Math.min(offset + bufferChunkSize, numSamples));
+            const mp3buf = mp3encoder.encodeBuffer(block);
+            if (mp3buf.length > 0) {
+              mp3Chunks.push(mp3buf);
+            }
+          }
+          
+          const endBuf = mp3encoder.flush();
+          if (endBuf.length > 0) {
+            mp3Chunks.push(endBuf);
+          }
+          
+          const finalMp3Blob = new Blob(mp3Chunks, { type: 'audio/mpeg' });
+          const mp3Url = URL.createObjectURL(finalMp3Blob);
+          
+          setAudioBlobUrl(mp3Url);
+          setStatus('success');
+          addLog("Chúc mừng! Đã xuất file MP3 thật (audio/mpeg) thành công.");
+          
+        } catch (mp3Err: any) {
+          console.error("MP3 encoder failed:", mp3Err);
+          addLog(`Lỗi mã hóa MP3: ${mp3Err.message || mp3Err}`);
+          setStatus('error');
         }
       };
       

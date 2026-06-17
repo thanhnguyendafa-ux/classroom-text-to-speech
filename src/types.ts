@@ -30,3 +30,4 @@ export interface ActiveSpeechState {
   isPlaying: boolean;
   progressPercent: number; // For visualization
 }
+
