@@ -94,6 +94,14 @@ export default function LessonLibrary({
   const [newLessonTitle, setNewLessonTitle] = useState('');
   const [targetFolderId, setTargetFolderId] = useState<string>('unassigned'); // 'unassigned' or folder ID
 
+  // Custom Deletion Confirmation Modal target state
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
+    type: 'lesson' | 'folder';
+    id: string;
+    title: string;
+    folderId?: string;
+  } | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -102,51 +110,56 @@ export default function LessonLibrary({
     if (typeof window !== 'undefined') {
       const savedFoldersJson = localStorage.getItem('library_folders');
       const savedUncategorizedJson = localStorage.getItem('library_uncategorized');
+      const seedVersion = localStorage.getItem('library_seed_version_v3');
       
-      if (savedFoldersJson) {
-        try {
-          setFolders(JSON.parse(savedFoldersJson));
-        } catch (e) {
-          console.error('Error parsing library folders', e);
+      if (seedVersion === 'true' && (savedFoldersJson || savedUncategorizedJson)) {
+        if (savedFoldersJson) {
+          try {
+            setFolders(JSON.parse(savedFoldersJson));
+          } catch (e) {
+            console.error('Error parsing library folders', e);
+          }
         }
-      }
-      
-      if (savedUncategorizedJson) {
-        try {
-          setUncategorizedLessons(JSON.parse(savedUncategorizedJson));
-        } catch (e) {
-          console.error('Error parsing uncategorized lessons', e);
+        if (savedUncategorizedJson) {
+          try {
+            setUncategorizedLessons(JSON.parse(savedUncategorizedJson));
+          } catch (e) {
+            console.error('Error parsing uncategorized lessons', e);
+          }
         }
       } else {
-        // First-time setup: seed with default educational sets to show how it works!
-        const defaultPopcornText = 'popcorn ;3 /4\nbắp rang\nI like popcorn\nCon thích bắp rang /1\nflower\nbông hoa nhài thơm ngát ;2\nwelcome to classroom\nChào mừng thầy cô và các học sinh ;3 /4';
-        const defaultClassroomText = 'Please stand up.\nChào cả lớp.\nOpen your books to page ten.\nTrật tự nào các em.\nListen and repeat.\nHoàn thành bài tập về nhà.';
+        // Default seed datasets matching exactly: 1 folder, 2 files inside, 1 file outside (including English-Vietnamese & Chinese-Vietnamese)
+        const defaultOuterText = 'sunflower\nhoa hướng dương\nbright sunflower\nhoa hướng dương rực rỡ\nI saw a bright sunflower. /1.5\nTôi đã thấy một bông hoa hướng dương rực rỡ.\nplanting sunflower seeds\ngieo hạt hoa hướng dương\nWe are planting sunflower seeds in the garden. ;2\nChúng tôi đang gieo hạt hoa hướng dương trong vườn.';
         
+        const defaultNestedEnglishText = 'popcorn\nbắp rang\ndelicious popcorn\nbắp rang ngon lành\nI love eating delicious popcorn. /1.5\nMình rất thích ăn bắp rang ngon lành.\nsharing popcorn\nchia sẻ bắp rang\nWe are sharing popcorn while watching a movie. ;2\nChúng mình đang chung nhau ăn bắp rang khi xem phim.';
+        
+        const defaultNestedChineseText = '苹果\nquả táo\n红苹果\nquả táo màu đỏ\n我喜欢吃红苹果。 /1.5\nTài thích ăn quả táo màu đỏ.\n买新鲜苹果\nmua táo tươi ngon\n妈妈去超市买新鲜苹果。 ;2\nMẹ đi siêu thị mua táo tươi ngon.';
+
         const initialUncategorized: SavedLesson[] = [
           {
-            id: `lesson-seed-1`,
-            title: 'Học bắp rang & Hoa nhài (Mẫu)',
-            rawText: defaultPopcornText,
-            createdAt: Date.now() - 50000
-          },
-          {
-            id: `lesson-seed-2`,
-            title: 'Mẫu câu Classroom English (Mẫu)',
-            rawText: defaultClassroomText,
+            id: `lesson-seed-outer-1`,
+            title: 'Học Tiếng Anh Giao Tiếp (Mẫu Anh-Việt)',
+            rawText: defaultOuterText,
             createdAt: Date.now() - 100000
           }
         ];
         
         const initialFolders: SavedFolder[] = [
           {
-            id: 'folder-seed-1',
-            name: 'Giáo Án Lớp 3A',
+            id: 'folder-seed-v3',
+            name: 'Khóa Học Song Ngữ Giao Tiếp',
             lessons: [
               {
-                id: 'lesson-seed-nested-1',
-                title: 'Unit 1: Hello & Greetings',
-                rawText: 'Hello\nXin chào\nHow are you?\nBạn khỏe không?\nI am fine, thank you.\nMình khỏe, cảm ơn bạn.\nGoodbye!\nTạm biệt!',
+                id: 'lesson-seed-nested-eng',
+                title: 'Tiếng Anh Du Lịch (Mẫu Anh-Việt)',
+                rawText: defaultNestedEnglishText,
                 createdAt: Date.now() - 50000
+              },
+              {
+                id: 'lesson-seed-nested-zho',
+                title: 'Tiếng Trung Giao Tiếp (Mẫu Trung-Việt)',
+                rawText: defaultNestedChineseText,
+                createdAt: Date.now() - 10000
               }
             ],
             createdAt: Date.now()
@@ -157,9 +170,10 @@ export default function LessonLibrary({
         setUncategorizedLessons(initialUncategorized);
         localStorage.setItem('library_folders', JSON.stringify(initialFolders));
         localStorage.setItem('library_uncategorized', JSON.stringify(initialUncategorized));
+        localStorage.setItem('library_seed_version_v3', 'true');
         
         // Expand the seed folder by default
-        setExpandedFolders({ 'folder-seed-1': true });
+        setExpandedFolders({ 'folder-seed-v3': true });
       }
     }
   }, []);
@@ -698,13 +712,13 @@ export default function LessonLibrary({
                       <button
                         type="button"
                         onClick={() => {
-                          if (confirm(`Bạn muốn làm gì với các bài học trong Thư mục "${folder.name}"? \n\n- Ấn OK (Đồng ý) để xóa thư mục NHƯNG giữ lại các bài học (chuyển ra Chưa Phân Loại).\n- Ngoài ra bạn có thể xóa tất cả.`)) {
-                            handleDeleteFolder(folder.id, true);
-                          } else if (confirm(`Bạn có chắc muốn Xóa Toàn Bộ cả Bài Học lẫn Thư mục "${folder.name}" không?`)) {
-                            handleDeleteFolder(folder.id, false);
-                          }
+                          setDeleteConfirmTarget({
+                            type: 'folder',
+                            id: folder.id,
+                            title: folder.name
+                          });
                         }}
-                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded"
+                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
                         title="Xóa thư mục"
                       >
                         <Trash2 className="w-3 h-3" />
@@ -761,7 +775,7 @@ export default function LessonLibrary({
                             )}
                           </div>
 
-                          <div className="flex items-center gap-1 opacity-10 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-1 shrink-0 opacity-80 md:opacity-40 group-hover:opacity-100 transition-opacity">
                             {isLessonEditing ? (
                               <>
                                 <button
@@ -800,11 +814,14 @@ export default function LessonLibrary({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    if (confirm(`Bạn chắc chắn muốn xóa bài học "${lesson.title}" không?`)) {
-                                      handleDeleteLesson(lesson.id, folder.id);
-                                    }
+                                    setDeleteConfirmTarget({
+                                      type: 'lesson',
+                                      id: lesson.id,
+                                      title: lesson.title,
+                                      folderId: folder.id
+                                    });
                                   }}
-                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded"
+                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
                                   title="Xóa bài học"
                                 >
                                   <Trash2 className="w-2.5 h-2.5" />
@@ -873,7 +890,7 @@ export default function LessonLibrary({
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1 opacity-10 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 shrink-0 opacity-80 md:opacity-40 group-hover:opacity-100 transition-opacity">
                       {isLessonEditing ? (
                         <>
                           <button
@@ -912,11 +929,13 @@ export default function LessonLibrary({
                           <button
                             type="button"
                             onClick={() => {
-                              if (confirm(`Bạn chắc chắn muốn xóa bài học "${lesson.title}" không?`)) {
-                                handleDeleteLesson(lesson.id);
-                              }
+                              setDeleteConfirmTarget({
+                                type: 'lesson',
+                                id: lesson.id,
+                                title: lesson.title
+                              });
                             }}
-                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded"
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
                             title="Xóa bài học"
                           >
                             <Trash2 className="w-2.5 h-2.5" />
@@ -931,6 +950,89 @@ export default function LessonLibrary({
           </div>
         )}
       </div>
+
+      {/* Custom Deletion Confirmation Dialog Modal */}
+      {deleteConfirmTarget && (
+        <div id="delete-confirm-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-100 animate-scaleUp text-left">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-xs font-bold text-slate-900">
+                  {deleteConfirmTarget.type === 'folder' ? 'Xác nhận xóa thư mục?' : 'Xác nhận xóa bài học?'}
+                </h4>
+                <p className="text-[11px] text-slate-550 mt-1.5 leading-relaxed">
+                  {deleteConfirmTarget.type === 'folder' ? (
+                    <>
+                      Bạn đang xóa thư mục <strong className="text-slate-800">"{deleteConfirmTarget.title}"</strong>. Hãy chọn cách xử lý cho các bài học bên trong:
+                    </>
+                  ) : (
+                    <>
+                      Bạn có chắc chắn muốn xóa vĩnh viễn bài giảng <strong className="text-slate-800">"{deleteConfirmTarget.title}"</strong> không? Hành động này không thể hoàn tác.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2 justify-end">
+              {deleteConfirmTarget.type === 'folder' ? (
+                <div className="space-y-1.5 w-full">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleDeleteFolder(deleteConfirmTarget.id, true);
+                      setDeleteConfirmTarget(null);
+                    }}
+                    className="w-full px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-650 text-slate-700 rounded-lg text-[10px] font-semibold cursor-pointer text-center border border-transparent transition"
+                  >
+                    Xóa thư mục (Giữ các bài trong "Chưa Phân Loại")
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleDeleteFolder(deleteConfirmTarget.id, false);
+                      setDeleteConfirmTarget(null);
+                    }}
+                    className="w-full px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-semibold cursor-pointer text-center transition"
+                  >
+                    Xóa tất cả (Thư mục & Bài học bên trong)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirmTarget(null)}
+                    className="w-full px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 rounded-lg text-[10px] font-semibold cursor-pointer text-center transition"
+                  >
+                    Hủy bỏ
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirmTarget(null)}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-semibold cursor-pointer text-center transition"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleDeleteLesson(deleteConfirmTarget.id, deleteConfirmTarget.folderId);
+                      setDeleteConfirmTarget(null);
+                    }}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-semibold cursor-pointer text-center transition"
+                  >
+                    Xóa vĩnh viễn
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

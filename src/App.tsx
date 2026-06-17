@@ -46,8 +46,8 @@ import LessonLibrary from './components/LessonLibrary';
 const TEMPLATES = [
   {
     title: 'Bilingual Popcorn',
-    description: 'Bộ từ vựng & hội thoại song ngữ Anh - Việt mẫu khi vào app.',
-    content: 'popcorn ;3 /4\nbắp rang\nI like popcorn\nCon thích bắp rang /1\nflower\nbông hoa nhài thơm ngát ;2\nwelcome to classroom\nChào mừng thầy cô và các học sinh ;3 /4'
+    description: 'Bộ từ vựng & hội thoại song ngữ Anh - Việt mẫu đi từ Từ đơn -> Cụm từ -> Câu.',
+    content: 'popcorn\nbắp rang\ndelicious popcorn\nbắp rang ngon lành\nI love eating delicious popcorn. /1.5\nMình rất thích ăn bắp rang ngon lành.\nsharing popcorn\nchia sẻ bắp rang\nWe are sharing popcorn while watching a movie. ;2\nChúng mình đang chung nhau ăn bắp rang khi xem phim.'
   },
   {
     title: 'Vietnamese Accent & Diacritics',
@@ -62,20 +62,20 @@ const TEMPLATES = [
   {
     title: 'Châu Á (CN - JP - KR)',
     description: 'Mẫu câu luyện nghe và nói Tiếng Trung, Nhật, Hàn chất lượng cao.',
-    content: 'こんにちは\nHi, Nice to meet you.\n안녕하세요\n어떻게 지내세요?\n你好吗？\n祝你今天过得愉快\n學會中文、聽懂世界\n祝大家身體健康、萬事如意'
+    content: 'こんにちは\nHi, Nice to meet you.\n안녕하세요\n어떻게 지내세요?\n你好吗？\n祝你今天过得愉快\n學會中文、聽懂世界\n祝大家身體健康、萬事 như ý'
   }
 ];
 
 // Helper regex to detect language characters
 const JAPANESE_CHARACTER_REGEX = /[\u3040-\u309F\u30A0-\u30FF]/;
 const KOREAN_CHARACTER_REGEX = /[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/;
-const CHINESE_TRADITIONAL_UNIQUE_CHARS = /[體廣門見劃設對華遷萬國學會東億個開鳳龍聽擊買賣車愛東漢義鋸齒靈麗響讓觀認邊發變禮藝]/;
+const CHINESE_TRADITIONAL_UNIQUE_CHARS = /[體廣門見劃設對華遷萬國學會東億個開鳳龍聽擊買賣車愛東漢義鋸齒靈丽響讓觀認邊發變禮藝]/;
 const CHINESE_CHARACTER_REGEX = /[\u4E00-\u9FFF]/;
 const VIETNAMESE_DIACRITICS_REGEX = /[àáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệđìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵĂÂÊÔƠƯĐ]/i;
 
 export default function App() {
   const [rawText, setRawText] = useState<string>(
-    'popcorn ;3 /4\nbắp rang\nI like popcorn\nCon thích bắp rang /1\nflower\nbông hoa nhài thơm ngát ;2\nwelcome to classroom\nChào mừng thầy cô và các học sinh ;3 /4'
+    'popcorn\nbắp rang\ndelicious popcorn\nbắp rang ngon lành\nI love eating delicious popcorn. /1.5\nMình rất thích ăn bắp rang ngon lành.\nsharing popcorn\nchia sẻ bắp rang\nWe are sharing popcorn while watching a movie. ;2\nChúng mình đang chung nhau ăn bắp rang khi xem phim.'
   );
   
   const [speechList, setSpeechList] = useState<SpeechItem[]>([]);
@@ -242,32 +242,98 @@ export default function App() {
   };
 
   const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
+  const [promptTopic, setPromptTopic] = useState<string>('Giao tiếp Tiếng Anh hàng ngày');
+  const [promptType, setPromptType] = useState<'basic' | 'repeat' | 'pause' | 'advanced'>('advanced');
 
-  const GPT_PROMPT_TEMPLATE = `Hãy đóng vai một giáo viên ngoại ngữ soạn giáo án song ngữ đạt chuẩn. Hãy tạo cho tôi danh sách từ vựng/mẫu câu theo chủ đề song ngữ ANH - VIỆT (tiếng Anh lẻ chẵn tiếng Việt) có cấu trúc đặc biệt để nạp vào ứng dụng luyện đọc.
+  const getDynamicGPTPrompt = () => {
+    const topicText = promptTopic.trim() || 'Giao tiếp Tiếng Anh hàng ngày';
+    switch (promptType) {
+      case 'basic':
+        return `Hãy đóng vai một giáo viên ngoại ngữ soạn giáo án song ngữ đạt chuẩn. Hãy tạo cho tôi danh sách từ vựng/mẫu câu theo chủ đề song ngữ ANH - VIỆT (tiếng Anh lẻ, tiếng Việt chẵn) dùng để nạp vào ứng dụng luyện nghe nói.
+
+Chủ đề bài học: ${topicText}
 
 Yêu cầu định dạng nghiêm ngặt:
 1. Danh sách gồm các cặp dòng xen kẽ: Dòng tiếng Anh lẻ (1, 3, 5,...) và Dòng tiếng Việt chẵn (2, 4, 6,...).
-2. Viết liền nhau, không để trống giữa cặp và dòng kế tiếp.
-3. Mỗi cặp dòng là một set học.
-4. Có thể định dạng mở rộng ở cuối câu nếu muốn:
-   - Thêm ';X' (với X là số lần lặp, ví dụ: ';2' hoặc ';3').
-   - Thêm '/Y' (với Y là khoảng nghỉ giây sau câu đó, ví dụ: '/4' hoặc '/1.5').
+2. Viết liền nhau hoàn toàn, không có dòng trống ở giữa các cặp và dòng kế tiếp.
+3. Mỗi cặp tiếng Anh - tiếng Việt là một đơn vị bài học.
+4. KHÔNG sử dụng bất kỳ ký tự phân tách đặc biệt nào khác (không có ";" và không có "/").
 
-Hãy soạn cho tôi bài học với chủ đề bất kì gồm các từ vựng/mẫu câu chuẩn định dạng sau, định dạng đầu ra chỉ chứa danh sách dòng chữ, không cần giải thích thêm:
+Hãy soạn bài học gồm khoảng 10-15 dòng (5-8 cặp) phản ánh sự phát triển từ Từ đơn -> Cụm từ -> Câu hoàn chỉnh (Ví dụ: từ "popcorn" đến cụm từ "delicious popcorn" rồi sang câu hoàn chỉnh "I love eating delicious popcorn") liên quan đến chủ đề trên. Định dạng đầu ra chỉ chứa danh sách dòng chữ thô như cấu trúc mẫu dưới đây, không cần tiêu đề hay giải thích thêm:
+popcorn
+bắp rang
+delicious popcorn
+bắp rang ngon lành
+I love eating delicious popcorn.
+Mời rất thích ăn bắp rang ngon lành.`;
+
+      case 'repeat':
+        return `Hãy đóng vai một giáo viên ngoại ngữ soạn giáo án song ngữ đạt chuẩn. Hãy tạo cho tôi danh sách từ vựng/mẫu câu theo chủ đề song ngữ ANH - VIỆT (tiếng Anh lẻ, tiếng Việt chẵn) dùng để nạp vào ứng dụng luyện nghe nói có tùy chỉnh tần suất lặp lại.
+
+Chủ đề bài học: ${topicText}
+
+Yêu cầu định dạng nghiêm ngặt:
+1. Danh sách gồm các cặp dòng xen kẽ: Dòng tiếng Anh lẻ (1, 3, 5,...) và Dòng tiếng Việt chẵn (2, 4, 6,...).
+2. Viết liền nhau hoàn toàn, không có dòng trống ở giữa.
+3. Ở cuối câu của dòng tiếng Anh lẻ, hãy kèm ký tự ";X" (với X là số lần lặp đọc lại của câu đó, ví dụ: ';2' hoặc ';3' tùy thuộc độ dài hoặc độ khó của mẫu từ/câu để học viên nhại lại nhiều lần).
+4. KHÔNG dùng ký tự gạch chéo "/" để chia khoảng nghỉ.
+
+Hãy soạn bài học gồm khoảng 10-15 dòng (5-8 cặp) phản ánh sự phát triển từ Từ đơn -> Cụm từ -> Câu hoàn chỉnh liên quan đến chủ đề trên. Định dạng đầu ra chỉ chứa danh sách dòng chữ thô như cấu trúc mẫu dưới đây, không cần tiêu đề hay giải thích thêm:
+popcorn ;3
+bắp rang
+delicious popcorn ;2
+bắp rang ngon lành
+I love eating delicious popcorn. ;3
+Mời rất thích ăn bắp rang ngon lành.`;
+
+      case 'pause':
+        return `Hãy đóng vai một giáo viên ngoại ngữ soạn giáo án song ngữ đạt chuẩn. Hãy tạo cho tôi danh sách từ vựng/mẫu câu theo chủ đề song ngữ ANH - VIỆT (tiếng Anh lẻ, tiếng Việt chẵn) dùng để nạp vào ứng dụng luyện nghe nói có tùy chỉnh giãn cách nghỉ.
+
+Chủ đề bài học: ${topicText}
+
+Yêu cầu định dạng nghiêm ngặt:
+1. Danh sách gồm các cặp dòng xen kẽ: Dòng tiếng Anh lẻ (1, 3, 5,...) và Dòng tiếng Việt chẵn (2, 4, 6,...).
+2. Viết liền nhau hoàn toàn, không được để trống dòng ở giữa.
+3. Ở cuối câu của dòng tiếng Anh lẻ hoặc dòng tiếng Việt chẵn, hãy kèm ký tự "/Y" (với Y là thời gian chờ tính bằng giây để người học kịp đọc theo/phản xạ trước khi ứng dụng tự động chuyển câu kế tiếp, ví dụ: '/1.5' hoặc '/4' tùy ý bạn thiết kế phù hợp).
+4. KHÔNG dùng dấu chấm phẩy ";" để chỉ định số lặp lại.
+
+Hãy soạn bài học gồm khoảng 10-15 dòng (5-8 cặp) phản ánh sự phát triển từ Từ đơn -> Cụm từ -> Câu hoàn chỉnh liên quan đến chủ đề trên. Định dạng đầu ra chỉ chứa danh sách dòng chữ thô như cấu trúc mẫu dưới đây, không cần tiêu đề hay giải thích thêm:
+popcorn
+bắp rang
+delicious popcorn
+bắp rang ngon lành /2
+I love eating delicious popcorn. /3
+Mời rất thích ăn bắp rang ngon lành.`;
+
+      case 'advanced':
+      default:
+        return `Hãy đóng vai một giáo viên ngoại ngữ soạn giáo án song ngữ đạt chuẩn. Hãy tạo cho tôi danh sách từ vựng/mẫu câu theo chủ đề song ngữ ANH - VIỆT (tiếng Anh lẻ, tiếng Việt chẵn) dùng để nạp vào ứng dụng luyện nghe nói có tùy biến nâng cao (cả tần suất lặp lẫn thời gian nghỉ).
+
+Chủ đề bài học: ${topicText}
+
+Yêu cầu định dạng nghiêm ngặt:
+1. Danh sách gồm các cặp dòng xen kẽ: Dòng tiếng Anh lẻ (1, 3, 5,...) và Dòng tiếng Việt chẵn (2, 4, 6,...).
+2. Viết liền nhau hoàn toàn, không được để trống dòng ở giữa.
+3. Cho phép gộp cả hai tham số nâng cao:
+   - Thêm ';X' ở cuối câu để chỉ định số lần lặp đọc lại (ví dụ ';2' hoặc ';3').
+   - Thêm '/Y' ở cuối câu để chỉ định số giây nghỉ giải lao sau câu đó (ví dụ '/1.5' hoặc '/4').
+   - Bạn có thể đặt cả hai cùng lúc thành ';X /Y' tùy thích.
+
+Hãy soạn bài học gồm khoảng 10-15 dòng (5-8 cặp) phản ánh sự phát triển từ Từ đơn -> Cụm từ -> Câu hoàn chỉnh liên quan đến chủ đề trên. Định dạng đầu ra chỉ chứa danh sách dòng chữ thô như cấu trúc mẫu dưới đây, không cần tiêu đề hay giải thích thêm:
 popcorn ;3 /4
 bắp rang
-I like popcorn
-Con thích bắp rang /1
-flower
-bông hoa nhài thơm ngát ;2
-welcome to classroom
-Chào mừng thầy cô và các học sinh ;3 /4`;
+delicious popcorn
+bắp rang ngon lành /1.5
+I love eating delicious popcorn. ;2 /3
+Mời rất thích ăn bắp rang ngon lành.`;
+    }
+  };
 
   const handleCopyGPTPrompt = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(GPT_PROMPT_TEMPLATE).then(() => {
+      navigator.clipboard.writeText(getDynamicGPTPrompt()).then(() => {
         setCopiedPrompt(true);
-        setTimeout(() => setCopiedPrompt(false), 2000);
+        setTimeout(() => setCopiedPrompt(false), 2055);
       }).catch(err => {
         console.error("Failed to copy GPT Prompt:", err);
       });
@@ -1662,50 +1728,122 @@ Chào mừng thầy cô và các học sinh ;3 /4`;
             />
 
             {/* ChatGPT Prompt Builder Helper Card */}
-            <div id="gpt-prompt-helper-box" className="bg-gradient-to-br from-indigo-50 to-pink-50 border border-indigo-200/60 rounded-2xl p-5 shadow-xs relative overflow-hidden text-left hover:border-indigo-300 transition-colors">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-xl pointer-events-none" />
-              <div className="absolute -bottom-6 -left-6 w-16 h-16 bg-pink-500/5 rounded-full blur-md pointer-events-none" />
-              
-              <div className="flex items-center justify-between mb-3 relative">
-                <h3 className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-1.5 justify-start">
-                  <Sparkles className="w-4 h-4 text-pink-500 animate-pulse" />
-                  Mẫu Prompt ChatGPT Tạo Bài Tập
-                </h3>
+            <div id="gpt-prompt-helper-box" className="bg-gradient-to-br from-indigo-50/70 via-slate-50 to-pink-50/70 border border-slate-200 rounded-2xl p-5 shadow-xs text-left">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 justify-start">
+                    <Sparkles className="w-4 h-4 text-pink-500 animate-pulse" />
+                    Mẫu Prompt AI Tạo Giáo Án Song Ngữ
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Tùy biến câu lệnh và dán vào ChatGPT / Claude / Gemini để nhận danh sách bài học ngay lập tức.
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={handleCopyGPTPrompt}
-                  className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 cursor-pointer select-none ${
+                  className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 justify-center cursor-pointer select-none shrink-0 self-start sm:self-center ${
                     copiedPrompt 
-                      ? 'bg-emerald-500 text-white border-emerald-500 shadow-xs scale-105' 
-                      : 'bg-white text-indigo-600 border-indigo-100 hover:bg-indigo-50 hover:border-indigo-300'
+                      ? 'bg-emerald-500 text-white border-emerald-500 shadow-xs scale-102' 
+                      : 'bg-indigo-650 hover:bg-indigo-700 text-white border-transparent'
                   }`}
                 >
                   {copiedPrompt ? (
                     <>
-                      <Check className="w-3 h-3" />
-                      Đã sao chép!
+                      <Check className="w-3.5 h-3.5" />
+                      Đã copy thành công!
                     </>
                   ) : (
                     <>
-                      <Copy className="w-3 h-3" />
+                      <Copy className="w-3.5 h-3.5" />
                       Sao chép Prompt
                     </>
                   )}
                 </button>
               </div>
 
-              <p className="text-[11px] text-slate-600 leading-relaxed mb-3">
-                Chỉ cần copy lệnh dưới đây và dán vào ChatGPT (hoặc Claude/Gemini) để nhận về một danh sách từ vựng song ngữ chuẩn định dạng cho ứng dụng này.
-              </p>
+              {/* Guide/Explanation of special symbols */}
+              <div className="bg-indigo-50/40 border border-indigo-100 rounded-xl p-3 mb-4 text-[11px] text-slate-600 space-y-1.5 leading-relaxed">
+                <div className="font-bold text-slate-700 flex items-center gap-1 text-[11px]">
+                  <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
+                  Bạn có biết ý nghĩa của các ký hiệu đặc biệt hỗ trợ?
+                </div>
+                <ul className="list-disc pl-4 space-y-1 text-[10.5px]">
+                  <li>
+                    <strong className="text-pink-600 font-mono">Dấu gạch chéo (/Y)</strong>: Quy định <strong className="text-slate-800">thời gian nghỉ (giây)</strong> sau dòng đó. <br />
+                    <span className="text-slate-500">Ví dụ: <code className="bg-slate-100 px-1 rounded text-[10px]">Xin chào /2</code> (Đọc xong "Xin chào" sẽ dừng nghỉ 2 giây chờ học viên phản xạ trước khi sang câu sau).</span>
+                  </li>
+                  <li>
+                    <strong className="text-indigo-600 font-mono">Dấu chấm phẩy (;X)</strong>: Quy định <strong className="text-slate-800">số lần đọc lặp lại</strong> dòng đó. <br />
+                    <span className="text-slate-500">Ví dụ: <code className="bg-slate-100 px-1 rounded text-[10px]">Apple ;3</code> (Ứng dụng sẽ tự động đọc từ "Apple" lặp lại 3 lần liên tiếp trước khi dịch nghĩa).</span>
+                  </li>
+                </ul>
+              </div>
 
-              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 relative group">
-                <pre className="text-[10.5px] font-mono text-indigo-100 whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed scrollbar-thin text-left select-all">
-                  {GPT_PROMPT_TEMPLATE}
-                </pre>
-                <div className="absolute bottom-2 right-2 opacity-60 group-hover:opacity-100 transition-opacity pointer-events-none">
-                  <span className="text-[9px] font-mono text-slate-300 bg-slate-900/90 px-1.5 py-0.5 rounded border border-slate-800">
-                    Bấm nút ở trên để copy nhanh
-                  </span>
+              {/* Live configuration tools */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {/* Topic Input */}
+                <div className="space-y-1.5">
+                  <label htmlFor="prompt-topic-input" className="text-[10px] font-bold text-slate-505 flex items-center gap-1 uppercase tracking-wider">
+                    ✍️ 1. NHẬP CHỦ ĐỀ MUỐN HỌC:
+                  </label>
+                  <input
+                    id="prompt-topic-input"
+                    type="text"
+                    value={promptTopic}
+                    onChange={(e) => setPromptTopic(e.target.value)}
+                    placeholder="Ví dụ: Đàm thoại tại nhà hàng, Từ vựng sân bay..."
+                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden transition"
+                  />
+                </div>
+
+                {/* Prompt Type Selector */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-505 flex items-center gap-1 uppercase tracking-wider">
+                    ⚙️ 2. CHỌN LOẠI CẤU TRÚC PHÙ HỢP:
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { id: 'basic', label: 'Cơ bản thô', desc: 'Không chứa ";" hay "/"' },
+                      { id: 'repeat', label: 'Chỉ Lặp lại', desc: 'Có ";" lặp lại câu' },
+                      { id: 'pause', label: 'Chỉ Giãn cách', desc: 'Có "/" khoảng nghỉ' },
+                      { id: 'advanced', label: 'Nâng cao gộp', desc: 'Có cả ";" và "/"' },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setPromptType(t.id as any)}
+                        className={`px-2.5 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${
+                          promptType === t.id
+                            ? 'bg-indigo-50 border-indigo-300 text-indigo-950 font-semibold shadow-2xs'
+                            : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-650'
+                        }`}
+                      >
+                        <div className="text-[10px]">{t.label}</div>
+                        <div className={`text-[8.5px] ${promptType === t.id ? 'text-indigo-500' : 'text-slate-400'} font-normal mt-0.5 line-clamp-1`}>
+                          {t.desc}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Main code box previewer */}
+              <div className="relative">
+                <div className="absolute top-2.5 right-3 px-2 py-0.5 rounded-md bg-slate-800 text-[8.5px] font-mono text-slate-350 uppercase tracking-wider pointer-events-none">
+                  XEM TRƯỚC PROMPT
+                </div>
+                <div className="bg-slate-950 border border-slate-850 rounded-2xl p-4 group">
+                  <pre className="text-[10.5px] font-mono text-indigo-100 whitespace-pre-wrap max-h-56 overflow-y-auto leading-relaxed scrollbar-thin text-left select-all pr-2">
+                    {getDynamicGPTPrompt()}
+                  </pre>
+                  <div className="mt-2.5 pt-2.5 border-t border-slate-850 flex flex-col sm:flex-row sm:items-center sm:justify-between text-[9px] text-slate-400 gap-2">
+                    <span>* Giáo án sinh ra được sắp xếp xen kẽ, đi từ từ đơn đến câu hoàn chỉnh giúp học viên ghi nhớ tốt nhất.</span>
+                    <span className="font-mono text-indigo-300 bg-slate-900/90 px-1.5 py-0.5 rounded border border-slate-800 shrink-0 select-none text-center">
+                      Bấm "Sao chép Prompt" ở phía trên
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
