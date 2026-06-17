@@ -104,6 +104,9 @@ export default function AudioExportModal({
   const recordingUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const isStoppedManuallyRef = useRef<boolean>(false);
   const animationFrameRef = useRef<number | null>(null);
+  const capturePhaseRef = useRef<'idle' | 'preflight' | 'recording' | 'encoding' | 'success' | 'error'>('idle');
+  const abortReasonRef = useRef<string | null>(null);
+  const isExpectingSpeechRef = useRef<boolean>(false);
   
   // Process sets list
   useEffect(() => {
@@ -141,6 +144,8 @@ export default function AudioExportModal({
 
   const cancelAllProcesses = () => {
     isStoppedManuallyRef.current = true;
+    capturePhaseRef.current = 'error';
+    isExpectingSpeechRef.current = false;
     
     // Stop recording refs
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -361,6 +366,9 @@ export default function AudioExportModal({
    */
   const handleExportBrowserTTS = async () => {
     isStoppedManuallyRef.current = false;
+    capturePhaseRef.current = 'preflight';
+    abortReasonRef.current = null;
+    isExpectingSpeechRef.current = false;
     setStatus('recording');
     setLogs([]);
     setAudioBlobUrl(null);
@@ -558,16 +566,30 @@ export default function AudioExportModal({
         lastCheckTime = now;
         
         // Silent gate: if browser currently speaking, but no audio gets captured for 3 seconds, throw error!
-        const isCurrentlySpeaking = window.speechSynthesis.speaking;
-        if (isCurrentlySpeaking) {
+        // Only run this silent gate during active recording phase
+        const isCurrentlySpeaking = isExpectingSpeechRef.current;
+        if (isCurrentlySpeaking && capturePhaseRef.current === 'recording') {
           if (avg < 1.0) {
             activeSilenceDuration += delta;
             if (activeSilenceDuration >= 3.0) {
               addLog("CẢNH BÁO: Tín hiệu âm thanh biến mất khi đang đọc bài!");
-              cancelAllProcesses();
-              setStatus('error');
-              setProgressText("Không thu được tiếng");
-              addLog("LỖI: Trình duyệt bị im lặng hơn 3 giây liên tiếp trong quá trình đọc. Bản ghi bị hủy.");
+              abortReasonRef.current = 'silent-during-speech';
+              capturePhaseRef.current = 'error';
+              
+              if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+                animationFrameRef.current = null;
+              }
+              
+              if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                try {
+                  mediaRecorderRef.current.stop();
+                } catch (e) {}
+              }
+              
+              if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+              }
               return;
             }
           } else {
@@ -629,6 +651,28 @@ export default function AudioExportModal({
       };
       
       recorder.onstop = async () => {
+        if (isStoppedManuallyRef.current) {
+          addLog("Dừng ghi âm do người dùng hủy bỏ.");
+          setStatus('idle');
+          return;
+        }
+
+        if (abortReasonRef.current === 'silent-during-speech') {
+          setStatus('error');
+          setProgressText("Không thu được tiếng");
+          addLog("LỖI: Trình duyệt bị im lặng hơn 3 giây liên tiếp trong quá trình đọc. Bản ghi bị hủy.");
+          
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(t => t.stop());
+            mediaStreamRef.current = null;
+          }
+          if (micStreamRef.current) {
+            micStreamRef.current.getTracks().forEach(t => t.stop());
+            micStreamRef.current = null;
+          }
+          return;
+        }
+
         addLog("Đọc hoàn tất. Tiến hành nén tệp tin mpeg-MP3 thật...");
         setProgressText("Đang giải nén & nén sang định dạng MP3 thật...");
         setStatus('processing');
@@ -713,18 +757,21 @@ export default function AudioExportModal({
           const mp3Url = URL.createObjectURL(finalMp3Blob);
           
           setAudioBlobUrl(mp3Url);
+          capturePhaseRef.current = 'success';
           setStatus('success');
           addLog("Chúc mừng! Đã xuất file MP3 thật (audio/mpeg) thành công.");
           
         } catch (mp3Err: any) {
           console.error("MP3 encoder failed:", mp3Err);
           addLog(`Lỗi mã hóa MP3: ${mp3Err.message || mp3Err}`);
+          capturePhaseRef.current = 'error';
           setStatus('error');
         }
       };
       
       // Start recording
       recorder.start();
+      capturePhaseRef.current = 'recording';
       
       // 4. Sequential browser SpeechSynthesis loop
       let currentIndex = 0;
@@ -737,6 +784,12 @@ export default function AudioExportModal({
         
         if (currentIndex >= itemsToExport.length) {
           addLog("Đã chạy hết danh sách câu. Đang dừng ghi âm...");
+          capturePhaseRef.current = 'encoding';
+          isExpectingSpeechRef.current = false;
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+          }
           recorder.stop();
           if (mediaStreamRef.current) {
             mediaStreamRef.current.getTracks().forEach(t => t.stop());
@@ -795,7 +848,12 @@ export default function AudioExportModal({
             if (bestVoice) utterance.voice = bestVoice;
           }
           
+          utterance.onstart = () => {
+            isExpectingSpeechRef.current = true;
+          };
+          
           utterance.onend = () => {
+            isExpectingSpeechRef.current = false;
             if (isStoppedManuallyRef.current) return;
             
             if (currentRepeat < maxRepeats) {
@@ -810,6 +868,7 @@ export default function AudioExportModal({
           };
           
           utterance.onerror = (e) => {
+            isExpectingSpeechRef.current = false;
             addLog(`Hệ thống TTS cảnh báo trên dòng ${currentIndex + 1}: ${e.error}`);
             currentIndex++;
             setTimeout(playNextItem, 1000);
