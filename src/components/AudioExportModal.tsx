@@ -19,6 +19,7 @@ import {
 import { SpeechItem, LanguageCode } from '../types';
 import { encodeMonoMp3 } from '../audio/mp3Encoder';
 import { getPremiumVoiceForLang } from '../features/premium-tts/premiumVoices';
+import { generatePremiumTts } from '../features/premium-tts/premiumTtsClient';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -294,25 +295,15 @@ export default function AudioExportModal({
         
         addLog(`Gọi API câu ${i + 1}/${itemsToExport.length} [${itemLang}]: "${item.text.substring(0, 30)}..."`);
         
-        // 1. Fetch from Gemini endpoint
-        const response = await fetch("/api/tts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: item.text,
-            voice: chosenVoice,
-            lang: itemLang,
-            userApiKey: userGeminiApiKey
-          })
+        // 1. Fetch from Gemini endpoint using shared helper
+        const audioUrl = await generatePremiumTts({
+          text: item.text,
+          voice: chosenVoice,
+          lang: itemLang,
+          apiKey: userGeminiApiKey
         });
         
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || `Lỗi máy chủ trả về mã ${response.status}`);
-        }
-        
-        const resData = await response.json();
-        const rawPcm = extractPcmFromWavDataUrl(resData.audioUrl);
+        const rawPcm = extractPcmFromWavDataUrl(audioUrl);
         
         // Push the item's audio segments, repeating based on configured item repeats!
         const lineRepeats = item.repeats || 1;

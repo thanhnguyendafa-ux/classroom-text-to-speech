@@ -40,8 +40,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode } from './types';
 import { useGeminiApiKey } from './features/premium-tts/useGeminiApiKey';
 import { usePremiumTts } from './features/premium-tts/usePremiumTts';
-import { PremiumKeyPanel } from './features/premium-tts/PremiumKeyPanel';
-import { PremiumVoiceSettings } from './features/premium-tts/PremiumVoiceSettings';
+import { PremiumEngineSection } from './features/premium-tts/PremiumEngineSection';
 import { getPremiumVoiceForLang } from './features/premium-tts/premiumVoices';
 import ImageSearchModal from './components/ImageSearchModal';
 import TheaterPlayer from './components/TheaterPlayer';
@@ -2172,36 +2171,29 @@ Mời rất thích ăn bắp rang ngon lành.`;
                       </div>
                     </>
                   ) : (
-                    <>
-                      {/* Premium API Key Panel shown at the top of settings when chosen Premium */}
-                      <PremiumKeyPanel
-                        apiKey={userGeminiApiKey}
-                        showApiKey={showApiKey}
-                        setShowApiKey={setShowApiKey}
-                        setApiKey={handleApiKeyChange}
-                        clearApiKey={() => handleApiKeyChange('')}
-                      />
-
-                      {/* Premium Voice Dropdowns */}
-                      <PremiumVoiceSettings
-                        selectedVoices={{
-                          en: selectedPremiumVoiceEn,
-                          vi: selectedPremiumVoiceVi,
-                          'zh-cn': selectedPremiumVoiceZhCn,
-                          'zh-tw': selectedPremiumVoiceZhTw,
-                          ja: selectedPremiumVoiceJa,
-                          ko: selectedPremiumVoiceKo,
-                        }}
-                        onVoiceChange={(lang, val) => {
-                          if (lang === 'en') setSelectedPremiumVoiceEn(val);
-                          else if (lang === 'vi') setSelectedPremiumVoiceVi(val);
-                          else if (lang === 'zh-cn') setSelectedPremiumVoiceZhCn(val);
-                          else if (lang === 'zh-tw') setSelectedPremiumVoiceZhTw(val);
-                          else if (lang === 'ja') setSelectedPremiumVoiceJa(val);
-                          else if (lang === 'ko') setSelectedPremiumVoiceKo(val);
-                        }}
-                      />
-                    </>
+                    <PremiumEngineSection
+                      apiKey={userGeminiApiKey}
+                      showApiKey={showApiKey}
+                      setShowApiKey={setShowApiKey}
+                      setApiKey={handleApiKeyChange}
+                      clearApiKey={() => handleApiKeyChange('')}
+                      selectedVoices={{
+                        en: selectedPremiumVoiceEn,
+                        vi: selectedPremiumVoiceVi,
+                        'zh-cn': selectedPremiumVoiceZhCn,
+                        'zh-tw': selectedPremiumVoiceZhTw,
+                        ja: selectedPremiumVoiceJa,
+                        ko: selectedPremiumVoiceKo,
+                      }}
+                      onVoiceChange={(lang, val) => {
+                        if (lang === 'en') setSelectedPremiumVoiceEn(val);
+                        else if (lang === 'vi') setSelectedPremiumVoiceVi(val);
+                        else if (lang === 'zh-cn') setSelectedPremiumVoiceZhCn(val);
+                        else if (lang === 'zh-tw') setSelectedPremiumVoiceZhTw(val);
+                        else if (lang === 'ja') setSelectedPremiumVoiceJa(val);
+                        else if (lang === 'ko') setSelectedPremiumVoiceKo(val);
+                      }}
+                    />
                   )}
                 </div>
 

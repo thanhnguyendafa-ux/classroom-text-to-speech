@@ -1,7 +1,7 @@
 export interface PremiumVoice {
   value: string;
   label: string;
-  styleHint?: string;
+  note?: string;
 }
 
 export interface PremiumVoicesConfig {
@@ -13,36 +13,36 @@ export interface PremiumVoicesConfig {
 }
 
 export const GEMINI_TTS_VOICES: PremiumVoice[] = [
-  { value: 'Zephyr', label: 'Zephyr 👩‍💼', styleHint: 'Nữ - Truyền cảm, khuyến nghị' },
-  { value: 'Puck', label: 'Puck 👦', styleHint: 'Nam - Cá tính, vui vẻ' },
-  { value: 'Charon', label: 'Charon 👨', styleHint: 'Nam - Trầm ấm, dõng dạc' },
-  { value: 'Kore', label: 'Kore 👩', styleHint: 'Nữ - Trong trẻo, mượt mà' },
-  { value: 'Fenrir', label: 'Fenrir 🧔', styleHint: 'Nam - Sảng khoái, rõ ràng' },
-  { value: 'Leda', label: 'Leda 👩‍⚕️', styleHint: 'Nữ - Nhẹ nhàng, dễ chịu' },
-  { value: 'Orus', label: 'Orus 👨‍💼', styleHint: 'Nam - Chuyên nghiệp, tự tin' },
-  { value: 'Aoede', label: 'Aoede 👩‍🎤', styleHint: 'Nữ - Thanh thoát, bay bổng' },
-  { value: 'Callirrhoe', label: 'Callirrhoe 👱‍♀️', styleHint: 'Nữ - Êm ái, sâu lắng' },
-  { value: 'Autonoe', label: 'Autonoe 👩‍🎓', styleHint: 'Nữ - Trí thức, điềm đạm' },
-  { value: 'Enceladus', label: 'Enceladus 👨‍🚀', styleHint: 'Nam - Hùng dũng, tự nhiên' },
-  { value: 'Iapetus', label: 'Iapetus 👴', styleHint: 'Nam - Thuần súc, đĩnh đạc' },
-  { value: 'Umbriel', label: 'Umbriel 👩‍🎨', styleHint: 'Nữ - Nghệ sĩ, tinh tế' },
-  { value: 'Algieba', label: 'Algieba 👩', styleHint: 'Nữ - Ấm áp, thân thiện' },
-  { value: 'Despina', label: 'Despina 👧', styleHint: 'Nữ - Trẻ trung, năng động' },
-  { value: 'Erinome', label: 'Erinome 👩', styleHint: 'Nữ - Mộc mạc, gần gũi' },
-  { value: 'Algenib', label: 'Algenib 👨', styleHint: 'Nam - Linh hoạt, sắc sảo' },
-  { value: 'Rasalgethi', label: 'Rasalgethi 👨', styleHint: 'Nam - Mạnh mẽ, dứt khoát' },
-  { value: 'Laomedeia', label: 'Laomedeia 👩', styleHint: 'Nữ - Du dương, kể chuyện' },
-  { value: 'Achernar', label: 'Achernar 👨', styleHint: 'Nam - Khoẻ khoắn, nhiệt huyết' },
-  { value: 'Alnilam', label: 'Alnilam 👨', styleHint: 'Nam - Đậm đà, vang dội' },
-  { value: 'Schedar', label: 'Schedar 👩', styleHint: 'Nữ - Trầm lắng, nghiêm túc' },
-  { value: 'Gacrux', label: 'Gacrux 👨', styleHint: 'Nam - Ấm áp, tâm tình' },
-  { value: 'Pulcherrima', label: 'Pulcherrima 👩', styleHint: 'Nữ - Sang trọng, truyền cảm' },
-  { value: 'Achird', label: 'Achird 👩', styleHint: 'Nữ - Trong veo, nhẹ bẫng' },
-  { value: 'Zubenelgenubi', label: 'Zubenelgenubi 👨', styleHint: 'Nam - Đầy đặn, chững chạc' },
-  { value: 'Vindemiatrix', label: 'Vindemiatrix 👩', styleHint: 'Nữ - Sắc sảo, cuốn hút' },
-  { value: 'Sadachbia', label: 'Sadachbia 👩', styleHint: 'Nữ - Hoà ái, hiền dịu' },
-  { value: 'Sadaltager', label: 'Sadaltager 👨', styleHint: 'Nam - Chuyên gia, đĩnh đạc' },
-  { value: 'Sulafat', label: 'Sulafat 👩', styleHint: 'Nữ - Rõ chữ, lôi cuốn' }
+  { value: 'Zephyr', label: 'Zephyr 🎙️', note: 'Gợi ý: rõ, sáng, khuyên dùng' },
+  { value: 'Puck', label: 'Puck 🎙️', note: 'Gợi ý: vui tươi, cá tính' },
+  { value: 'Charon', label: 'Charon 🎙️', note: 'Gợi ý: trầm ấm, dõng dạc' },
+  { value: 'Kore', label: 'Kore 🎙️', note: 'Gợi ý: trong trẻo, mượt mà' },
+  { value: 'Fenrir', label: 'Fenrir 🎙️', note: 'Gợi ý: sảng khoái, rõ ràng' },
+  { value: 'Leda', label: 'Leda 🎙️', note: 'Gợi ý: nhẹ nhàng, dễ chịu' },
+  { value: 'Orus', label: 'Orus 🎙️', note: 'Gợi ý: chuyên nghiệp, tự tin' },
+  { value: 'Aoede', label: 'Aoede 🎙️', note: 'Gợi ý: thanh thoát, ngân vang' },
+  { value: 'Callirrhoe', label: 'Callirrhoe 🎙️', note: 'Gợi ý: sâu lắng, êm ái' },
+  { value: 'Autonoe', label: 'Autonoe 🎙️', note: 'Gợi ý: điềm đạm, trí thức' },
+  { value: 'Enceladus', label: 'Enceladus 🎙️', note: 'Gợi ý: tự nhiên, hùng dũng' },
+  { value: 'Iapetus', label: 'Iapetus 🎙️', note: 'Gợi ý: đĩnh đạc, mộc mạc' },
+  { value: 'Umbriel', label: 'Umbriel 🎙️', note: 'Gợi ý: tinh tế, uyển chuyển' },
+  { value: 'Algieba', label: 'Algieba 🎙️', note: 'Gợi ý: ấm áp, thân thiện' },
+  { value: 'Despina', label: 'Despina 🎙️', note: 'Gợi ý: năng động, trẻ trung' },
+  { value: 'Erinome', label: 'Erinome 🎙️', note: 'Gợi ý: gần gũi, thuần phác' },
+  { value: 'Algenib', label: 'Algenib 🎙️', note: 'Gợi ý: sắc sảo, linh hoạt' },
+  { value: 'Rasalgethi', label: 'Rasalgethi 🎙️', note: 'Gợi ý: dứt khoát, mạnh mẽ' },
+  { value: 'Laomedeia', label: 'Laomedeia 🎙️', note: 'Gợi ý: truyền cảm, kể chuyện' },
+  { value: 'Achernar', label: 'Achernar 🎙️', note: 'Gợi ý: khoẻ khoắn, đầy đặn' },
+  { value: 'Alnilam', label: 'Alnilam 🎙️', note: 'Gợi ý: vang dội, đậm chất' },
+  { value: 'Schedar', label: 'Schedar 🎙️', note: 'Gợi ý: nghiêm túc, trầm lắng' },
+  { value: 'Gacrux', label: 'Gacrux 🎙️', note: 'Gợi ý: tâm tình, ấm áp' },
+  { value: 'Pulcherrima', label: 'Pulcherrima 🎙️', note: 'Gợi ý: sang trọng, truyền cảm' },
+  { value: 'Achird', label: 'Achird 🎙️', note: 'Gợi ý: nhẹ bẫng, trong veo' },
+  { value: 'Zubenelgenubi', label: 'Zubenelgenubi 🎙️', note: 'Gợi ý: chững chạc, đầy đặn' },
+  { value: 'Vindemiatrix', label: 'Vindemiatrix 🎙️', note: 'Gợi ý: cuốn hút, sắc sảo' },
+  { value: 'Sadachbia', label: 'Sadachbia 🎙️', note: 'Gợi ý: hiền dịu, hoà ái' },
+  { value: 'Sadaltager', label: 'Sadaltager 🎙️', note: 'Gợi ý: đĩnh đạc, chuyên gia' },
+  { value: 'Sulafat', label: 'Sulafat 🎙️', note: 'Gợi ý: lôi cuốn, rõ chữ' }
 ];
 
 export const PREMIUM_VOICES: Record<string, PremiumVoicesConfig> = {
