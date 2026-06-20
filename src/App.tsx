@@ -51,6 +51,8 @@ import { SpeechSettingsPanel } from './components/SpeechSettingsPanel';
 import { LessonInputPanel, TEMPLATES } from './components/LessonInputPanel';
 import { PlaybackController } from './components/PlaybackController';
 import { SpeechListBoard } from './components/SpeechListBoard';
+import CompactHeader from './components/CompactHeader';
+import AppWorkspace from './components/AppWorkspace';
 
 
 // Helper regex to detect language characters
@@ -260,6 +262,9 @@ export default function App() {
   const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
   const [promptTopic, setPromptTopic] = useState<string>('Giao tiếp Tiếng Anh hàng ngày');
   const [promptType, setPromptType] = useState<'basic' | 'repeat' | 'pause' | 'advanced'>('advanced');
+  const [showGptPromptGuide, setShowGptPromptGuide] = useState<boolean>(false);
+  const [showChromeTip, setShowChromeTip] = useState<boolean>(false);
+  const [showDrillGuide, setShowDrillGuide] = useState<boolean>(false);
 
   const getDynamicGPTPrompt = () => {
     const topicText = promptTopic.trim() || 'Giao tiếp Tiếng Anh hàng ngày';
@@ -1487,484 +1492,472 @@ Mời rất thích ăn bắp rang ngon lành.`;
   const koreanVoices = voices.filter(v => v.lang.toLowerCase().startsWith('ko'));
 
   return (
-    <div id="classroom-tts-root" className="min-h-screen bg-slate-55 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 pb-20">
+    <div id="classroom-tts-root" className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 pb-20">
       
-      {/* Dynamic Header */}
-      <header id="app-header" className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-indigo-600 rounded-xl text-white shadow-sm flex items-center justify-center">
-              <Volume2 className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
-                Classroom Speech <span className="text-xs font-semibold px-2.5 py-0.5 bg-indigo-50 border border-indigo-100/50 rounded-full text-indigo-600">Pro Studio</span>
-              </h1>
-              <p className="text-[11px] text-slate-500 hidden sm:block">Giáo trình luyện nghe, chính tả bài hát tiếng Anh & tiếng Việt tối ưu</p>
-            </div>
-          </div>
+      {/* Compact workspace-optimized Header */}
+      <CompactHeader
+        engineMode={engineMode}
+        hasPremiumKey={!!userGeminiApiKey}
+        speechCount={speechList.length}
+        onOpenExport={() => setIsAudioExportModalOpen(true)}
+        onOpenShare={() => setIsShareModalOpen(true)}
+      />
 
-          <div className="flex items-center space-x-3">
-            {engineMode === 'premium' ? (
-              <div className="hidden md:flex items-center space-x-1.5 bg-indigo-50 border border-indigo-100 rounded-lg px-2.5 py-1 text-xs text-indigo-700 font-bold animate-pulse">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-650" />
-                <span>Premium Studio AI Active</span>
-              </div>
-            ) : (
-              <div className="hidden md:flex items-center space-x-1.5 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1 text-xs text-emerald-700 font-semibold">
-                <Monitor className="w-3.5 h-3.5" />
-                <span>Native Browser SpeechSynthesis</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <main id="app-main" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+      <main id="app-main" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
         
-        {/* Banner with Vietnamese focus guidelines */}
-        <div id="welcome-message-banner" className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 rounded-2xl text-white p-6 sm:p-8 shadow-md relative overflow-hidden mb-6">
-          <div className="absolute right-0 bottom-0 opacity-10 translate-x-10 translate-y-10 pointer-events-none">
-            <Volume2 className="w-80 h-80" />
-          </div>
-          <div className="relative z-10 max-w-4xl">
-            <div className="flex items-center space-x-2 text-indigo-300 text-xs font-bold uppercase tracking-wider mb-2">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Chrome / Safari Browser Optimized Speech Technology</span>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight leading-snug">
-              Hệ Thống Luyện Phát Âm Trực Tuyến & Chép Chính Tả
-            </h2>
-            <p className="text-indigo-200 text-xs sm:text-sm mt-2 leading-relaxed">
-              Dành cho giáo viên ngoại ngữ thiết kế bài giảng. Nhập danh sách từ vựng, tự động nhận diện ngôn ngữ tốt nhất, lặp lại phát âm tùy ý từng dòng và tự động chuyển tiếp liên lục để học sinh chép bài. Kéo thả dòng bất kì để đổi thứ tự câu hỏi!
-            </p>
-          </div>
-        </div>
+        {/* Dynamic Slotted Workspace component */}
+        <AppWorkspace
+          speechCount={speechList.length}
+          leftColumn={
+            <>
+              {/* Standard Text Editor Input */}
+              <LessonInputPanel
+                rawText={rawText}
+                setRawText={setRawText}
+                autoGroupSet={autoGroupSet}
+                onAutoGroupSetChange={handleAutoGroupSetChange}
+                setMultiplier={setMultiplier}
+                onSetMultiplierChange={handleSetMultiplierChange}
+                onCreateList={() => handleCreateList()}
+                onClearInput={() => setRawText('')}
+                onApplyTemplate={handleApplyTemplate}
+              />
 
-        {/* Primary Functional Dashboard Grid */}
-        <div id="studio-grid" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
-          {/* LEFT AREA: Text Editor & Settings Configurations */}
-          <div id="creator-workspace-col" className="lg:col-span-5 space-y-6">
-            
-            {/* Standard Text Editor Input */}
-            <LessonInputPanel
-              rawText={rawText}
-              setRawText={setRawText}
-              autoGroupSet={autoGroupSet}
-              onAutoGroupSetChange={handleAutoGroupSetChange}
-              setMultiplier={setMultiplier}
-              onSetMultiplierChange={handleSetMultiplierChange}
-              onCreateList={() => handleCreateList()}
-              onClearInput={() => setRawText('')}
-              onApplyTemplate={handleApplyTemplate}
-            />
+              {/* Local Lesson & Folder Library Panel */}
+              <LessonLibrary 
+                currentRawText={rawText} 
+                currentSpeechList={speechList}
+                currentSettings={{
+                  speed,
+                  timeBetweenLines,
+                  rowLayoutMode,
+                  engineMode,
+                  selectedPremiumVoiceEn,
+                  selectedPremiumVoiceVi,
+                  selectedEnVoiceName,
+                  selectedViVoiceName,
+                  autoGroupSet,
+                  setMultiplier,
+                  useUniversalImage,
+                  universalImageUrl
+                }}
+                onLoadLesson={(lesson) => {
+                  // 1. Restore raw text editor
+                  setRawText(lesson.rawText);
+                  
+                  // 2. Restore all configurations
+                  if (lesson.settings) {
+                    const s = lesson.settings as any;
+                    if (typeof s.speed === 'number') setSpeed(s.speed);
+                    if (typeof s.timeBetweenLines === 'number') setTimeBetweenLines(s.timeBetweenLines);
+                    if (typeof s.rowLayoutMode === 'string') setRowLayoutMode(s.rowLayoutMode);
+                    if (typeof s.engineMode === 'string') setEngineMode(s.engineMode);
+                    if (typeof s.selectedPremiumVoiceEn === 'string') setSelectedPremiumVoiceEn(s.selectedPremiumVoiceEn);
+                    if (typeof s.selectedPremiumVoiceVi === 'string') setSelectedPremiumVoiceVi(s.selectedPremiumVoiceVi);
+                    if (typeof s.selectedPremiumVoiceZhCn === 'string') setSelectedPremiumVoiceZhCn(s.selectedPremiumVoiceZhCn);
+                    if (typeof s.selectedPremiumVoiceZhTw === 'string') setSelectedPremiumVoiceZhTw(s.selectedPremiumVoiceZhTw);
+                    if (typeof s.selectedPremiumVoiceJa === 'string') setSelectedPremiumVoiceJa(s.selectedPremiumVoiceJa);
+                    if (typeof s.selectedPremiumVoiceKo === 'string') setSelectedPremiumVoiceKo(s.selectedPremiumVoiceKo);
+                    if (typeof s.selectedEnVoiceName === 'string') setSelectedEnVoiceName(s.selectedEnVoiceName);
+                    if (typeof s.selectedViVoiceName === 'string') setSelectedViVoiceName(s.selectedViVoiceName);
+                    if (typeof s.selectedZhCnVoiceName === 'string') setSelectedZhCnVoiceName(s.selectedZhCnVoiceName);
+                    if (typeof s.selectedZhTwVoiceName === 'string') setSelectedZhTwVoiceName(s.selectedZhTwVoiceName);
+                    if (typeof s.selectedJaVoiceName === 'string') setSelectedJaVoiceName(s.selectedJaVoiceName);
+                    if (typeof s.selectedKoVoiceName === 'string') setSelectedKoVoiceName(s.selectedKoVoiceName);
+                    if (typeof s.autoGroupSet === 'boolean') handleAutoGroupSetChange(s.autoGroupSet);
+                    if (typeof s.setMultiplier === 'number') handleSetMultiplierChange(s.setMultiplier);
+                    if (typeof s.useUniversalImage === 'boolean') handleUseUniversalImageChange(s.useUniversalImage);
+                    if (typeof s.universalImageUrl === 'string') handleUniversalImageUrlChange(s.universalImageUrl);
+                  }
 
-            {/* Local Lesson & Folder Library Panel */}
-            <LessonLibrary 
-              currentRawText={rawText} 
-              currentSpeechList={speechList}
-              currentSettings={{
-                speed,
-                timeBetweenLines,
-                rowLayoutMode,
-                engineMode,
-                selectedPremiumVoiceEn,
-                selectedPremiumVoiceVi,
-                selectedEnVoiceName,
-                selectedViVoiceName,
-                autoGroupSet,
-                setMultiplier,
-                useUniversalImage,
-                universalImageUrl
-              }}
-              onLoadLesson={(lesson) => {
-                // 1. Restore raw text editor
-                setRawText(lesson.rawText);
-                
-                // 2. Restore all configurations
-                if (lesson.settings) {
-                  const s = lesson.settings as any;
-                  if (typeof s.speed === 'number') setSpeed(s.speed);
-                  if (typeof s.timeBetweenLines === 'number') setTimeBetweenLines(s.timeBetweenLines);
-                  if (typeof s.rowLayoutMode === 'string') setRowLayoutMode(s.rowLayoutMode);
-                  if (typeof s.engineMode === 'string') setEngineMode(s.engineMode);
-                  if (typeof s.selectedPremiumVoiceEn === 'string') setSelectedPremiumVoiceEn(s.selectedPremiumVoiceEn);
-                  if (typeof s.selectedPremiumVoiceVi === 'string') setSelectedPremiumVoiceVi(s.selectedPremiumVoiceVi);
-                  if (typeof s.selectedPremiumVoiceZhCn === 'string') setSelectedPremiumVoiceZhCn(s.selectedPremiumVoiceZhCn);
-                  if (typeof s.selectedPremiumVoiceZhTw === 'string') setSelectedPremiumVoiceZhTw(s.selectedPremiumVoiceZhTw);
-                  if (typeof s.selectedPremiumVoiceJa === 'string') setSelectedPremiumVoiceJa(s.selectedPremiumVoiceJa);
-                  if (typeof s.selectedPremiumVoiceKo === 'string') setSelectedPremiumVoiceKo(s.selectedPremiumVoiceKo);
-                  if (typeof s.selectedEnVoiceName === 'string') setSelectedEnVoiceName(s.selectedEnVoiceName);
-                  if (typeof s.selectedViVoiceName === 'string') setSelectedViVoiceName(s.selectedViVoiceName);
-                  if (typeof s.selectedZhCnVoiceName === 'string') setSelectedZhCnVoiceName(s.selectedZhCnVoiceName);
-                  if (typeof s.selectedZhTwVoiceName === 'string') setSelectedZhTwVoiceName(s.selectedZhTwVoiceName);
-                  if (typeof s.selectedJaVoiceName === 'string') setSelectedJaVoiceName(s.selectedJaVoiceName);
-                  if (typeof s.selectedKoVoiceName === 'string') setSelectedKoVoiceName(s.selectedKoVoiceName);
-                  if (typeof s.autoGroupSet === 'boolean') handleAutoGroupSetChange(s.autoGroupSet);
-                  if (typeof s.setMultiplier === 'number') handleSetMultiplierChange(s.setMultiplier);
-                  if (typeof s.useUniversalImage === 'boolean') handleUseUniversalImageChange(s.useUniversalImage);
-                  if (typeof s.universalImageUrl === 'string') handleUniversalImageUrlChange(s.universalImageUrl);
-                }
+                  // 3. Restore list of cards & its custom images
+                  if (Array.isArray(lesson.speechList) && lesson.speechList.length > 0) {
+                    setSpeechList(lesson.speechList);
+                  } else {
+                    handleCreateList(lesson.rawText);
+                  }
+                }}
+              />
 
-                // 3. Restore list of cards & its custom images
-                if (Array.isArray(lesson.speechList) && lesson.speechList.length > 0) {
-                  setSpeechList(lesson.speechList);
-                } else {
-                  handleCreateList(lesson.rawText);
-                }
-              }}
-            />
-
-            {/* ChatGPT Prompt Builder Helper Card */}
-            <div id="gpt-prompt-helper-box" className="bg-gradient-to-br from-indigo-50/70 via-slate-50 to-pink-50/70 border border-slate-200 rounded-2xl p-5 shadow-xs text-left">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                <div>
-                  <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 justify-start">
-                    <Sparkles className="w-4 h-4 text-pink-500 animate-pulse" />
-                    Mẫu Prompt AI Tạo Giáo Án Song Ngữ
-                  </h3>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Tùy biến câu lệnh và dán vào ChatGPT / Claude / Gemini để nhận danh sách bài học ngay lập tức.
-                  </p>
+              {/* ChatGPT Prompt Builder Helper Card */}
+              <div id="gpt-prompt-helper-box" className="bg-gradient-to-br from-indigo-50/70 via-slate-50 to-pink-50/70 border border-slate-200 rounded-2xl p-5 shadow-xs text-left">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 justify-start">
+                      <Sparkles className="w-4 h-4 text-pink-500 animate-pulse" />
+                      Mẫu Prompt AI Tạo Giáo Án
+                    </h3>
+                    <p className="text-[11px] text-slate-505 mt-0.5">
+                      Dán câu lệnh vào ChatGPT / Claude / Gemini để nhận danh sách từ và câu song ngữ nhanh chóng.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyGPTPrompt}
+                    className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 justify-center cursor-pointer select-none shrink-0 self-start sm:self-center ${
+                      copiedPrompt 
+                        ? 'bg-emerald-500 text-white border-emerald-500 shadow-xs scale-102' 
+                        : 'bg-indigo-650 hover:bg-indigo-700 text-white border-transparent'
+                    }`}
+                  >
+                    {copiedPrompt ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        Đã copy!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        Sao chép Prompt
+                      </>
+                    )}
+                  </button>
                 </div>
+
+                {/* Guide/Explanation of special symbols - COLLAPSED / TOGGLED */}
+                <div className="space-y-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowGptPromptGuide(!showGptPromptGuide)}
+                    className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 select-none cursor-pointer"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>{showGptPromptGuide ? "Ẩn hướng dẫn ký hiệu / ;" : "Trợ giúp: Hướng dẫn ký hiệu đặc biệt / ;"}</span>
+                  </button>
+                  {showGptPromptGuide && (
+                    <div className="bg-indigo-50/40 border border-indigo-100 rounded-xl p-3 text-[11px] text-slate-605 space-y-1.5 leading-relaxed animate-fade-in text-left">
+                      <ul className="list-disc pl-4 space-y-1 text-[10.5px]">
+                        <li>
+                          <strong className="text-pink-600 font-mono">Dấu gạch chéo (/Y)</strong>: Quy định <strong className="text-slate-800">thời gian nghỉ (giây)</strong> sau dòng đó. <br />
+                          <span className="text-slate-500">Ví dụ: <code className="bg-slate-100 px-1 rounded text-[10px]">Xin chào /2</code> (Đọc xong "Xin chào" sẽ dừng nghỉ 2 giây rồi đọc tiếp).</span>
+                        </li>
+                        <li>
+                          <strong className="text-indigo-600 font-mono">Dấu chấm phẩy (;X)</strong>: Quy định <strong className="text-slate-800">số lần đọc lặp lại</strong> dòng đó. <br />
+                          <span className="text-slate-500">Ví dụ: <code className="bg-slate-100 px-1 rounded text-[10px]">Apple ;3</code> (Nói từ "Apple" lặp 3 lần liên tiếp rồi học tiếp câu sau).</span>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {/* Live configuration tools */}
+                <div className="grid grid-cols-1 gap-4 mb-4">
+                  {/* Topic Input */}
+                  <div className="space-y-1.5">
+                    <label htmlFor="prompt-topic-input" className="text-[10px] font-bold text-slate-500 flex items-center gap-1 uppercase tracking-wider">
+                      ✍️ 1. NHẬP CHỦ ĐỀ MUỐN HỌC:
+                    </label>
+                    <input
+                      id="prompt-topic-input"
+                      type="text"
+                      value={promptTopic}
+                      onChange={(e) => setPromptTopic(e.target.value)}
+                      placeholder="Ví dụ: Đàm thoại tại nhà hàng, Từ vựng sân bay..."
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden transition"
+                    />
+                  </div>
+
+                  {/* Prompt Type Selector */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-500 flex items-center gap-1 uppercase tracking-wider">
+                      ⚙️ 2. CHỌN LOẠI CẤU TRÚC PHÙ HỢP:
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { id: 'basic', label: 'Cơ bản thô', desc: 'Không chứa ";" hay "/"' },
+                        { id: 'repeat', label: 'Chỉ Lặp lại', desc: 'Có ";" lặp lại câu' },
+                        { id: 'pause', label: 'Chỉ Giãn cách', desc: 'Có "/" khoảng nghỉ' },
+                        { id: 'advanced', label: 'Nâng cao gộp', desc: 'Có cả ";" và "/"' },
+                      ].map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setPromptType(t.id as any)}
+                          className={`px-2.5 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${
+                            promptType === t.id
+                              ? 'bg-indigo-50 border-indigo-300 text-indigo-950 font-semibold shadow-2xs'
+                              : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-650'
+                          }`}
+                        >
+                          <div className="text-[10px]">{t.label}</div>
+                          <div className={`text-[8.5px] ${promptType === t.id ? 'text-indigo-500' : 'text-slate-400'} font-normal mt-0.5 line-clamp-1`}>
+                            {t.desc}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main code box previewer */}
+                <div className="relative">
+                  <div className="absolute top-2.5 right-3 px-2 py-0.5 rounded-md bg-slate-800 text-[8.5px] font-mono text-slate-350 uppercase tracking-wider pointer-events-none">
+                    XEM TRƯỚC PROMPT
+                  </div>
+                  <div className="bg-slate-950 border border-slate-850 rounded-2xl p-4 group">
+                    <pre className="text-[10.5px] font-mono text-indigo-100 whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed scrollbar-thin text-left select-all pr-2">
+                      {getDynamicGPTPrompt()}
+                    </pre>
+                    <div className="mt-2 pt-2 border-t border-slate-850 flex flex-col text-[9px] text-slate-400 gap-1.5">
+                      <span>* Giáo án được tạo xen kẽ song ngữ, tuần tự hợp lý.</span>
+                      <span className="font-mono text-indigo-350 bg-slate-900/90 px-1.5 py-0.5 rounded border border-slate-800 shrink-0 select-none text-center">
+                        Bấm sao chép để dán vào AI
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          }
+          centerColumn={
+            <>
+              <SpeechListBoard
+                speechList={speechList}
+                rowLayoutMode={rowLayoutMode}
+                toggleRowLayoutMode={toggleRowLayoutMode}
+                fileInputRef={fileInputRef}
+                handleExportData={handleExportData}
+                triggerPlaylistDrill={triggerPlaylistDrill}
+                handleStopAll={handleStopAll}
+                handleClearAll={handleClearAll}
+                autoAdvance={autoAdvance}
+                newRowText={newRowText}
+                setNewRowText={setNewRowText}
+                newRowLang={newRowLang}
+                setNewRowLang={setNewRowLang}
+                newRowRepeats={newRowRepeats}
+                setNewRowRepeats={setNewRowRepeats}
+                newRowDelay={newRowDelay}
+                setNewRowDelay={setNewRowDelay}
+                handleAddSingleRow={handleAddSingleRow}
+                setIsShareModalOpen={setIsShareModalOpen}
+                setIsAudioExportModalOpen={setIsAudioExportModalOpen}
+                handleApplyTemplate={handleApplyTemplate}
+                
+                playingItemId={playingItemId}
+                currentRepeatIndex={currentRepeatIndex}
+                waitingState={waitingState}
+                editingItemId={editingItemId}
+                editingText={editingText}
+                setEditingText={setEditingText}
+                startEditingRow={startEditingRow}
+                saveEditedRow={saveEditedRow}
+                setEditingItemId={setEditingItemId}
+                
+                draggedIndex={draggedIndex}
+                dragOverIndex={dragOverIndex}
+                handleDragStart={handleDragStart}
+                handleDragEnd={handleDragEnd}
+                handleDragOver={handleDragOver}
+                handleDropRow={handleDropRow}
+                
+                speed={speed}
+                handleSpeakItem={handleSpeakItem}
+                handleClearImage={handleClearImage}
+                setSelectedItemForImageSearch={setSelectedItemForImageSearch}
+                setIsImageSearchModalOpen={setIsImageSearchModalOpen}
+                handleRowRepeatsChange={handleRowRepeatsChange}
+                handleRowDelayChange={handleRowDelayChange}
+                handleRowSpeedChange={handleRowSpeedChange}
+                handleRowLangChange={handleRowLangChange}
+                handleJoinWithNext={handleJoinWithNext}
+                handleDeleteRow={handleDeleteRow}
+                handleDuplicateSet={handleDuplicateSet}
+                handleUngroupSet={handleUngroupSet}
+              />
+
+              {/* Instruction workflow summary tips - COLLAPSED / TOGGLED */}
+              <div id="classroom-drill-card" className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs text-left">
                 <button
                   type="button"
-                  onClick={handleCopyGPTPrompt}
-                  className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 justify-center cursor-pointer select-none shrink-0 self-start sm:self-center ${
-                    copiedPrompt 
-                      ? 'bg-emerald-500 text-white border-emerald-500 shadow-xs scale-102' 
-                      : 'bg-indigo-650 hover:bg-indigo-700 text-white border-transparent'
-                  }`}
+                  onClick={() => setShowDrillGuide(!showDrillGuide)}
+                  className="w-full flex items-center justify-between text-slate-800 font-bold select-none cursor-pointer text-xs"
                 >
-                  {copiedPrompt ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      Đã copy thành công!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      Sao chép Prompt
-                    </>
-                  )}
+                  <div className="flex items-center space-x-2">
+                    <HelpCircle className="w-4 h-4 text-slate-500 shrink-0" />
+                    <span>Mẹo kiểm tra và thi chính tả (Dictation Drill)</span>
+                  </div>
+                  <span className="text-[10px] text-indigo-600 underline font-extrabold shrink-0 ml-2">
+                    {showDrillGuide ? 'Ẩn trợ giúp' : 'Bấm Trợ giúp'}
+                  </span>
                 </button>
-              </div>
-
-              {/* Guide/Explanation of special symbols */}
-              <div className="bg-indigo-50/40 border border-indigo-100 rounded-xl p-3 mb-4 text-[11px] text-slate-600 space-y-1.5 leading-relaxed">
-                <div className="font-bold text-slate-700 flex items-center gap-1 text-[11px]">
-                  <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
-                  Bạn có biết ý nghĩa của các ký hiệu đặc biệt hỗ trợ?
-                </div>
-                <ul className="list-disc pl-4 space-y-1 text-[10.5px]">
-                  <li>
-                    <strong className="text-pink-600 font-mono">Dấu gạch chéo (/Y)</strong>: Quy định <strong className="text-slate-800">thời gian nghỉ (giây)</strong> sau dòng đó. <br />
-                    <span className="text-slate-500">Ví dụ: <code className="bg-slate-100 px-1 rounded text-[10px]">Xin chào /2</code> (Đọc xong "Xin chào" sẽ dừng nghỉ 2 giây chờ học viên phản xạ trước khi sang câu sau).</span>
-                  </li>
-                  <li>
-                    <strong className="text-indigo-600 font-mono">Dấu chấm phẩy (;X)</strong>: Quy định <strong className="text-slate-800">số lần đọc lặp lại</strong> dòng đó. <br />
-                    <span className="text-slate-500">Ví dụ: <code className="bg-slate-100 px-1 rounded text-[10px]">Apple ;3</code> (Ứng dụng sẽ tự động đọc từ "Apple" lặp lại 3 lần liên tiếp trước khi dịch nghĩa).</span>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Live configuration tools */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                {/* Topic Input */}
-                <div className="space-y-1.5">
-                  <label htmlFor="prompt-topic-input" className="text-[10px] font-bold text-slate-505 flex items-center gap-1 uppercase tracking-wider">
-                    ✍️ 1. NHẬP CHỦ ĐỀ MUỐN HỌC:
-                  </label>
-                  <input
-                    id="prompt-topic-input"
-                    type="text"
-                    value={promptTopic}
-                    onChange={(e) => setPromptTopic(e.target.value)}
-                    placeholder="Ví dụ: Đàm thoại tại nhà hàng, Từ vựng sân bay..."
-                    className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden transition"
-                  />
-                </div>
-
-                {/* Prompt Type Selector */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-505 flex items-center gap-1 uppercase tracking-wider">
-                    ⚙️ 2. CHỌN LOẠI CẤU TRÚC PHÙ HỢP:
-                  </label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {[
-                      { id: 'basic', label: 'Cơ bản thô', desc: 'Không chứa ";" hay "/"' },
-                      { id: 'repeat', label: 'Chỉ Lặp lại', desc: 'Có ";" lặp lại câu' },
-                      { id: 'pause', label: 'Chỉ Giãn cách', desc: 'Có "/" khoảng nghỉ' },
-                      { id: 'advanced', label: 'Nâng cao gộp', desc: 'Có cả ";" và "/"' },
-                    ].map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setPromptType(t.id as any)}
-                        className={`px-2.5 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${
-                          promptType === t.id
-                            ? 'bg-indigo-50 border-indigo-300 text-indigo-950 font-semibold shadow-2xs'
-                            : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-650'
-                        }`}
-                      >
-                        <div className="text-[10px]">{t.label}</div>
-                        <div className={`text-[8.5px] ${promptType === t.id ? 'text-indigo-500' : 'text-slate-400'} font-normal mt-0.5 line-clamp-1`}>
-                          {t.desc}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Main code box previewer */}
-              <div className="relative">
-                <div className="absolute top-2.5 right-3 px-2 py-0.5 rounded-md bg-slate-800 text-[8.5px] font-mono text-slate-350 uppercase tracking-wider pointer-events-none">
-                  XEM TRƯỚC PROMPT
-                </div>
-                <div className="bg-slate-950 border border-slate-850 rounded-2xl p-4 group">
-                  <pre className="text-[10.5px] font-mono text-indigo-100 whitespace-pre-wrap max-h-56 overflow-y-auto leading-relaxed scrollbar-thin text-left select-all pr-2">
-                    {getDynamicGPTPrompt()}
-                  </pre>
-                  <div className="mt-2.5 pt-2.5 border-t border-slate-850 flex flex-col sm:flex-row sm:items-center sm:justify-between text-[9px] text-slate-400 gap-2">
-                    <span>* Giáo án sinh ra được sắp xếp xen kẽ, đi từ từ đơn đến câu hoàn chỉnh giúp học viên ghi nhớ tốt nhất.</span>
-                    <span className="font-mono text-indigo-350 bg-slate-900/90 px-1.5 py-0.5 rounded border border-slate-800 shrink-0 select-none text-center">
-                      Bấm "Sao chép Prompt" ở phía trên
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Custom Control Settings box */}
-            <SpeechSettingsPanel
-              engineMode={engineMode}
-              setEngineMode={setEngineMode}
-              speed={speed}
-              setSpeed={setSpeed}
-              onApplySpeedToAll={() => {
-                setSpeechList(prev => prev.map(item => ({ ...item, speed: speed })));
-              }}
-              volume={volume}
-              handleVolumeChange={handleVolumeChange}
-              autoAdvance={autoAdvance}
-              setAutoAdvance={setAutoAdvance}
-              timeBetweenLines={timeBetweenLines}
-              setTimeBetweenLines={setTimeBetweenLines}
-              onApplyDelayToAll={() => {
-                setSpeechList(prev => prev.map(item => ({ ...item, delaySec: timeBetweenLines })));
-              }}
-              playlistLoopMode={playlistLoopMode}
-              handlePlaylistLoopModeChange={handlePlaylistLoopModeChange}
-              selectedEnVoiceName={selectedEnVoiceName}
-              setSelectedEnVoiceName={setSelectedEnVoiceName}
-              selectedViVoiceName={selectedViVoiceName}
-              setSelectedViVoiceName={setSelectedViVoiceName}
-              selectedZhCnVoiceName={selectedZhCnVoiceName}
-              setSelectedZhCnVoiceName={setSelectedZhCnVoiceName}
-              selectedZhTwVoiceName={selectedZhTwVoiceName}
-              setSelectedZhTwVoiceName={setSelectedZhTwVoiceName}
-              selectedJaVoiceName={selectedJaVoiceName}
-              setSelectedJaVoiceName={setSelectedJaVoiceName}
-              selectedKoVoiceName={selectedKoVoiceName}
-              setSelectedKoVoiceName={setSelectedKoVoiceName}
-              englishVoices={englishVoices}
-              vietnameseVoices={vietnameseVoices}
-              zhCnVoices={zhCnVoices}
-              zhTwVoices={zhTwVoices}
-              japaneseVoices={japaneseVoices}
-              koreanVoices={koreanVoices}
-              userGeminiApiKey={userGeminiApiKey}
-              showApiKey={showApiKey}
-              setShowApiKey={setShowApiKey}
-              handleApiKeyChange={handleApiKeyChange}
-              clearApiKey={clearApiKey}
-              selectedPremiumVoices={selectedPremiumVoices}
-              onVoiceChange={onVoiceChange}
-            />
-
-            {/* Unified Background Theme Configurations (Optional) */}
-            <div id="universal-theme-box" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs hover:border-slate-350 transition-colors duration-200">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <ImageIcon className="w-4.5 h-4.5 text-indigo-600" />
-                  Ảnh nền đồng nhất chuỗi học
-                </h3>
-                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full uppercase">Optional</span>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <div className="flex flex-col pr-2">
-                    <span className="text-xs font-bold text-slate-700">Đồng nhất ảnh minh họa</span>
-                    <span className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
-                      Áp dụng 1 ảnh nền/chủ đề duy nhất cho tất cả các câu khi trình chiếu
-                    </span>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
-                    <input
-                      type="checkbox"
-                      checked={useUniversalImage}
-                      onChange={(e) => handleUseUniversalImageChange(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
-
-                {useUniversalImage && (
-                  <div className="space-y-2 animate-fade-in text-left">
-                    <label htmlFor="universal-img-url" className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
-                      URL hình ảnh chủ đề hoặc ảnh chụp
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        id="universal-img-url"
-                        type="text"
-                        placeholder="Dán URL hình hoặc click Tìm ảnh..."
-                        className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-hidden text-slate-705 font-sans"
-                        value={universalImageUrl}
-                        onChange={(e) => handleUniversalImageUrlChange(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSearchingUniversalImage(true);
-                          setSelectedItemForImageSearch({
-                            id: 'universal',
-                            text: 'Background template model scenery',
-                            lang: 'auto',
-                            resolvedLang: 'en',
-                            repeats: 1,
-                            delaySec: 2.0
-                          });
-                          setIsImageSearchModalOpen(true);
-                        }}
-                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 text-xs px-3 py-2 rounded-lg transition shrink-0 cursor-pointer flex items-center justify-center gap-1"
-                        title="Tìm ảnh đẹp từ kho ảnh của ứng dụng"
-                      >
-                        <Search className="w-3.5 h-3.5" />
-                        Tìm ảnh
-                      </button>
+                {showDrillGuide && (
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-3 items-start animate-fade-in">
+                    <div className="bg-indigo-50 p-2 rounded-xl text-indigo-650 shrink-0">
+                      <HelpCircle className="w-4 h-4" />
                     </div>
-
-                    {universalImageUrl && (
-                      <div className="relative mt-2 rounded-xl overflow-hidden aspect-[16/6] border border-slate-200 group/uimg">
-                        <img
-                          src={universalImageUrl}
-                          alt="Universal Theme Background"
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleUniversalImageUrlChange('')}
-                          className="absolute top-1 right-1 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full opacity-90 transition shadow-xs cursor-pointer"
-                          title="Xoá ảnh nền đồng nhất"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
-                    <span className="text-[10px] text-slate-400 block mt-1 leading-relaxed">
-                      * Khi bật, mọi hình minh họa riêng lẻ của các câu sẽ tạm thời được thay thế bằng hình ảnh này trong chế độ rạp chiếu phim (Cinema Mode) của bạn.
-                    </span>
+                    <div className="text-left text-xs text-slate-500 leading-relaxed space-y-1">
+                      <h4 className="font-bold text-slate-900 text-xs mb-1">Cách tạo bài nghe chính tả hoàn hảo:</h4>
+                      <ol className="list-decimal list-inside space-y-1">
+                        <li>Cài số lần lặp (<strong className="text-slate-700">Lặp</strong>) cho mỗi câu là <strong className="text-indigo-650 font-semibold">2 hoặc 3 lần</strong>.</li>
+                        <li>Bật nút tắt <strong className="text-indigo-600 font-semibold">Tự động chuyển câu</strong> ở cột phải và đặt thời gian nghỉ là <strong className="text-slate-700 font-semibold">3-4 giây</strong>.</li>
+                        <li>Bấm <strong className="text-slate-800 font-semibold">Phát toàn bài (Play)</strong>. Hệ thống sẽ đọc câu, lặp lại phù hợp, chờ ghi chép rồi tự đi tiếp mượt mà!</li>
+                      </ol>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
+            </>
+          }
+          rightColumn={
+            <>
+              {/* Custom Control Settings box */}
+              <SpeechSettingsPanel
+                engineMode={engineMode}
+                setEngineMode={setEngineMode}
+                speed={speed}
+                setSpeed={setSpeed}
+                onApplySpeedToAll={() => {
+                  setSpeechList(prev => prev.map(item => ({ ...item, speed: speed })));
+                }}
+                volume={volume}
+                handleVolumeChange={handleVolumeChange}
+                autoAdvance={autoAdvance}
+                setAutoAdvance={setAutoAdvance}
+                timeBetweenLines={timeBetweenLines}
+                setTimeBetweenLines={setTimeBetweenLines}
+                onApplyDelayToAll={() => {
+                  setSpeechList(prev => prev.map(item => ({ ...item, delaySec: timeBetweenLines })));
+                }}
+                playlistLoopMode={playlistLoopMode}
+                handlePlaylistLoopModeChange={handlePlaylistLoopModeChange}
+                selectedEnVoiceName={selectedEnVoiceName}
+                setSelectedEnVoiceName={setSelectedEnVoiceName}
+                selectedViVoiceName={selectedViVoiceName}
+                setSelectedViVoiceName={setSelectedViVoiceName}
+                selectedZhCnVoiceName={selectedZhCnVoiceName}
+                setSelectedZhCnVoiceName={setSelectedZhCnVoiceName}
+                selectedZhTwVoiceName={selectedZhTwVoiceName}
+                setSelectedZhTwVoiceName={setSelectedZhTwVoiceName}
+                selectedJaVoiceName={selectedJaVoiceName}
+                setSelectedJaVoiceName={setSelectedJaVoiceName}
+                selectedKoVoiceName={selectedKoVoiceName}
+                setSelectedKoVoiceName={setSelectedKoVoiceName}
+                englishVoices={englishVoices}
+                vietnameseVoices={vietnameseVoices}
+                zhCnVoices={zhCnVoices}
+                zhTwVoices={zhTwVoices}
+                japaneseVoices={japaneseVoices}
+                koreanVoices={koreanVoices}
+                userGeminiApiKey={userGeminiApiKey}
+                showApiKey={showApiKey}
+                setShowApiKey={setShowApiKey}
+                handleApiKeyChange={handleApiKeyChange}
+                clearApiKey={clearApiKey}
+                selectedPremiumVoices={selectedPremiumVoices}
+                onVoiceChange={onVoiceChange}
+              />
 
-            {/* Instruction on Chrome High-Quality Voice Activation */}
-            <div id="chrome-voice-info-card" className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 text-xs text-emerald-800 space-y-2">
-              <div className="flex items-center space-x-2 text-emerald-900 font-bold">
-                <Sparkles className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
-                <span>Mẹo dùng giọng đọc Chrome chuẩn nhất</span>
+              {/* Unified Background Theme Configurations (Optional) */}
+              <div id="universal-theme-box" className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs text-left">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-3">
+                  <h3 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-indigo-600" />
+                    Ảnh nền đồng nhất chuỗi học
+                  </h3>
+                  <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">Tùy chọn</span>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <div className="flex flex-col pr-2 text-xs">
+                      <span className="font-bold text-slate-700">Đồng nhất ảnh minh họa</span>
+                      <span className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
+                        Áp dụng 1 ảnh nền duy nhất cho tất cả các câu
+                      </span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={useUniversalImage}
+                        onChange={(e) => handleUseUniversalImageChange(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+
+                  {useUniversalImage && (
+                    <div className="space-y-2 animate-fade-in text-left">
+                      <label htmlFor="universal-img-url" className="text-[10px] font-bold text-slate-500 uppercase block">
+                        URL hình ảnh chủ đề hoặc ảnh chụp
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          id="universal-img-url"
+                          type="text"
+                          placeholder="Dán URL hình hoặc click Tìm ảnh..."
+                          className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-hidden text-slate-705 font-sans"
+                          value={universalImageUrl}
+                          onChange={(e) => handleUniversalImageUrlChange(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSearchingUniversalImage(true);
+                            setSelectedItemForImageSearch({
+                              id: 'universal',
+                              text: 'Background template model scenery',
+                              lang: 'auto',
+                              resolvedLang: 'en',
+                              repeats: 1,
+                              delaySec: 2.0
+                            });
+                            setIsImageSearchModalOpen(true);
+                          }}
+                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 text-xs px-2.5 py-1.5 rounded-lg transition shrink-0 cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <Search className="w-3.5 h-3.5" />
+                          Tìm ảnh
+                        </button>
+                      </div>
+
+                      {universalImageUrl && (
+                        <div className="relative mt-2 rounded-xl overflow-hidden aspect-[16/6] border border-slate-200 group/uimg">
+                          <img
+                            src={universalImageUrl}
+                            alt="Universal Theme Background"
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleUniversalImageUrlChange('')}
+                            className="absolute top-1 right-1 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full opacity-90 transition shadow-xs cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-              <p className="leading-relaxed">
-                Ứng dụng này sử dụng các gói đọc tự nhiên tích hợp sẵn của trình duyệt. 
-                Khi sử dụng trên <strong className="text-emerald-900">Google Chrome</strong>, các giọng nói <strong className="text-emerald-950">&quot;Google tiếng Việt&quot;</strong> hoặc <strong className="text-emerald-950">&quot;Google US English&quot;</strong> trực tuyến sẽ tự động được tải, mang đến độ chân thực mượt mà cao nhất mà không tốn chi phí.
-              </p>
-            </div>
 
-          </div>
-
-          {/* RIGHT AREA: Editable and Interactive Speaker List view */}
-          <div id="results-col" className="lg:col-span-7 space-y-6">
-            
-            <SpeechListBoard
-              speechList={speechList}
-              rowLayoutMode={rowLayoutMode}
-              toggleRowLayoutMode={toggleRowLayoutMode}
-              fileInputRef={fileInputRef}
-              handleExportData={handleExportData}
-              triggerPlaylistDrill={triggerPlaylistDrill}
-              handleStopAll={handleStopAll}
-              handleClearAll={handleClearAll}
-              autoAdvance={autoAdvance}
-              newRowText={newRowText}
-              setNewRowText={setNewRowText}
-              newRowLang={newRowLang}
-              setNewRowLang={setNewRowLang}
-              newRowRepeats={newRowRepeats}
-              setNewRowRepeats={setNewRowRepeats}
-              newRowDelay={newRowDelay}
-              setNewRowDelay={setNewRowDelay}
-              handleAddSingleRow={handleAddSingleRow}
-              setIsShareModalOpen={setIsShareModalOpen}
-              setIsAudioExportModalOpen={setIsAudioExportModalOpen}
-              handleApplyTemplate={handleApplyTemplate}
-              
-              playingItemId={playingItemId}
-              currentRepeatIndex={currentRepeatIndex}
-              waitingState={waitingState}
-              editingItemId={editingItemId}
-              editingText={editingText}
-              setEditingText={setEditingText}
-              startEditingRow={startEditingRow}
-              saveEditedRow={saveEditedRow}
-              setEditingItemId={setEditingItemId}
-              
-              draggedIndex={draggedIndex}
-              dragOverIndex={dragOverIndex}
-              handleDragStart={handleDragStart}
-              handleDragEnd={handleDragEnd}
-              handleDragOver={handleDragOver}
-              handleDropRow={handleDropRow}
-              
-              speed={speed}
-              handleSpeakItem={handleSpeakItem}
-              handleClearImage={handleClearImage}
-              setSelectedItemForImageSearch={setSelectedItemForImageSearch}
-              setIsImageSearchModalOpen={setIsImageSearchModalOpen}
-              handleRowRepeatsChange={handleRowRepeatsChange}
-              handleRowDelayChange={handleRowDelayChange}
-              handleRowSpeedChange={handleRowSpeedChange}
-              handleRowLangChange={handleRowLangChange}
-              handleJoinWithNext={handleJoinWithNext}
-              handleDeleteRow={handleDeleteRow}
-              handleDuplicateSet={handleDuplicateSet}
-              handleUngroupSet={handleUngroupSet}
-            />
-
-            {/* Instruction workflow summary tips */}
-            <div id="classroom-drill-card" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row gap-4 items-start">
-              <div className="bg-indigo-50 p-2.5 rounded-xl text-indigo-600 shrink-0">
-                <HelpCircle className="w-5 h-5" />
+              {/* Instruction on Chrome High-Quality Voice Activation - COLLAPSED / TOGGLED */}
+              <div id="chrome-voice-info-card" className="bg-emerald-50/50 border border-emerald-150 rounded-2xl p-4 text-xs text-emerald-800 text-left">
+                <button
+                  type="button"
+                  onClick={() => setShowChromeTip(!showChromeTip)}
+                  className="w-full flex items-center justify-between text-emerald-900 font-bold select-none cursor-pointer"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Mẹo dùng giọng Chrome hay nhất</span>
+                  </div>
+                  <span className="text-[10px] text-emerald-650 underline font-extrabold shrink-0 ml-2">
+                    {showChromeTip ? 'Ẩn trợ giúp' : 'Bấm Trợ giúp'}
+                  </span>
+                </button>
+                {showChromeTip && (
+                  <p className="leading-relaxed mt-2.5 pt-2.5 border-t border-emerald-100/60 text-slate-700 text-[11px] animate-fade-in">
+                    Mặc định trình duyệt Chrome có sẵn gói tts online cực hay như <strong className="text-slate-900">&quot;Google tiếng Việt&quot;</strong> và <strong className="text-slate-900">&quot;Google US English&quot;</strong>. Chọn các giọng có chữ &quot;Google&quot; trong phần cấu hình hoặc chuyển sang chế độ Premium AI để tận dụng sức mạnh trí tuệ nhân tạo Gemini!
+                  </p>
+                )}
               </div>
-              <div className="text-left text-xs text-slate-500 leading-relaxed">
-                <h4 className="font-bold text-slate-900 text-sm mb-1.5">Cách tạo buổi thi chính tả (Spelling/Dictation Drill) hiệu quả:</h4>
-                <ol className="list-decimal list-inside space-y-1 sm:space-y-1.5">
-                  <li>Cài số lần lặp (<strong className="text-slate-700">Lặp</strong>) cho mỗi câu là <strong className="text-indigo-650">2 hoặc 3 lần</strong>.</li>
-                  <li>Bật nút tắt <strong className="text-indigo-600">Tự động chuyển dòng kế tiếp</strong> ở bảng trái và set thời gian nghỉ khoảng <strong className="text-slate-700">3 hoặc 4 giây</strong>.</li>
-                  <li>Click nút <strong className="text-slate-800">Phát chuỗi luyện tập (Play)</strong>. Hệ thống sẽ đọc câu 1, lặp lại nó 2 lần, đợi 3 giây cho học sinh viết rồi tự động phát câu 2 mượt mà tuyệt đối!</li>
-                </ol>
-              </div>
-            </div>
-
-          </div>
-
-        </div>
+            </>
+          }
+        />
 
       </main>
 
