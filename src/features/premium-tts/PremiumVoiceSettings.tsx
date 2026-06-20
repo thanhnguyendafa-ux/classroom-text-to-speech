@@ -43,7 +43,7 @@ export const PremiumVoiceSettings: React.FC<PremiumVoiceSettingsProps> = ({
             >
               {config.voices.map((v) => (
                 <option key={v.value} value={v.value}>
-                  {v.label}
+                  {v.label}{v.styleHint ? ` (${v.styleHint})` : ''}
                 </option>
               ))}
             </select>
