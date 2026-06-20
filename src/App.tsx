@@ -38,6 +38,11 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode } from './types';
+import { useGeminiApiKey } from './features/premium-tts/useGeminiApiKey';
+import { usePremiumTts } from './features/premium-tts/usePremiumTts';
+import { PremiumKeyPanel } from './features/premium-tts/PremiumKeyPanel';
+import { PremiumVoiceSettings } from './features/premium-tts/PremiumVoiceSettings';
+import { getPremiumVoiceForLang } from './features/premium-tts/premiumVoices';
 import ImageSearchModal from './components/ImageSearchModal';
 import TheaterPlayer from './components/TheaterPlayer';
 import ShareModal from './components/ShareModal';
@@ -413,26 +418,20 @@ Mời rất thích ăn bắp rang ngon lành.`;
     localStorage.setItem('rowLayoutMode', mode);
   };
 
-  // User-supplied Gemini API Key for Premium Voices
-  const [userGeminiApiKey, setUserGeminiApiKey] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('userGeminiApiKey') || '';
-    }
-    return '';
-  });
-  const [showApiKey, setShowApiKey] = useState<boolean>(false);
+  // User-supplied Gemini API Key and Premium engine hook
+  const {
+    apiKey: userGeminiApiKey,
+    showApiKey,
+    setShowApiKey,
+    setApiKey: handleApiKeyChange,
+  } = useGeminiApiKey();
+
+  const { generateTts } = usePremiumTts();
 
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume);
     if (typeof window !== 'undefined') {
       localStorage.setItem('speechVolume', String(newVolume));
-    }
-  };
-
-  const handleApiKeyChange = (val: string) => {
-    setUserGeminiApiKey(val);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('userGeminiApiKey', val);
     }
   };
 
@@ -999,38 +998,17 @@ Mời rất thích ăn bắp rang ngon lành.`;
       setCurrentRepeatIndex(1);
 
       const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
-      let chosenVoice = selectedPremiumVoiceEn;
-      if (langCode === 'vi') {
-        chosenVoice = selectedPremiumVoiceVi;
-      } else if (langCode === 'zh-cn') {
-        chosenVoice = selectedPremiumVoiceZhCn;
-      } else if (langCode === 'zh-tw') {
-        chosenVoice = selectedPremiumVoiceZhTw;
-      } else if (langCode === 'ja') {
-        chosenVoice = selectedPremiumVoiceJa;
-      } else if (langCode === 'ko') {
-        chosenVoice = selectedPremiumVoiceKo;
-      }
+      const chosenVoice = getPremiumVoiceForLang(langCode, {
+        selectedPremiumVoiceEn,
+        selectedPremiumVoiceVi,
+        selectedPremiumVoiceZhCn,
+        selectedPremiumVoiceZhTw,
+        selectedPremiumVoiceJa,
+        selectedPremiumVoiceKo,
+      });
 
       try {
-        const response = await fetch("/api/tts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: item.text,
-            voice: chosenVoice,
-            lang: langCode,
-            userApiKey: userGeminiApiKey
-          })
-        });
-
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error || "Thất bại khi kết nối API giọng nói Premium.");
-        }
-
-        const data = await response.json();
-        const audioUrl = data.audioUrl;
+        const audioUrl = await generateTts(item.text, chosenVoice, langCode, userGeminiApiKey);
 
         const playIteration = () => {
           if (activePlayingIdRef.current !== item.id) {
@@ -1887,7 +1865,7 @@ Mời rất thích ăn bắp rang ngon lành.`;
                       }`}
                     >
                       <span className="flex items-center gap-1">💎 Giọng Premium AI</span>
-                      <span className="text-[9px] text-indigo-200 font-normal">Cực hay như TTSMaker</span>
+                      <span className="text-[9px] text-indigo-200/90 font-normal font-sans">Dùng Gemini API key của bạn</span>
                     </button>
                   </div>
                 </div>
@@ -2195,166 +2173,34 @@ Mời rất thích ăn bắp rang ngon lành.`;
                     </>
                   ) : (
                     <>
-                      <div>
-                        <label htmlFor="en-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
-                          🇺🇸 Giọng Premium EN (Gemini AI) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
-                        </label>
-                        <select
-                          id="en-premium-voice"
-                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
-                          value={selectedPremiumVoiceEn}
-                          onChange={(e) => setSelectedPremiumVoiceEn(e.target.value)}
-                        >
-                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Truyền cảm, khuyến nghị)</option>
-                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo)</option>
-                          <option value="Puck">Puck 👦 (Nam - Cá tính, vui vẻ)</option>
-                          <option value="Charon">Charon 👨 (Nam - Trầm ấm, dõng dạc)</option>
-                          <option value="Fenrir">Fenrir 🧔 (Nam - Sảng khoái, rõ ràng)</option>
-                        </select>
-                      </div>
+                      {/* Premium API Key Panel shown at the top of settings when chosen Premium */}
+                      <PremiumKeyPanel
+                        apiKey={userGeminiApiKey}
+                        showApiKey={showApiKey}
+                        setShowApiKey={setShowApiKey}
+                        setApiKey={handleApiKeyChange}
+                        clearApiKey={() => handleApiKeyChange('')}
+                      />
 
-                      <div>
-                        <label htmlFor="vi-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
-                          🇻🇳 Giọng Premium VI (Gemini AI) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
-                        </label>
-                        <select
-                          id="vi-premium-voice"
-                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
-                          value={selectedPremiumVoiceVi}
-                          onChange={(e) => setSelectedPremiumVoiceVi(e.target.value)}
-                        >
-                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo, khuyến nghị)</option>
-                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Sống động)</option>
-                          <option value="Puck">Puck 👦 (Nam - Cá tính)</option>
-                          <option value="Charon">Charon 👨 (Nam - Vừa phải, ấm áp)</option>
-                          <option value="Fenrir">Fenrir 🧔 (Nam - Mạnh mẽ, rõ chữ)</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label htmlFor="zh-cn-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
-                          🇨🇳 Giọng Premium ZH-CN (Gemini) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
-                        </label>
-                        <select
-                          id="zh-cn-premium-voice"
-                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
-                          value={selectedPremiumVoiceZhCn}
-                          onChange={(e) => setSelectedPremiumVoiceZhCn(e.target.value)}
-                        >
-                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo, khuyến nghị)</option>
-                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Sống động)</option>
-                          <option value="Puck">Puck 👦 (Nam - Cá tính)</option>
-                          <option value="Charon">Charon 👨 (Nam - Ấm áp)</option>
-                          <option value="Fenrir">Fenrir 🧔 (Nam - Rõ chữ)</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label htmlFor="zh-tw-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
-                          🇭🇰 Giọng Premium ZH-TW (Gemini) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
-                        </label>
-                        <select
-                          id="zh-tw-premium-voice"
-                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
-                          value={selectedPremiumVoiceZhTw}
-                          onChange={(e) => setSelectedPremiumVoiceZhTw(e.target.value)}
-                        >
-                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Truyền cảm, khuyến nghị)</option>
-                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo)</option>
-                          <option value="Puck">Puck 👦 (Nam - Cá tính)</option>
-                          <option value="Charon">Charon 👨 (Nam - Trầm ấm)</option>
-                          <option value="Fenrir">Fenrir 🧔 (Nam - Dõng dạc)</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label htmlFor="ja-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
-                          🇯🇵 Giọng Premium JA (Gemini) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
-                        </label>
-                        <select
-                          id="ja-premium-voice"
-                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
-                          value={selectedPremiumVoiceJa}
-                          onChange={(e) => setSelectedPremiumVoiceJa(e.target.value)}
-                        >
-                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Truyền cảm, khuyến nghị)</option>
-                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo)</option>
-                          <option value="Puck">Puck 👦 (Nam - Cá tính)</option>
-                          <option value="Charon">Charon 👨 (Nam - Trầm ấm)</option>
-                          <option value="Fenrir">Fenrir 🧔 (Nam - Sảng khoái)</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label htmlFor="ko-premium-voice" className="text-[10px] font-bold text-indigo-600 uppercase block mb-1 flex items-center gap-1">
-                          🇰🇷 Giọng Premium KO (Gemini) <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1 rounded">Mượt</span>
-                        </label>
-                        <select
-                          id="ko-premium-voice"
-                          className="w-full text-xs font-sans bg-indigo-50/50 border border-indigo-150 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-indigo-50 transition-colors"
-                          value={selectedPremiumVoiceKo}
-                          onChange={(e) => setSelectedPremiumVoiceKo(e.target.value)}
-                        >
-                          <option value="Kore">Kore 👩 (Nữ - Trong trẻo, khuyến nghị)</option>
-                          <option value="Zephyr">Zephyr 👩‍💼 (Nữ - Sống động)</option>
-                          <option value="Puck">Puck 👦 (Nam - Cá tính)</option>
-                          <option value="Charon">Charon 👨 (Nam - Vừa phải)</option>
-                          <option value="Fenrir">Fenrir 🧔 (Nam - Mạnh mẽ)</option>
-                        </select>
-                      </div>
-
-                      {/* Personal Gemini API Key Entry */}
-                      <div className="bg-indigo-50/60 border border-indigo-150/85 rounded-xl p-3 mt-3">
-                        <div className="flex justify-between items-center mb-1.5">
-                          <label htmlFor="user-api-key" className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider flex items-center gap-1">
-                            <Key className="w-3.5 h-3.5 text-indigo-600" /> Key Gemini API Của Bạn
-                          </label>
-                          <a 
-                            href="https://aistudio.google.com/app/apikey" 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-[10px] font-extrabold text-indigo-600 hover:underline flex items-center gap-0.5"
-                          >
-                            Lấy Key Miễn Phí ↗
-                          </a>
-                        </div>
-                        <div className="relative">
-                          <input
-                            id="user-api-key"
-                            type={showApiKey ? "text" : "password"}
-                            placeholder="Nhập API Key: AIzaSy..."
-                            className="w-full text-xs font-mono bg-white border border-indigo-200 rounded-lg pl-3 pr-8 py-2 text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                            value={userGeminiApiKey}
-                            onChange={(e) => handleApiKeyChange(e.target.value)}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowApiKey(!showApiKey)}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-450 hover:text-slate-650 p-1 cursor-pointer font-bold"
-                            title={showApiKey ? "Ẩn API Key" : "Hiển thị API Key"}
-                          >
-                            {showApiKey ? (
-                              <EyeOff className="w-3.5 h-3.5" />
-                            ) : (
-                              <Eye className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                        </div>
-                        <div className="flex justify-between items-center mt-2">
-                          <p className="text-[9px] text-slate-450 leading-relaxed max-w-[75%]">
-                            * Key chỉ lưu trong trình duyệt này. Không nên dùng trên máy công cộng.
-                          </p>
-                          {userGeminiApiKey && (
-                            <button
-                              type="button"
-                              onClick={() => handleApiKeyChange("")}
-                              className="text-[9px] font-extrabold text-rose-650 hover:text-rose-800 hover:underline cursor-pointer bg-none border-none p-0 shrink-0"
-                            >
-                              Xóa Key
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                      {/* Premium Voice Dropdowns */}
+                      <PremiumVoiceSettings
+                        selectedVoices={{
+                          en: selectedPremiumVoiceEn,
+                          vi: selectedPremiumVoiceVi,
+                          'zh-cn': selectedPremiumVoiceZhCn,
+                          'zh-tw': selectedPremiumVoiceZhTw,
+                          ja: selectedPremiumVoiceJa,
+                          ko: selectedPremiumVoiceKo,
+                        }}
+                        onVoiceChange={(lang, val) => {
+                          if (lang === 'en') setSelectedPremiumVoiceEn(val);
+                          else if (lang === 'vi') setSelectedPremiumVoiceVi(val);
+                          else if (lang === 'zh-cn') setSelectedPremiumVoiceZhCn(val);
+                          else if (lang === 'zh-tw') setSelectedPremiumVoiceZhTw(val);
+                          else if (lang === 'ja') setSelectedPremiumVoiceJa(val);
+                          else if (lang === 'ko') setSelectedPremiumVoiceKo(val);
+                        }}
+                      />
                     </>
                   )}
                 </div>

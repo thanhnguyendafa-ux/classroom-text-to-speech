@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { SpeechItem, LanguageCode } from '../types';
 import { encodeMonoMp3 } from '../audio/mp3Encoder';
+import { getPremiumVoiceForLang } from '../features/premium-tts/premiumVoices';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -282,12 +283,14 @@ export default function AudioExportModal({
         setProgressText(`Đang kết nối AI để lấy giọng đọc câu ${i + 1}/${itemsToExport.length}...`);
         
         const itemLang = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
-        let chosenVoice = selectedPremiumVoiceEn;
-        if (itemLang === 'vi') chosenVoice = selectedPremiumVoiceVi;
-        else if (itemLang === 'zh-cn') chosenVoice = selectedPremiumVoiceZhCn;
-        else if (itemLang === 'zh-tw') chosenVoice = selectedPremiumVoiceZhTw;
-        else if (itemLang === 'ja') chosenVoice = selectedPremiumVoiceJa;
-        else if (itemLang === 'ko') chosenVoice = selectedPremiumVoiceKo;
+        const chosenVoice = getPremiumVoiceForLang(itemLang, {
+          selectedPremiumVoiceEn,
+          selectedPremiumVoiceVi,
+          selectedPremiumVoiceZhCn,
+          selectedPremiumVoiceZhTw,
+          selectedPremiumVoiceJa,
+          selectedPremiumVoiceKo
+        });
         
         addLog(`Gọi API câu ${i + 1}/${itemsToExport.length} [${itemLang}]: "${item.text.substring(0, 30)}..."`);
         
