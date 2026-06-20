@@ -42,6 +42,7 @@ import { useGeminiApiKey } from './features/premium-tts/useGeminiApiKey';
 import { usePremiumTts } from './features/premium-tts/usePremiumTts';
 import { PremiumEngineSection } from './features/premium-tts/PremiumEngineSection';
 import { getPremiumVoiceForLang } from './features/premium-tts/premiumVoices';
+import { usePremiumVoiceSettings } from './features/premium-tts/usePremiumVoiceSettings';
 import ImageSearchModal from './components/ImageSearchModal';
 import TheaterPlayer from './components/TheaterPlayer';
 import ShareModal from './components/ShareModal';
@@ -112,12 +113,40 @@ export default function App() {
 
   // Engine Mode: 'browser' (native speech) vs 'premium' (Gemini AI TTS)
   const [engineMode, setEngineMode] = useState<'browser' | 'premium'>('browser');
-  const [selectedPremiumVoiceEn, setSelectedPremiumVoiceEn] = useState<string>('Zephyr');
-  const [selectedPremiumVoiceVi, setSelectedPremiumVoiceVi] = useState<string>('Kore');
-  const [selectedPremiumVoiceZhCn, setSelectedPremiumVoiceZhCn] = useState<string>('Kore');
-  const [selectedPremiumVoiceZhTw, setSelectedPremiumVoiceZhTw] = useState<string>('Zephyr');
-  const [selectedPremiumVoiceJa, setSelectedPremiumVoiceJa] = useState<string>('Zephyr');
-  const [selectedPremiumVoiceKo, setSelectedPremiumVoiceKo] = useState<string>('Kore');
+  
+  const {
+    selectedPremiumVoiceEn,
+    setSelectedPremiumVoiceEn,
+    selectedPremiumVoiceVi,
+    setSelectedPremiumVoiceVi,
+    selectedPremiumVoiceZhCn,
+    setSelectedPremiumVoiceZhCn,
+    selectedPremiumVoiceZhTw,
+    setSelectedPremiumVoiceZhTw,
+    selectedPremiumVoiceJa,
+    setSelectedPremiumVoiceJa,
+    selectedPremiumVoiceKo,
+    setSelectedPremiumVoiceKo,
+    onVoiceChange,
+  } = usePremiumVoiceSettings();
+
+  const selectedPremiumVoices = {
+    en: selectedPremiumVoiceEn,
+    vi: selectedPremiumVoiceVi,
+    'zh-cn': selectedPremiumVoiceZhCn,
+    'zh-tw': selectedPremiumVoiceZhTw,
+    ja: selectedPremiumVoiceJa,
+    ko: selectedPremiumVoiceKo,
+  };
+
+  const premiumVoiceSettings = {
+    selectedPremiumVoiceEn,
+    selectedPremiumVoiceVi,
+    selectedPremiumVoiceZhCn,
+    selectedPremiumVoiceZhTw,
+    selectedPremiumVoiceJa,
+    selectedPremiumVoiceKo,
+  };
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<any>(null);
   const lastNodesRef = useRef<any>(null);
@@ -423,6 +452,7 @@ Mời rất thích ăn bắp rang ngon lành.`;
     showApiKey,
     setShowApiKey,
     setApiKey: handleApiKeyChange,
+    clearApiKey,
   } = useGeminiApiKey();
 
   const { generateTts } = usePremiumTts();
@@ -997,14 +1027,7 @@ Mời rất thích ăn bắp rang ngon lành.`;
       setCurrentRepeatIndex(1);
 
       const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
-      const chosenVoice = getPremiumVoiceForLang(langCode, {
-        selectedPremiumVoiceEn,
-        selectedPremiumVoiceVi,
-        selectedPremiumVoiceZhCn,
-        selectedPremiumVoiceZhTw,
-        selectedPremiumVoiceJa,
-        selectedPremiumVoiceKo,
-      });
+      const chosenVoice = getPremiumVoiceForLang(langCode, premiumVoiceSettings);
 
       try {
         const audioUrl = await generateTts(item.text, chosenVoice, langCode, userGeminiApiKey);
@@ -2176,23 +2199,9 @@ Mời rất thích ăn bắp rang ngon lành.`;
                       showApiKey={showApiKey}
                       setShowApiKey={setShowApiKey}
                       setApiKey={handleApiKeyChange}
-                      clearApiKey={() => handleApiKeyChange('')}
-                      selectedVoices={{
-                        en: selectedPremiumVoiceEn,
-                        vi: selectedPremiumVoiceVi,
-                        'zh-cn': selectedPremiumVoiceZhCn,
-                        'zh-tw': selectedPremiumVoiceZhTw,
-                        ja: selectedPremiumVoiceJa,
-                        ko: selectedPremiumVoiceKo,
-                      }}
-                      onVoiceChange={(lang, val) => {
-                        if (lang === 'en') setSelectedPremiumVoiceEn(val);
-                        else if (lang === 'vi') setSelectedPremiumVoiceVi(val);
-                        else if (lang === 'zh-cn') setSelectedPremiumVoiceZhCn(val);
-                        else if (lang === 'zh-tw') setSelectedPremiumVoiceZhTw(val);
-                        else if (lang === 'ja') setSelectedPremiumVoiceJa(val);
-                        else if (lang === 'ko') setSelectedPremiumVoiceKo(val);
-                      }}
+                      clearApiKey={clearApiKey}
+                      selectedVoices={selectedPremiumVoices}
+                      onVoiceChange={onVoiceChange}
                     />
                   )}
                 </div>
