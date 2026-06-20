@@ -40,7 +40,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode } from './types';
 import { useGeminiApiKey } from './features/premium-tts/useGeminiApiKey';
 import { usePremiumTts } from './features/premium-tts/usePremiumTts';
-import { PremiumEngineSection } from './features/premium-tts/PremiumEngineSection';
 import { getPremiumVoiceForLang } from './features/premium-tts/premiumVoices';
 import { usePremiumVoiceSettings } from './features/premium-tts/usePremiumVoiceSettings';
 import ImageSearchModal from './components/ImageSearchModal';
@@ -48,30 +47,10 @@ import TheaterPlayer from './components/TheaterPlayer';
 import ShareModal from './components/ShareModal';
 import LessonLibrary from './components/LessonLibrary';
 import AudioExportModal from './components/AudioExportModal';
+import { SpeechSettingsPanel } from './components/SpeechSettingsPanel';
+import { LessonInputPanel, TEMPLATES } from './components/LessonInputPanel';
+import { PlaybackController } from './components/PlaybackController';
 
-// Pre-defined educational templates for teachers and students
-const TEMPLATES = [
-  {
-    title: 'Bilingual Popcorn',
-    description: 'Bộ từ vựng & hội thoại song ngữ Anh - Việt mẫu đi từ Từ đơn -> Cụm từ -> Câu.',
-    content: 'popcorn\nbắp rang\ndelicious popcorn\nbắp rang ngon lành\nI love eating delicious popcorn. /1.5\nMình rất thích ăn bắp rang ngon lành.\nsharing popcorn\nchia sẻ bắp rang\nWe are sharing popcorn while watching a movie. ;2\nChúng mình đang chung nhau ăn bắp rang khi xem phim.'
-  },
-  {
-    title: 'Vietnamese Accent & Diacritics',
-    description: 'Các từ tiếng Việt mang dấu thanh khó phát âm chuẩn.',
-    content: 'bắp rang bơ\nhạt dẻ cười\nbuổi trưa ăn bưởi chua\nđường lầy lội đi lại khó khăn\ntrứng cuộn phô mai'
-  },
-  {
-    title: 'Everyday Classroom English',
-    description: 'Các khẩu lệnh cơ bản giáo viên dùng trong lớp học.',
-    content: 'Please stand up.\nChào cả lớp.\nOpen your books to page ten.\nTrật tự nào các em.\nListen and repeat.\nHoàn thành bài tập về nhà.'
-  },
-  {
-    title: 'Châu Á (CN - JP - KR)',
-    description: 'Mẫu câu luyện nghe và nói Tiếng Trung, Nhật, Hàn chất lượng cao.',
-    content: 'こんにちは\nHi, Nice to meet you.\n안녕하세요\n어떻게 지내세요?\n你好吗？\n祝你今天过得愉快\n學會中文、聽懂世界\n祝大家身體健康、萬事 như ý'
-  }
-];
 
 // Helper regex to detect language characters
 const JAPANESE_CHARACTER_REGEX = /[\u3040-\u309F\u30A0-\u30FF]/;
@@ -1568,111 +1547,17 @@ Mời rất thích ăn bắp rang ngon lành.`;
           <div id="creator-workspace-col" className="lg:col-span-5 space-y-6">
             
             {/* Standard Text Editor Input */}
-            <div id="words-maker-box" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs hover:border-slate-350 transition-colors duration-200">
-              <div className="flex items-center justify-between mb-3">
-                <label htmlFor="word-list-textarea" className="font-bold text-slate-900 text-base flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-indigo-600" />
-                  Nhập danh sách dòng từ
-                </label>
-                <div id="row-estimation" className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-md">
-                  {rawText.split('\n').filter(l => l.trim().length > 0).length} dòng phát hiện
-                </div>
-              </div>
-
-              <textarea
-                id="word-list-textarea"
-                rows={6}
-                value={rawText}
-                onChange={(e) => setRawText(e.target.value)}
-                placeholder="Ví dụ:&#10;banana&#10;Good morning everyone&#10;bánh mì ngon thịt nguội&#10;how is the weather today?..."
-                className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white focus:border-indigo-500 transition-all text-left"
-              />
-
-              {/* Course Template selectors */}
-              <div id="text-preset-box" className="mt-4">
-                <span className="text-[11px] font-bold text-slate-400 block mb-2 uppercase tracking-tight">Bài giảng mẫu nhanh:</span>
-                <div id="presets-links" className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {TEMPLATES.map((tmpl, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleApplyTemplate(tmpl.content)}
-                      className="text-left text-xs bg-slate-50 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 rounded-lg p-2.5 transition active:scale-[0.98] cursor-pointer"
-                      title={tmpl.description}
-                    >
-                      <strong className="text-slate-800 block truncate">{tmpl.title}</strong>
-                      <span className="text-[10px] text-slate-400 block truncate mt-0.5">{tmpl.description}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Auto Group toggle option */}
-              {/* Auto Group toggle option */}
-              <div id="auto-group-toggle-container" className="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col pr-2">
-                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5 justify-start">
-                      <Link className="w-3.5 h-3.5 text-indigo-500 rotate-45" />
-                      Tự động ghép 2 dòng thành 1 Set
-                    </span>
-                    <span className="text-[10px] text-slate-500 mt-0.5 max-w-xs text-left">Hai dòng liên tiếp sẽ được gộp chung thành một cặp để thao tác & sao chép cùng lúc</span>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={autoGroupSet}
-                      onChange={(e) => handleAutoGroupSetChange(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </label>
-                </div>
-
-                {autoGroupSet && (
-                  <div className="pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-xs animate-fadeIn">
-                    <span className="font-semibold text-slate-600 flex items-center gap-1">
-                      ⚡ Số lần lặp/sao chép mỗi Set khi tạo:
-                    </span>
-                    <div className="flex bg-slate-200 p-0.5 rounded-lg border border-slate-200/50">
-                      {[1, 2, 3, 4].map((num) => (
-                        <button
-                          key={num}
-                          type="button"
-                          onClick={() => handleSetMultiplierChange(num)}
-                          className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
-                            setMultiplier === num
-                              ? 'bg-indigo-600 text-white shadow-xs'
-                              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-300/40'
-                          }`}
-                        >
-                          x{num}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Build interactive board keys */}
-              <div id="creator-actions-row" className="mt-5 pt-4 border-t border-slate-100 flex gap-2">
-                <button
-                  id="create-list-trigger"
-                  onClick={() => handleCreateList()}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Volume2 className="w-4 h-4" />
-                  Tạo danh mục loa đọc
-                </button>
-                <button
-                  id="clear-input-trigger"
-                  onClick={() => setRawText('')}
-                  className="bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 font-semibold text-xs px-3 rounded-xl transition flex-shrink-0 flex items-center justify-center cursor-pointer"
-                  title="Xoá trống vùng nhập"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+            <LessonInputPanel
+              rawText={rawText}
+              setRawText={setRawText}
+              autoGroupSet={autoGroupSet}
+              onAutoGroupSetChange={handleAutoGroupSetChange}
+              setMultiplier={setMultiplier}
+              onSetMultiplierChange={handleSetMultiplierChange}
+              onCreateList={() => handleCreateList()}
+              onClearInput={() => setRawText('')}
+              onApplyTemplate={handleApplyTemplate}
+            />
 
             {/* Local Lesson & Folder Library Panel */}
             <LessonLibrary 
@@ -1843,7 +1728,7 @@ Mời rất thích ăn bắp rang ngon lành.`;
                   </pre>
                   <div className="mt-2.5 pt-2.5 border-t border-slate-850 flex flex-col sm:flex-row sm:items-center sm:justify-between text-[9px] text-slate-400 gap-2">
                     <span>* Giáo án sinh ra được sắp xếp xen kẽ, đi từ từ đơn đến câu hoàn chỉnh giúp học viên ghi nhớ tốt nhất.</span>
-                    <span className="font-mono text-indigo-300 bg-slate-900/90 px-1.5 py-0.5 rounded border border-slate-800 shrink-0 select-none text-center">
+                    <span className="font-mono text-indigo-350 bg-slate-900/90 px-1.5 py-0.5 rounded border border-slate-800 shrink-0 select-none text-center">
                       Bấm "Sao chép Prompt" ở phía trên
                     </span>
                   </div>
@@ -1852,362 +1737,51 @@ Mời rất thích ăn bắp rang ngon lành.`;
             </div>
 
             {/* Custom Control Settings box */}
-            <div id="audio-settings-box" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <Sliders className="w-4.5 h-4.5 text-indigo-600" />
-                  Cấu hình giọng đọc & Chuyển câu
-                </h3>
-              </div>
-
-              <div className="space-y-4">
-                {/* Engine Mode Segmented Control */}
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 block mb-2 uppercase tracking-tight">CÔNG NGHỆ VOICE CHỌN:</span>
-                  <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => setEngineMode('browser')}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-150 flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
-                        engineMode === 'browser'
-                          ? 'bg-white text-indigo-700 shadow-sm'
-                          : 'text-slate-505 hover:text-slate-800'
-                      }`}
-                    >
-                      <span className="flex items-center gap-1">🌐 Trình duyệt</span>
-                      <span className="text-[9px] text-slate-400 font-normal">Tốc độ cao, offline</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEngineMode('premium')}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold transition-all duration-150 flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
-                        engineMode === 'premium'
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'text-slate-505 hover:text-slate-800'
-                      }`}
-                    >
-                      <span className="flex items-center gap-1">💎 Giọng Premium AI</span>
-                      <span className="text-[9px] text-indigo-200/90 font-normal font-sans">Dùng Gemini API key của bạn</span>
-                    </button>
-                  </div>
-                </div>
-
-                <hr className="border-slate-100" />
-
-                 {/* 1. Speech Speed Slider */}
-                <div>
-                  <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Tốc độ giọng nói (Speed):</span>
-                    <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{speed.toFixed(1)}x</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-[10px] text-slate-400">Chậm (0.5)</span>
-                    <input
-                      id="speed-input-slider"
-                      type="range"
-                      min="0.5"
-                      max="2.0"
-                      step="0.1"
-                      value={speed}
-                      onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                      className="flex-1 accent-indigo-600 h-1.5 bg-slate-100 rounded-lg cursor-pointer"
-                    />
-                    <span className="text-[10px] text-slate-400">Nhanh (2.0)</span>
-                  </div>
-                  <div className="flex justify-end mt-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSpeechList(prev => prev.map(item => ({ ...item, speed: speed })));
-                      }}
-                      className="text-[10px] font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 border border-indigo-100 py-1 rounded hover:bg-indigo-100 transition duration-150 cursor-pointer w-full text-center"
-                      title="Áp dụng tốc độ này cho toàn bộ các dòng hiện tại"
-                    >
-                      ⚡ Áp dụng tốc độ này cho tất cả câu
-                    </button>
-                  </div>
-                </div>
-
-                <hr className="border-slate-100" />
-
-                {/* Speech Volume Slider */}
-                <div>
-                  <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">Âm lượng đọc (Volume):</span>
-                    <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded transition-all duration-300 ${
-                      volume > 1.1 
-                        ? 'text-rose-600 bg-rose-50 ring-1 ring-rose-250 animate-pulse' 
-                        : volume > 1.0 
-                          ? 'text-amber-600 bg-amber-50 ring-1 ring-amber-200' 
-                          : 'text-indigo-600 bg-indigo-50'
-                    }`}>
-                      {Math.round(volume * 100)}% {volume > 1.0 && '🚀 Booster'}
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-[10px] text-slate-400">Tắt (0%)</span>
-                    <input
-                      id="volume-input-slider"
-                      type="range"
-                      min="0.0"
-                      max="2.0"
-                      step="0.05"
-                      value={volume}
-                      onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                      className="flex-1 accent-indigo-600 h-1.5 bg-slate-100 rounded-lg cursor-pointer"
-                    />
-                    <span className="text-[10px] text-slate-400">Cực đại (200%)</span>
-                  </div>
-                  {volume > 1.0 && (
-                    <p className="text-[9px] text-rose-500 font-medium mt-1 leading-relaxed">
-                      💡 Mẹo: Âm lượng &gt; 100% (Khuyếch đại Web Audio) hoạt động tối ưu nhất với giọng Premium (Gemini API).
-                    </p>
-                  )}
-                </div>
-
-                <hr className="border-slate-100" />
-
-                {/* 2. Auto Advance Configuration (Auto chuyển dòng) */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-700 block">Tự động chuyển dòng kế tiếp</span>
-                      <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">Bật để nói liên tục từ trên xuống</span>
-                    </div>
-                    
-                    {/* Switch Toggle */}
-                    <button
-                      id="auto-advance-toggle"
-                      onClick={() => setAutoAdvance(!autoAdvance)}
-                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                        autoAdvance ? 'bg-indigo-600' : 'bg-slate-300'
-                      }`}
-                    >
-                      <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                          autoAdvance ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
-
-                  {autoAdvance && (
-                    <div className="pt-2 border-t border-slate-200">
-                      <div className="flex justify-between mb-1.5 text-xs">
-                        <span className="font-semibold text-slate-700">Thời gian nghỉ mặc định:</span>
-                        <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{timeBetweenLines} giây</span>
-                      </div>
-                      <input
-                        id="time-between-input"
-                        type="range"
-                        min="0.5"
-                        max="10.0"
-                        step="0.5"
-                        value={timeBetweenLines}
-                        onChange={(e) => setTimeBetweenLines(parseFloat(e.target.value))}
-                        className="w-full accent-indigo-600 h-1 bg-white rounded-lg border border-slate-200 cursor-pointer"
-                      />
-                      <div className="flex justify-end mt-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSpeechList(prev => prev.map(item => ({ ...item, delaySec: timeBetweenLines })));
-                          }}
-                          className="text-[10px] font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 border border-indigo-100 px-20 py-1 rounded hover:bg-indigo-100 transition duration-150 cursor-pointer w-full text-center"
-                          title="Áp dụng thời gian nghỉ này cho toàn bộ các dòng hiện tại"
-                        >
-                          ⚡ Áp dụng thời gian nghỉ này cho tất cả câu
-                        </button>
-                      </div>
-                      <span className="text-[10px] text-slate-400 block mt-2 text-left leading-relaxed">
-                        * Bạn cũng có thể điều chỉnh thời gian nghỉ riêng biệt từng câu (bằng nút <strong className="text-slate-500">Nghỉ</strong>) trực tiếp trên từng thẻ dòng bên phải!
-                      </span>
-
-                      {/* Chế độ lặp lại toàn bộ chuỗi */}
-                      <div className="pt-2.5 mt-2.5 border-t border-slate-200">
-                        <span className="text-[10px] font-bold text-slate-600 block mb-1.5 uppercase tracking-wide">Khi đọc xong tất cả các câu:</span>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handlePlaylistLoopModeChange('once')}
-                            className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer ${
-                              playlistLoopMode === 'once'
-                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-3xs'
-                                : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800'
-                            }`}
-                          >
-                            <span>🎯 Phát 1 lần rồi dừng</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handlePlaylistLoopModeChange('infinite')}
-                            className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer ${
-                              playlistLoopMode === 'infinite'
-                                ? 'bg-amber-50 border-amber-200 text-amber-705 shadow-3xs'
-                                : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800'
-                            }`}
-                          >
-                            <span>🔁 Lặp lại vô hạn chuỗi</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <hr className="border-slate-100" />
-
-                {/* 3. Favorite Preferred Voice Mappings (Conditional logic on mode selection) */}
-                <div className="space-y-4">
-                  {engineMode === 'browser' ? (
-                    <>
-                      <div>
-                        <label htmlFor="en-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                          🇺🇸 Giọng English ưu tiên (Browser's engine)
-                        </label>
-                        <select
-                          id="en-voice-fav"
-                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
-                          value={selectedEnVoiceName}
-                          onChange={(e) => setSelectedEnVoiceName(e.target.value)}
-                        >
-                          {englishVoices.length === 0 ? (
-                            <option value="">-- Dùng English mặc định máy --</option>
-                          ) : (
-                            englishVoices.map((v) => (
-                              <option key={v.name} value={v.name}>
-                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label htmlFor="vi-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                          🇻🇳 Giọng Tiếng Việt ưu tiên (Browser's engine)
-                        </label>
-                        <select
-                          id="vi-voice-fav"
-                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
-                          value={selectedViVoiceName}
-                          onChange={(e) => setSelectedViVoiceName(e.target.value)}
-                        >
-                          {vietnameseVoices.length === 0 ? (
-                            <option value="">-- Dùng Tiếng Việt mặc định máy --</option>
-                          ) : (
-                            vietnameseVoices.map((v) => (
-                              <option key={v.name} value={v.name}>
-                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label htmlFor="zh-cn-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                          🇨🇳 Giọng ZH-CN ưu tiên (Browser's engine)
-                        </label>
-                        <select
-                          id="zh-cn-voice-fav"
-                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
-                          value={selectedZhCnVoiceName}
-                          onChange={(e) => setSelectedZhCnVoiceName(e.target.value)}
-                        >
-                          {zhCnVoices.length === 0 ? (
-                            <option value="">-- Dùng ZH-CN mặc định máy --</option>
-                          ) : (
-                            zhCnVoices.map((v) => (
-                              <option key={v.name} value={v.name}>
-                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label htmlFor="zh-tw-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                          🇭🇰 Giọng ZH-TW ưu tiên (Browser's engine)
-                        </label>
-                        <select
-                          id="zh-tw-voice-fav"
-                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
-                          value={selectedZhTwVoiceName}
-                          onChange={(e) => setSelectedZhTwVoiceName(e.target.value)}
-                        >
-                          {zhTwVoices.length === 0 ? (
-                            <option value="">-- Dùng ZH-TW mặc định máy --</option>
-                          ) : (
-                            zhTwVoices.map((v) => (
-                              <option key={v.name} value={v.name}>
-                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label htmlFor="ja-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                          🇯🇵 Giọng Tiếng Nhật ưu tiên (Browser's engine)
-                        </label>
-                        <select
-                          id="ja-voice-fav"
-                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
-                          value={selectedJaVoiceName}
-                          onChange={(e) => setSelectedJaVoiceName(e.target.value)}
-                        >
-                          {japaneseVoices.length === 0 ? (
-                            <option value="">-- Dùng Tiếng Nhật mặc định máy --</option>
-                          ) : (
-                            japaneseVoices.map((v) => (
-                              <option key={v.name} value={v.name}>
-                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label htmlFor="ko-voice-fav" className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
-                          🇰🇷 Giọng Tiếng Hàn ưu tiên (Browser's engine)
-                        </label>
-                        <select
-                          id="ko-voice-fav"
-                          className="w-full text-xs font-sans bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 hover:bg-slate-100 transition-colors"
-                          value={selectedKoVoiceName}
-                          onChange={(e) => setSelectedKoVoiceName(e.target.value)}
-                        >
-                          {koreanVoices.length === 0 ? (
-                            <option value="">-- Dùng Tiếng Hàn mặc định máy --</option>
-                          ) : (
-                            koreanVoices.map((v) => (
-                              <option key={v.name} value={v.name}>
-                                {v.name} {v.localService ? '(Sẵn trong máy)' : ''}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </div>
-                    </>
-                  ) : (
-                    <PremiumEngineSection
-                      apiKey={userGeminiApiKey}
-                      showApiKey={showApiKey}
-                      setShowApiKey={setShowApiKey}
-                      setApiKey={handleApiKeyChange}
-                      clearApiKey={clearApiKey}
-                      selectedVoices={selectedPremiumVoices}
-                      onVoiceChange={onVoiceChange}
-                    />
-                  )}
-                </div>
-
-              </div>
-            </div>
+            <SpeechSettingsPanel
+              engineMode={engineMode}
+              setEngineMode={setEngineMode}
+              speed={speed}
+              setSpeed={setSpeed}
+              onApplySpeedToAll={() => {
+                setSpeechList(prev => prev.map(item => ({ ...item, speed: speed })));
+              }}
+              volume={volume}
+              handleVolumeChange={handleVolumeChange}
+              autoAdvance={autoAdvance}
+              setAutoAdvance={setAutoAdvance}
+              timeBetweenLines={timeBetweenLines}
+              setTimeBetweenLines={setTimeBetweenLines}
+              onApplyDelayToAll={() => {
+                setSpeechList(prev => prev.map(item => ({ ...item, delaySec: timeBetweenLines })));
+              }}
+              playlistLoopMode={playlistLoopMode}
+              handlePlaylistLoopModeChange={handlePlaylistLoopModeChange}
+              selectedEnVoiceName={selectedEnVoiceName}
+              setSelectedEnVoiceName={setSelectedEnVoiceName}
+              selectedViVoiceName={selectedViVoiceName}
+              setSelectedViVoiceName={setSelectedViVoiceName}
+              selectedZhCnVoiceName={selectedZhCnVoiceName}
+              setSelectedZhCnVoiceName={setSelectedZhCnVoiceName}
+              selectedZhTwVoiceName={selectedZhTwVoiceName}
+              setSelectedZhTwVoiceName={setSelectedZhTwVoiceName}
+              selectedJaVoiceName={selectedJaVoiceName}
+              setSelectedJaVoiceName={setSelectedJaVoiceName}
+              selectedKoVoiceName={selectedKoVoiceName}
+              setSelectedKoVoiceName={setSelectedKoVoiceName}
+              englishVoices={englishVoices}
+              vietnameseVoices={vietnameseVoices}
+              zhCnVoices={zhCnVoices}
+              zhTwVoices={zhTwVoices}
+              japaneseVoices={japaneseVoices}
+              koreanVoices={koreanVoices}
+              userGeminiApiKey={userGeminiApiKey}
+              showApiKey={showApiKey}
+              setShowApiKey={setShowApiKey}
+              handleApiKeyChange={handleApiKeyChange}
+              clearApiKey={clearApiKey}
+              selectedPremiumVoices={selectedPremiumVoices}
+              onVoiceChange={onVoiceChange}
+            />
 
             {/* Unified Background Theme Configurations (Optional) */}
             <div id="universal-theme-box" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs hover:border-slate-350 transition-colors duration-200">
@@ -2320,148 +1894,36 @@ Mời rất thích ăn bắp rang ngon lành.`;
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
               
               {/* Dynamic list controls & status banner */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 mb-4 gap-4">
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                    <BookOpen className="w-5 h-5 text-indigo-600" />
-                    Bảng tương tác từ và âm thanh
-                  </h3>
-                  <div className="flex gap-2 items-center flex-wrap mt-1">
-                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                      Tổng số: {speechList.length} dòng
-                    </span>
-                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                      🇺🇸 EN: {speechList.filter(item => item.resolvedLang === 'en').length}
-                    </span>
-                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">
-                      🇻🇳 VI: {speechList.filter(item => item.resolvedLang === 'vi').length}
-                    </span>
-                    <span className="text-[10px] text-slate-400 italic">
-                      (Kéo thả đổi vị trí)
-                    </span>
-                  </div>
-
-                  {/* Layout mode indicator & selection controller */}
-                  <div className="mt-2.5 flex items-center bg-slate-100/80 rounded-lg p-0.5 border border-slate-200/60 w-fit">
-                    <button
-                      type="button"
-                      onClick={() => toggleRowLayoutMode('below')}
-                      className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
-                        rowLayoutMode === 'below'
-                          ? 'bg-white text-indigo-700 shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                      title="Nút cấu hình xếp dưới, dòng chữ chiếm trọn chiều ngang rất dễ nhìn"
-                    >
-                      ⚡ Bố cục rộng (Nút dưới)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleRowLayoutMode('side')}
-                      className={`text-[10px] sm:text-[11px] font-bold px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1 ${
-                        rowLayoutMode === 'side'
-                          ? 'bg-white text-indigo-700 shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                      title="Nút cấu hình xếp cạnh dòng chữ"
-                    >
-                      🎛️ Bố cục gọn (Bên cạnh)
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex items-center flex-wrap gap-2">
-                  {/* Import Button (Always available) */}
-                  <button
-                    id="import-list-trigger"
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-xs font-bold bg-white border border-slate-250 text-slate-700 hover:bg-slate-50 py-1.5 px-3 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-3xs"
-                    title="Nhập và phục hồi bài luyện tập từ file backup đã lưu (.json)"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-indigo-655" />
-                    <span>Nhập File Backup</span>
-                  </button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleImportData}
-                    accept=".json"
-                    className="hidden"
-                  />
-
-                  {speechList.length > 0 && (
-                    <>
-                      {/* Public Sharing Button */}
-                      <button
-                        id="share-list-trigger"
-                        type="button"
-                        onClick={() => setIsShareModalOpen(true)}
-                        className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 px-3.5 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-3xs"
-                        title="Tạo liên kết chia sẻ công khai bài học này với đầy đủ cài đặt, tốc độ, hình hình minh họa của bạn"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                        <span>Chia sẻ liên kết</span>
-                      </button>
-
-                      {/* Export Audio Button */}
-                      <button
-                        id="export-audio-trigger"
-                        type="button"
-                        onClick={() => setIsAudioExportModalOpen(true)}
-                        className="text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100/60 py-1.5 px-3 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-3xs"
-                        title="Xuất bài học thành file âm thanh (MP3, WAV) chất lượng cao"
-                      >
-                        <Radio className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
-                        <span>Xuất File Nghe MP3</span>
-                      </button>
-
-                      {/* Export Button */}
-                      <button
-                        id="export-list-trigger"
-                        type="button"
-                        onClick={handleExportData}
-                        className="text-xs font-bold bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100/60 py-1.5 px-3 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-3xs"
-                        title="Xuất cấu hình bài tập kèm thông số nghỉ dừng, số lần lặp, vận tốc, link hình ảnh đã tối ưu ra máy cá nhân (.json)"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Xuất File Backup</span>
-                      </button>
-
-                      {/* Play All Drill Mode trigger button */}
-                      <button
-                        id="play-all-drill-trigger"
-                        onClick={triggerPlaylistDrill}
-                        className="text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 py-1.5 px-3 rounded-lg transition active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-3xs"
-                        title={autoAdvance ? "Liên tục phát các dòng" : "Phát từ câu đầu tiên"}
-                      >
-                        <Play className="w-3.5 h-3.5 fill-indigo-700" />
-                        Phát chuỗi luyện tập (Play)
-                      </button>
-
-                      <button
-                        id="stop-global-audio"
-                        onClick={handleStopAll}
-                        className="text-xs font-bold bg-slate-100 border border-slate-200 text-slate-800 hover:bg-slate-200 py-1.5 px-2.5 rounded-lg transition active:scale-95 flex items-center gap-1 cursor-pointer"
-                        title="Ngưng mọi giọng đọc ngay"
-                      >
-                        <VolumeX className="w-3.5 h-3.5 text-slate-600" />
-                        Dừng audio
-                      </button>
-
-                      <button
-                        id="clear-list-trigger"
-                        onClick={handleClearAll}
-                        className="text-xs font-bold bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100/50 py-1.5 px-2.5 rounded-lg transition active:scale-95 flex items-center gap-1 cursor-pointer shadow-3xs"
-                        title="Xoá hết danh sách câu"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                        Xoá bảng
-                      </button>
-                    </>
-                  )}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
+                <div className="flex gap-2 items-center flex-wrap">
+                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md select-none">
+                    Tổng số: {speechList.length} dòng
+                  </span>
+                  <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 px-2 py-0.5 rounded-md select-none">
+                    🇺🇸 EN: {speechList.filter(item => item.resolvedLang === 'en').length}
+                  </span>
+                  <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md select-none">
+                    🇻🇳 VI: {speechList.filter(item => item.resolvedLang === 'vi').length}
+                  </span>
+                  <span className="text-[10px] text-slate-400 italic select-none">
+                    (Kéo thả đổi vị trí)
+                  </span>
                 </div>
               </div>
+
+              <PlaybackController
+                speechList={speechList}
+                rowLayoutMode={rowLayoutMode}
+                toggleRowLayoutMode={toggleRowLayoutMode}
+                onImportClick={() => fileInputRef.current?.click()}
+                onShareClick={() => setIsShareModalOpen(true)}
+                onExportAudioClick={() => setIsAudioExportModalOpen(true)}
+                onExportBackupClick={handleExportData}
+                onPlayAll={triggerPlaylistDrill}
+                onStopAll={handleStopAll}
+                onClearAll={handleClearAll}
+                autoAdvance={autoAdvance}
+              />
 
               {/* Inline dynamic row direct addition form */}
               <form onSubmit={handleAddSingleRow} id="quick-add-form" className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 mb-4 bg-slate-50 border border-slate-200 rounded-xl p-2 font-sans">

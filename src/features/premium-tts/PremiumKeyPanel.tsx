@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Key, Eye, EyeOff, Trash2, Clipboard, ExternalLink, AlertCircle, Check } from 'lucide-react';
 
 interface PremiumKeyPanelProps {
@@ -17,6 +17,16 @@ export const PremiumKeyPanel: React.FC<PremiumKeyPanelProps> = ({
   clearApiKey,
 }) => {
   const [copiedSuccess, setCopiedSuccess] = useState(false);
+  const [isStorageBlocked, setIsStorageBlocked] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('__test_premium_storage__', 'test');
+      localStorage.removeItem('__test_premium_storage__');
+    } catch {
+      setIsStorageBlocked(true);
+    }
+  }, []);
 
   const handlePasteKey = async () => {
     try {
@@ -60,6 +70,13 @@ export const PremiumKeyPanel: React.FC<PremiumKeyPanelProps> = ({
           Lấy Key Miễn Phí <ExternalLink className="w-2.5 h-2.5" />
         </a>
       </div>
+
+      {isStorageBlocked && (
+        <div id="local-storage-blocked-alert" className="flex items-center gap-1.5 bg-rose-50 border border-rose-200/60 rounded-lg p-2 mb-2 text-rose-850 text-[10.5px] font-medium leading-tight">
+          <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+          <span>Lưu ý: Bộ nhớ trình duyệt (LocalStorage) bị chặn. API Key sẽ không tự lưu khi bạn tải lại trang.</span>
+        </div>
+      )}
 
       {!apiKey ? (
         <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200/60 rounded-lg p-2 mb-2 text-amber-800 text-[11px] font-medium leading-tight">
