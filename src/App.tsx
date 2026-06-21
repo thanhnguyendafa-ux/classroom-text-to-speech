@@ -260,94 +260,236 @@ export default function App() {
   };
 
   const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
-  const [promptTopic, setPromptTopic] = useState<string>('Giao tiếp Tiếng Anh hàng ngày');
-  const [promptType, setPromptType] = useState<'basic' | 'repeat' | 'pause' | 'advanced'>('advanced');
+  const [promptTopic, setPromptTopic] = useState<string>('Giao thông công cộng');
+  const [promptMainIdeas, setPromptMainIdeas] = useState<string>('Khuyến khích công dân sử dụng phương tiện xanh, điện sạch, metro, xe buýt để giảm thiểu nạn kẹt xe ùn tắc và ngăn chặn ô nhiễm môi trường.');
+  const [promptType, setPromptType] = useState<'basic' | 'repeat' | 'pause' | 'advanced'>('pause');
   const [showGptPromptGuide, setShowGptPromptGuide] = useState<boolean>(false);
   const [showChromeTip, setShowChromeTip] = useState<boolean>(false);
   const [showDrillGuide, setShowDrillGuide] = useState<boolean>(false);
 
   const getDynamicGPTPrompt = () => {
-    const topicText = promptTopic.trim() || 'Giao tiếp Tiếng Anh hàng ngày';
+    const topicText = promptTopic.trim() || 'Giao thông công cộng';
+    const mainIdeasText = promptMainIdeas.trim() || 'Khuyến khích công dân sử dụng phương tiện công cộng để giảm ùn tắc và giảm ô nhiễm môi trường.';
+
+    let timingRequirements = '';
+    let formatRequirements = '';
+    let exampleText = '';
+
     switch (promptType) {
-      case 'basic':
-        return `Hãy đóng vai một giáo viên ngoại ngữ soạn giáo án song ngữ đạt chuẩn. Hãy tạo cho tôi danh sách từ vựng/mẫu câu theo chủ đề song ngữ ANH - VIỆT (tiếng Anh lẻ, tiếng Việt chẵn) dùng để nạp vào ứng dụng luyện nghe nói.
+      case 'pause': // Mẫu trên là /
+        timingRequirements = `Yêu cầu về thời gian nghỉ:
+* Cuối mỗi dòng phải có ký hiệu /Y.
+* Y là số giây nghỉ để người học nghe, hiểu và nhại lại trọn vẹn dòng đó.
+* Không quy định số giây cố định theo loại từ, cụm từ hoặc câu.
+* Hãy tự điều chỉnh thời gian theo số lượng từ, độ dài nội dung, độ khó phát âm và tốc độ nhại lại của người học bình thường.
+* Nội dung ngắn và dễ có thể dùng thời gian nghỉ ngắn hơn.
+* Nội dung dài hoặc khó phải có thời gian nghỉ dài hơn.
+* Thời gian phải đủ thoải mái để người học nghe xong rồi nhại lại đầy đủ, không được chuyển quá nhanh.
+* Có thể dùng số nguyên hoặc số thập phân, ví dụ: /2.5, /4, /6.5, /9.`;
 
-Chủ đề bài học: ${topicText}
+        formatRequirements = `Yêu cầu định dạng:
+* Viết các dòng liền nhau hoàn toàn.
+* Không để dòng trống.
+* Không đánh số thứ tự.
+* Không dùng dấu đầu dòng.
+* Không thêm tiêu đề.
+* Không thêm lời giải thích trước hoặc sau bài.
+* Không dùng dấu chấm phẩy (;).
+* Mỗi dòng phải kết thúc bằng ký hiệu thời gian /Y.
+* Đầu ra chỉ chứa danh sách văn bản thô để sao chép trực tiếp vào ứng dụng.`;
 
-Yêu cầu định dạng nghiêm ngặt:
-1. Danh sách gồm các cặp dòng xen kẽ: Dòng tiếng Anh lẻ (1, 3, 5,...) và Dòng tiếng Việt chẵn (2, 4, 6,...).
-2. Viết liền nhau hoàn toàn, không có dòng trống ở giữa các cặp và dòng kế tiếp.
-3. Mỗi cặp tiếng Anh - tiếng Việt là một đơn vị bài học.
-4. KHÔNG sử dụng bất kỳ ký tự phân tách đặc biệt nào khác (không có ";" và không có "/").
+        exampleText = `Ví dụ cách phát triển nội dung:
+Chủ đề: Giao thông công cộng
+giao thông công cộng /3
+public transportation /3.5
+sử dụng giao thông công cộng /4
+use public transportation /4.5
+khuyến khích người dân sử dụng giao thông công cộng /6
+encourage people to use public transportation /6.5
+Trước hết, chính phủ nên khuyến khích người dân sử dụng giao thông công cộng. /9
+Firstly, governments should encourage people to use public transportation. /9.5
+số lượng ô tô /3
+the number of cars /3.5
+giảm số lượng ô tô /4
+reduce the number of cars /4.5
+giảm số lượng ô tô trên đường /5.5
+reduce the number of cars on the road /6
+Điều này có thể giúp giảm số lượng ô tô trên đường. /8
+This can help reduce the number of cars on the road. /8.5
+tắc nghẽn giao thông /3
+traffic congestion /3.5
+giảm tắc nghẽn giao thông /4.5
+reduce traffic congestion /5
+giảm tắc nghẽn giao thông ở các thành phố lớn /6
+reduce traffic congestion in major cities /6.5
+Nhờ đó, tình trạng tắc nghẽn giao thông ở các thành phố lớn có thể được giảm bớt. /10
+As a result, traffic congestion in major cities can be reduced. /10.5`;
+        break;
 
-Hãy soạn bài học gồm khoảng 10-15 dòng (5-8 cặp) phản ánh sự phát triển từ Từ đơn -> Cụm từ -> Câu hoàn chỉnh (Ví dụ: từ "popcorn" đến cụm từ "delicious popcorn" rồi sang câu hoàn chỉnh "I love eating delicious popcorn") liên quan đến chủ đề trên. Định dạng đầu ra chỉ chứa danh sách dòng chữ thô như cấu trúc mẫu dưới đây, không cần tiêu đề hay giải thích thêm:
-popcorn
-bắp rang
-delicious popcorn
-bắp rang ngon lành
-I love eating delicious popcorn.
-Mời rất thích ăn bắp rang ngon lành.`;
+      case 'advanced': // Mẫu ; /
+        timingRequirements = `Yêu cầu về tần suất lặp và thời gian nghỉ:
+* Cuối mỗi dòng phải có ký hiệu ;X /Y.
+* X là số lần lặp đọc lại của câu đó (ví dụ: ;2 hoặc ;3 tùy thuộc độ dài hoặc độ khó của mẫu từ/câu để học viên nhại lại nhiều lần).
+* Y là số giây nghỉ để người học nghe, hiểu và nhại lại trọn vẹn dòng đó sau khi lặp xong.
+* Không quy định số giây cố định theo loại từ, cụm từ hoặc câu.
+* Hãy tự điều chỉnh số lần lặp và thời gian theo số lượng từ, độ dài nội dung, độ khó phát âm và tốc độ nhại lại của người học bình thường.
+* Thời gian phải đủ thoải mái để người học nghe xong rồi nhại lại đầy đủ, không được chuyển quá nhanh.`;
 
-      case 'repeat':
-        return `Hãy đóng vai một giáo viên ngoại ngữ soạn giáo án song ngữ đạt chuẩn. Hãy tạo cho tôi danh sách từ vựng/mẫu câu theo chủ đề song ngữ ANH - VIỆT (tiếng Anh lẻ, tiếng Việt chẵn) dùng để nạp vào ứng dụng luyện nghe nói có tùy chỉnh tần suất lặp lại.
+        formatRequirements = `Yêu cầu định dạng:
+* Viết các dòng liền nhau hoàn toàn.
+* Không để dòng trống.
+* Không đánh số thứ tự.
+* Không dùng dấu đầu dòng.
+* Không thêm tiêu đề.
+* Không thêm lời giải thích trước hoặc sau bài.
+* Mỗi dòng phải kết thúc bằng ký hiệu ;X /Y.
+* Đầu ra chỉ chứa danh sách văn bản thô để sao chép trực tiếp vào ứng dụng.`;
 
-Chủ đề bài học: ${topicText}
+        exampleText = `Ví dụ cách phát triển nội dung:
+Chủ đề: Giao thông công cộng
+giao thông công cộng ;2 /3
+public transportation ;2 /3.5
+sử dụng giao thông công cộng ;2 /4
+use public transportation ;2 /4.5
+khuyến khích người dân sử dụng giao thông công cộng ;3 /6
+encourage people to use public transportation ;3 /6.5
+Trước hết, chính phủ nên khuyến khích người dân sử dụng giao thông công cộng. ;3 /9
+Firstly, governments should encourage people to use public transportation. ;3 /9.5
+số lượng ô tô ;2 /3
+the number of cars ;2 /3.5
+giảm số lượng ô tô ;2 /4
+reduce the number of cars ;2 /4.5
+giảm số lượng ô tô trên đường ;3 /5.5
+reduce the number of cars on the road ;3 /6
+Điều này có thể giúp giảm số lượng ô tô trên đường. ;3 /8
+This can help reduce the number of cars on the road. ;3 /8.5
+tắc nghẽn giao thông ;2 /3
+traffic congestion ;2 /3.5
+giảm tắc nghẽn giao thông ;2 /4.5
+reduce traffic congestion ;2 /5
+giảm tắc nghẽn giao thông ở các thành phố lớn ;3 /6
+reduce traffic congestion in major cities ;3 /6.5
+Nhờ đó, tình trạng tắc nghẽn giao thông ở các thành phố lớn có thể được giảm bớt. ;3 /10
+As a result, traffic congestion in major cities can be reduced. ;3 /10.5`;
+        break;
 
-Yêu cầu định dạng nghiêm ngặt:
-1. Danh sách gồm các cặp dòng xen kẽ: Dòng tiếng Anh lẻ (1, 3, 5,...) và Dòng tiếng Việt chẵn (2, 4, 6,...).
-2. Viết liền nhau hoàn toàn, không có dòng trống ở giữa.
-3. Ở cuối câu của dòng tiếng Anh lẻ, hãy kèm ký tự ";X" (với X là số lần lặp đọc lại của câu đó, ví dụ: ';2' hoặc ';3' tùy thuộc độ dài hoặc độ khó của mẫu từ/câu để học viên nhại lại nhiều lần).
-4. KHÔNG dùng ký tự gạch chéo "/" để chia khoảng nghỉ.
+      case 'repeat': // Mẫu chỉ có ;
+        timingRequirements = `Yêu cầu về số lần lặp lại:
+* Cuối mỗi dòng phải có ký hiệu ;X.
+* X là số lần lặp đọc lại của câu đó để học viên nhại đi nhại lại nhiều lần (ví dụ: ;2 hoặc ;3 tùy thuộc độ dài hoặc độ khó của mẫu từ/câu).
+* KHÔNG sử dụng ký hiệu gạch chéo "/" để chia khoảng nghỉ trong mẫu này.`;
 
-Hãy soạn bài học gồm khoảng 10-15 dòng (5-8 cặp) phản ánh sự phát triển từ Từ đơn -> Cụm từ -> Câu hoàn chỉnh liên quan đến chủ đề trên. Định dạng đầu ra chỉ chứa danh sách dòng chữ thô như cấu trúc mẫu dưới đây, không cần tiêu đề hay giải thích thêm:
-popcorn ;3
-bắp rang
-delicious popcorn ;2
-bắp rang ngon lành
-I love eating delicious popcorn. ;3
-Mời rất thích ăn bắp rang ngon lành.`;
+        formatRequirements = `Yêu cầu định dạng:
+* Viết các dòng liền nhau hoàn toàn.
+* Không để dòng trống.
+* Không đánh số thứ tự.
+* Không dùng dấu đầu dòng.
+* Không thêm tiêu đề.
+* Không thêm lời giải thích trước hoặc sau bài.
+* Không dùng dấu gạch chéo (/).
+* Mỗi dòng phải kết thúc bằng ký hiệu ;X.
+* Đầu ra chỉ chứa danh sách văn bản thô để sao chép trực tiếp vào ứng dụng.`;
 
-      case 'pause':
-        return `Hãy đóng vai một giáo viên ngoại ngữ soạn giáo án song ngữ đạt chuẩn. Hãy tạo cho tôi danh sách từ vựng/mẫu câu theo chủ đề song ngữ ANH - VIỆT (tiếng Anh lẻ, tiếng Việt chẵn) dùng để nạp vào ứng dụng luyện nghe nói có tùy chỉnh giãn cách nghỉ.
+        exampleText = `Ví dụ cách phát triển nội dung:
+Chủ đề: Giao thông công cộng
+giao thông công cộng ;2
+public transportation ;2
+sử dụng giao thông công cộng ;2
+use public transportation ;2
+khuyến khích người dân sử dụng giao thông công cộng ;3
+encourage people to use public transportation ;3
+Trước hết, chính phủ nên khuyến khích người dân sử dụng giao thông công cộng. ;3
+Firstly, governments should encourage people to use public transportation. ;3
+số lượng ô tô ;2
+the number of cars ;2
+giảm số lượng ô tô ;2
+reduce the number of cars ;2
+giảm số lượng ô tô trên đường ;3
+reduce the number of cars on the road ;3
+Điều này có thể giúp giảm số lượng ô tô trên đường. ;3
+This can help reduce the number of cars on the road. ;3
+tắc nghẽn giao thông ;2
+traffic congestion ;2
+giảm tắc nghẽn giao thông ;2
+reduce traffic congestion ;2
+giảm tắc nghẽn giao thông ở các thành phố lớn ;3
+reduce traffic congestion in major cities ;3
+Nhờ đó, tình trạng tắc nghẽn giao thông ở các thành phố lớn có thể được giảm bớt. ;3
+As a result, traffic congestion in major cities can be reduced. ;3`;
+        break;
 
-Chủ đề bài học: ${topicText}
-
-Yêu cầu định dạng nghiêm ngặt:
-1. Danh sách gồm các cặp dòng xen kẽ: Dòng tiếng Anh lẻ (1, 3, 5,...) và Dòng tiếng Việt chẵn (2, 4, 6,...).
-2. Viết liền nhau hoàn toàn, không được để trống dòng ở giữa.
-3. Ở cuối câu của dòng tiếng Anh lẻ hoặc dòng tiếng Việt chẵn, hãy kèm ký tự "/Y" (với Y là thời gian chờ tính bằng giây để người học kịp đọc theo/phản xạ trước khi ứng dụng tự động chuyển câu kế tiếp, ví dụ: '/1.5' hoặc '/4' tùy ý bạn thiết kế phù hợp).
-4. KHÔNG dùng dấu chấm phẩy ";" để chỉ định số lặp lại.
-
-Hãy soạn bài học gồm khoảng 10-15 dòng (5-8 cặp) phản ánh sự phát triển từ Từ đơn -> Cụm từ -> Câu hoàn chỉnh liên quan đến chủ đề trên. Định dạng đầu ra chỉ chứa danh sách dòng chữ thô như cấu trúc mẫu dưới đây, không cần tiêu đề hay giải thích thêm:
-popcorn
-bắp rang
-delicious popcorn
-bắp rang ngon lành /2
-I love eating delicious popcorn. /3
-Mời rất thích ăn bắp rang ngon lành.`;
-
-      case 'advanced':
+      case 'basic': // Mẫu không có / hay ;
       default:
-        return `Hãy đóng vai một giáo viên ngoại ngữ soạn giáo án song ngữ đạt chuẩn. Hãy tạo cho tôi danh sách từ vựng/mẫu câu theo chủ đề song ngữ ANH - VIỆT (tiếng Anh lẻ, tiếng Việt chẵn) dùng để nạp vào ứng dụng luyện nghe nói có tùy biến nâng cao (cả tần suất lặp lẫn thời gian nghỉ).
+        timingRequirements = `Yêu cầu định dạng:
+* KHÔNG sử dụng bất kỳ ký tự phân tách đặc biệt nào khác (không có ";" và không có "/"). Chỉ xuất văn bản thuần tuý.`;
 
-Chủ đề bài học: ${topicText}
+        formatRequirements = `Yêu cầu định dạng:
+* Viết các dòng liền nhau hoàn toàn.
+* Không để dòng trống.
+* Không đánh số thứ tự.
+* Không dùng dấu đầu dòng.
+* Không thêm tiêu đề.
+* Không thêm lời giải thích trước hoặc sau bài.
+* Đầu ra chỉ chứa danh sách dòng chữ thô như cấu trúc mẫu dưới đây, không cần tiêu đề hay giải thích thêm.`;
 
-Yêu cầu định dạng nghiêm ngặt:
-1. Danh sách gồm các cặp dòng xen kẽ: Dòng tiếng Anh lẻ (1, 3, 5,...) và Dòng tiếng Việt chẵn (2, 4, 6,...).
-2. Viết liền nhau hoàn toàn, không được để trống dòng ở giữa.
-3. Cho phép gộp cả hai tham số nâng cao:
-   - Thêm ';X' ở cuối câu để chỉ định số lần lặp đọc lại (ví dụ ';2' hoặc ';3').
-   - Thêm '/Y' ở cuối câu để chỉ định số giây nghỉ giải lao sau câu đó (ví dụ '/1.5' hoặc '/4').
-   - Bạn có thể đặt cả hai cùng lúc thành ';X /Y' tùy thích.
-
-Hãy soạn bài học gồm khoảng 10-15 dòng (5-8 cặp) phản ánh sự phát triển từ Từ đơn -> Cụm từ -> Câu hoàn chỉnh liên quan đến chủ đề trên. Định dạng đầu ra chỉ chứa danh sách dòng chữ thô như cấu trúc mẫu dưới đây, không cần tiêu đề hay giải thích thêm:
-popcorn ;3 /4
-bắp rang
-delicious popcorn
-bắp rang ngon lành /1.5
-I love eating delicious popcorn. ;2 /3
-Mời rất thích ăn bắp rang ngon lành.`;
+        exampleText = `Ví dụ cách phát triển nội dung:
+Chủ đề: Giao thông công cộng
+giao thông công cộng
+public transportation
+sử dụng giao thông công cộng
+use public transportation
+khuyến khích người dân sử dụng giao thông công cộng
+encourage people to use public transportation
+Trước hết, chính phủ nên khuyến khích người dân sử dụng giao thông công cộng.
+Firstly, governments should encourage people to use public transportation.
+số lượng ô tô
+the number of cars
+giảm số lượng ô tô
+reduce the number of cars
+giảm số lượng ô tô trên đường
+reduce the number of cars on the road
+Điều này có thể giúp giảm số lượng ô tô trên đường.
+This can help reduce the number of cars on the road.
+tắc nghẽn giao thông
+traffic congestion
+giảm tắc nghẽn giao thông
+reduce traffic congestion
+giảm tắc nghẽn giao thông ở các thành phố lớn
+reduce traffic congestion in major cities
+Nhờ đó, tình trạng tắc nghẽn giao thông ở các thành phố lớn có thể được giảm bớt.
+As a result, traffic congestion in major cities can be reduced.`;
+        break;
     }
+
+    return `Hãy soạn một bài luyện nghe – nhại song ngữ theo chủ đề:
+
+Chủ đề: ${topicText}
+
+Nội dung hoặc ý chính cần phát triển:
+${mainIdeasText}
+
+Hãy tạo một đoạn ngắn gồm các câu có nội dung liên kết tự nhiên với nhau.
+
+Với từng câu hoàn chỉnh, hãy xây dựng nội dung từ từ theo trình tự:
+từ hoặc ý trọng tâm → cụm từ ngắn → cụm từ dài hơn → câu hoàn chỉnh
+
+Từ và cụm từ ở bước trước phải được lồng lại vào bước sau. Sau khi hoàn thành một câu, mới chuyển sang xây dựng câu tiếp theo theo cùng quy trình.
+
+Yêu cầu song ngữ:
+* Luôn viết tiếng Việt trước.
+* Dòng tiếng Anh tương ứng đặt ngay bên dưới.
+* Mỗi nội dung phải có đủ một cặp Việt – Anh.
+* Bản dịch phải tự nhiên, sát nghĩa và dễ nhại lại.
+* Các từ, cụm từ và câu phải liên kết với nhau, không được rời rạc.
+* Các câu hoàn chỉnh cuối cùng phải tạo thành một đoạn ngắn có mạch ý rõ ràng.
+
+${timingRequirements}
+
+${formatRequirements}
+
+${exampleText}
+
+Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp, nhưng không sao chép nội dung ví dụ.`;
   };
 
   const handleCopyGPTPrompt = () => {
@@ -1653,21 +1795,36 @@ Mời rất thích ăn bắp rang ngon lành.`;
                       value={promptTopic}
                       onChange={(e) => setPromptTopic(e.target.value)}
                       placeholder="Ví dụ: Đàm thoại tại nhà hàng, Từ vựng sân bay..."
-                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden transition"
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden transition text-slate-800"
+                    />
+                  </div>
+
+                  {/* Main Ideas Input */}
+                  <div className="space-y-1.5">
+                    <label htmlFor="prompt-ideas-input" className="text-[10px] font-bold text-slate-500 flex items-center gap-1 uppercase tracking-wider">
+                      💡 2. Ý CHÍNH CẦN PHÁT TRIỂN:
+                    </label>
+                    <textarea
+                      id="prompt-ideas-input"
+                      value={promptMainIdeas}
+                      onChange={(e) => setPromptMainIdeas(e.target.value)}
+                      placeholder="Ví dụ: Khuyến khích người dân sử dụng phương tiện xanh, điện sạch, xe buýt để tránh kẹt xe và chống biến đổi khí hậu..."
+                      rows={2.5}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-hidden transition resize-none text-slate-800 font-sans leading-relaxed"
                     />
                   </div>
 
                   {/* Prompt Type Selector */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-500 flex items-center gap-1 uppercase tracking-wider">
-                      ⚙️ 2. CHỌN LOẠI CẤU TRÚC PHÙ HỢP:
+                      ⚙️ 3. CHỌN CẤU TRÚC PHÂN CÁCH NGHỈ:
                     </label>
                     <div className="grid grid-cols-2 gap-1.5">
                       {[
-                        { id: 'basic', label: 'Cơ bản thô', desc: 'Không chứa ";" hay "/"' },
-                        { id: 'repeat', label: 'Chỉ Lặp lại', desc: 'Có ";" lặp lại câu' },
-                        { id: 'pause', label: 'Chỉ Giãn cách', desc: 'Có "/" khoảng nghỉ' },
-                        { id: 'advanced', label: 'Nâng cao gộp', desc: 'Có cả ";" và "/"' },
+                        { id: 'basic', label: 'Không có gạch nghỉ /', desc: 'Mẫu cơ bản thô' },
+                        { id: 'repeat', label: 'Chỉ có dấu lặp ;', desc: 'Có tần suất lặp ;X' },
+                        { id: 'pause', label: 'Chỉ có khoảng nghỉ /', desc: 'Mẫu có giãn cách /Y' },
+                        { id: 'advanced', label: 'Mẫu gộp nâng cao ; /', desc: 'Gộp cả lặp ;X và nghỉ /Y' },
                       ].map((t) => (
                         <button
                           key={t.id}
