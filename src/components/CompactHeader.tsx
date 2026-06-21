@@ -36,7 +36,7 @@ export const CompactHeader: React.FC<CompactHeaderProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 leading-snug">
-                Classroom Speech <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 border border-indigo-100/50 rounded-full text-indigo-600">Pro Studio</span>
+                Twoway TTS <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-50 border border-indigo-100/50 rounded-full text-indigo-600">Pro Studio</span>
               </h1>
               <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
                 Dành cho Giáo viên hằng ngày
