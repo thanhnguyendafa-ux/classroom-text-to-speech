@@ -69,7 +69,7 @@ export const PremiumEngineSection: React.FC<PremiumEngineSectionProps> = ({
           </div>
           <div className="bg-white border border-slate-100 rounded-lg p-2 flex flex-col justify-between">
             <span className="text-[9.5px] text-slate-400 font-medium uppercase tracking-tight">Dùng lại (Tiết kiệm)</span>
-            <span className="text-xs font-bold text-emerald-600">+{cacheStats.hits} lần gọi AI</span>
+            <span className="text-xs font-bold text-emerald-600">Tiết kiệm {cacheStats.hits} lần gọi AI</span>
           </div>
         </div>
         

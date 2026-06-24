@@ -61,10 +61,16 @@ class PremiumTtsCacheStore {
     if (cached) {
       this.hits++;
       this.notify();
+      if ((import.meta as any).env?.DEV) {
+        console.debug(`[PremiumTTS Cache] HIT for text: "${params.text.substring(0, 30)}${params.text.length > 30 ? '...' : ''}" [lang: ${params.lang}, voice: ${params.voice}]`);
+      }
       return await cached;
     }
 
     this.misses++;
+    if ((import.meta as any).env?.DEV) {
+      console.debug(`[PremiumTTS Cache] MISS for text: "${params.text.substring(0, 30)}${params.text.length > 30 ? '...' : ''}" [lang: ${params.lang}, voice: ${params.voice}]`);
+    }
     
     // Check limit and evict before adding new
     if (this.cache.size >= MAX_CACHE_SIZE) {
