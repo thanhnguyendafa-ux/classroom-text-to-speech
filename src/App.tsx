@@ -51,7 +51,6 @@ import { SpeechSettingsPanel } from './components/SpeechSettingsPanel';
 import { LessonInputPanel, TEMPLATES } from './components/LessonInputPanel';
 import { PlaybackController } from './components/PlaybackController';
 import { SpeechListBoard } from './components/SpeechListBoard';
-import CompactHeader from './components/CompactHeader';
 import AppWorkspace from './components/AppWorkspace';
 import { useSharedPlaylistLoader } from './features/shared-playlist/useSharedPlaylistLoader';
 import SharedPlaylistBanner from './features/shared-playlist/SharedPlaylistBanner';
@@ -1785,19 +1784,13 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
   return (
     <div id="classroom-tts-root" className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       
-      {/* Compact workspace-optimized Header */}
-      <CompactHeader
-        engineMode={engineMode}
-        hasPremiumKey={!!userGeminiApiKey}
-        speechCount={speechList.length}
-        onOpenExport={() => setIsAudioExportModalOpen(true)}
-        onOpenShare={() => setIsShareModalOpen(true)}
-      />
-
       <AppShell
         activeSection={activeSection}
         onSectionChange={setActiveSection}
         onCreateNewLesson={handleCreateNewLesson}
+        engineMode={engineMode}
+        hasPremiumKey={!!userGeminiApiKey}
+        speechCount={speechList.length}
       >
         {activeSection === 'lessons' ? (
           <LessonsView

@@ -7,6 +7,8 @@ import {
   Plus,
   Volume2
 } from 'lucide-react';
+import { SidebarStatus } from './SidebarStatus';
+import { SidebarAccount } from './SidebarAccount';
 
 interface AppSidebarProps {
   collapsed: boolean;
@@ -14,6 +16,9 @@ interface AppSidebarProps {
   activeSection: 'lessons' | 'builder';
   onSectionChange: (section: 'lessons' | 'builder') => void;
   onCreateNewLesson?: () => void;
+  engineMode: 'browser' | 'premium';
+  hasPremiumKey: boolean;
+  speechCount: number;
 }
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({
@@ -21,12 +26,15 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   onToggleCollapsed,
   activeSection,
   onSectionChange,
-  onCreateNewLesson
+  onCreateNewLesson,
+  engineMode,
+  hasPremiumKey,
+  speechCount
 }) => {
   return (
     <aside 
       id="app-sidebar-desktop"
-      className={`hidden lg:flex flex-col h-[calc(100vh-65px)] bg-slate-900 border-r border-slate-850 text-slate-300 transition-all duration-300 shrink-0 sticky top-[65px] ${
+      className={`hidden lg:flex flex-col h-screen bg-slate-900 border-r border-slate-850 text-slate-300 transition-all duration-300 shrink-0 sticky top-0 ${
         collapsed ? 'w-16' : 'w-60'
       }`}
     >
@@ -115,9 +123,20 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         </button>
       </nav>
 
+      {/* Sidebar Status (Engine & Key indicators) */}
+      <SidebarStatus 
+        collapsed={collapsed}
+        engineMode={engineMode}
+        hasPremiumKey={hasPremiumKey}
+        speechCount={speechCount}
+      />
+
+      {/* Sidebar Account & Logout */}
+      <SidebarAccount collapsed={collapsed} />
+
       {/* Sidebar Footer */}
       {!collapsed && (
-        <div className="p-4 border-t border-slate-800 text-center text-[10px] text-slate-500">
+        <div className="p-3 border-t border-slate-800/60 text-center text-[9px] text-slate-650">
           Twoway TTS Pro &copy; 2026
         </div>
       )}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppSidebar } from './AppSidebar';
+import { MobileAppTopBar } from './MobileAppTopBar';
 import { BookOpen, PencilLine, Plus } from 'lucide-react';
 
 interface AppShellProps {
@@ -7,19 +8,28 @@ interface AppShellProps {
   onSectionChange: (section: 'lessons' | 'builder') => void;
   onCreateNewLesson: () => void;
   children: React.ReactNode;
+  engineMode: 'browser' | 'premium';
+  hasPremiumKey: boolean;
+  speechCount: number;
 }
 
 export const AppShell: React.FC<AppShellProps> = ({
   activeSection,
   onSectionChange,
   onCreateNewLesson,
-  children
+  children,
+  engineMode,
+  hasPremiumKey,
+  speechCount
 }) => {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
     <div id="app-shell-root" className="min-h-screen flex flex-col bg-slate-50">
       
+      {/* Mobile Top Bar (only visible on small devices) */}
+      <MobileAppTopBar />
+
       {/* Top Main Work Area */}
       <div className="flex-1 flex flex-row relative">
         
@@ -30,6 +40,9 @@ export const AppShell: React.FC<AppShellProps> = ({
           activeSection={activeSection}
           onSectionChange={onSectionChange}
           onCreateNewLesson={onCreateNewLesson}
+          engineMode={engineMode}
+          hasPremiumKey={hasPremiumKey}
+          speechCount={speechCount}
         />
 
         {/* Primary View Area */}
