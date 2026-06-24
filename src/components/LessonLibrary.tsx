@@ -39,6 +39,11 @@ import {
   deleteLesson 
 } from '../features/cloud-lessons/cloudLessonApi';
 
+import { LibraryToolbar } from '../features/lessons/components/LibraryToolbar';
+import { MigrationNotice } from '../features/lessons/components/MigrationNotice';
+import { LibraryGallery } from '../features/lessons/components/LibraryGallery';
+import { LibraryList } from '../features/lessons/components/LibraryList';
+
 export interface SavedLesson {
   id: string;
   title: string;
@@ -105,6 +110,28 @@ export default function LessonLibrary({
 
   const [folders, setFolders] = useState<SavedFolder[]>([]);
   const [uncategorizedLessons, setUncategorizedLessons] = useState<SavedLesson[]>([]);
+
+  // Gallery/List and Drilldown States
+  const [viewMode, setViewMode] = useState<'gallery' | 'list'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('lessonLibraryViewMode') as 'gallery' | 'list') || 'gallery';
+    }
+    return 'gallery';
+  });
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Persist viewMode
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lessonLibraryViewMode', viewMode);
+    }
+  }, [viewMode]);
+
+  // Reset drilldown when activeTab switches
+  useEffect(() => {
+    setSelectedFolderId(null);
+  }, [activeTab]);
 
   const fetchCloudData = async () => {
     if (!user) return;
@@ -722,301 +749,195 @@ export default function LessonLibrary({
     e.target.value = '';
   };
 
+  // Calculate display and filtered items
+  const displayFolders = activeTab === 'cloud' 
+    ? cloudFolders.map(cf => ({
+        id: cf.id,
+        name: cf.name,
+        lessons: cloudLessons.filter(cl => cl.folderId === cf.id).map(cl => ({
+          id: cl.id,
+          title: cl.title,
+          rawText: cl.rawText,
+          speechList: cl.speechList,
+          settings: cl.settings,
+          createdAt: cl.createdAt
+        }))
+      }))
+    : folders;
+
+  const displayUncategorized = activeTab === 'cloud'
+    ? cloudLessons.filter(cl => cl.folderId === null).map(cl => ({
+        id: cl.id,
+        title: cl.title,
+        rawText: cl.rawText,
+        speechList: cl.speechList,
+        settings: cl.settings,
+        createdAt: cl.createdAt
+      }))
+    : uncategorizedLessons;
+
+  const filteredFolders = displayFolders.map(f => {
+    const matchedLessons = f.lessons.filter((l: any) => 
+      l.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    return {
+      ...f,
+      lessons: matchedLessons
+    };
+  }).filter(f => {
+    const folderNameMatch = f.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return folderNameMatch || f.lessons.length > 0;
+  });
+
+  const filteredUncategorized = displayUncategorized.filter((l: any) => 
+    l.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div id="lesson-library-card" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs text-left">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
-            <FolderOpen className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="font-extrabold text-slate-800 text-sm">Thư Viện Bài Giảng & Thư Mục</h3>
-            <p className="text-[10px] text-slate-550">Lưu trữ, sao lưu và quản lý các giáo án song ngữ của bạn</p>
-          </div>
-        </div>
+    <div id="lesson-library-container" className="text-left font-sans">
+      
+      {/* 1. Global Toolbar Component */}
+      <LibraryToolbar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        showSaveLessonForm={showSaveLessonForm}
+        setShowSaveLessonForm={setShowSaveLessonForm}
+        showNewFolderInput={showNewFolderInput}
+        setShowNewFolderInput={setShowNewFolderInput}
+        user={user}
+        isCloudLoading={isCloudLoading}
+        fetchCloudData={fetchCloudData}
+        handleImportButtonClick={() => fileInputRef.current?.click()}
+        handleExportBackup={handleExportBackup}
+        fileInputRef={fileInputRef}
+        handleImportFileChange={handleImportFileChange}
+        hasItemsToSave={currentSpeechList.length > 0 || !!currentRawText.trim()}
+      />
 
-        {/* Global actions: Backup, Import */}
-        {activeTab === 'local' && (
-          <div className="flex items-center gap-1.5">
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleImportFileChange} 
-              accept=".json" 
-              className="hidden" 
-            />
-            <button 
-              type="button"
-              onClick={handleImportButtonClick}
-              title="Import Thư Viện từ File .json"
-              className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-lg border border-slate-200 transition active:scale-95 cursor-pointer flex items-center justify-center"
-            >
-              <Upload className="w-3.5 h-3.5" />
-            </button>
-            <button 
-              type="button"
-              onClick={handleExportBackup}
-              title="Backup toàn bộ Thư Viện (.json)"
-              className="p-1.5 hover:bg-slate-100 text-indigo-600 hover:text-indigo-700 rounded-lg border border-slate-200 transition active:scale-95 cursor-pointer flex items-center justify-center"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+      {/* 2. Compact Migration Notice / Banner Component */}
+      <MigrationNotice
+        activeTab={activeTab}
+        user={user}
+        localFoldersCount={folders.length}
+        localLessonsCount={uncategorizedLessons.length}
+        isCloudLoading={isCloudLoading}
+        handleMigrateLocalToCloud={handleMigrateLocalToCloud}
+        showMigrationBanner={showMigrationBanner}
+        setShowMigrationBanner={setShowMigrationBanner}
+      />
 
-        {activeTab === 'cloud' && user && (
-          <button
-            type="button"
-            onClick={fetchCloudData}
-            title="Đồng bộ lại thư viện đám mây"
-            className="p-1.5 hover:bg-slate-100 text-indigo-600 rounded-lg border border-slate-200 transition active:scale-95 cursor-pointer flex items-center justify-center"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isCloudLoading ? 'animate-spin' : ''}`} />
-          </button>
-        )}
-      </div>
-
-      {/* Tab Switcher */}
-      <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold">
-        <button
-          type="button"
-          onClick={() => setActiveTab('cloud')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg transition cursor-pointer select-none ${
-            activeTab === 'cloud'
-              ? 'bg-white text-indigo-700 shadow-2xs'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Cloud className="w-3.5 h-3.5" />
-          <span>Tài khoản đám mây</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('local')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg transition cursor-pointer select-none ${
-            activeTab === 'local'
-              ? 'bg-white text-indigo-700 shadow-2xs'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Laptop className="w-3.5 h-3.5" />
-          <span>Bản nháp trên máy này</span>
-        </button>
-      </div>
-
-      {/* Local Tab draft warning banner */}
-      {activeTab === 'local' && (
-        <div className="bg-amber-50/60 border border-amber-200/80 p-3 rounded-xl mb-4 text-[11px] animate-fadeIn">
-          <div className="flex items-start gap-2.5">
-            <div className="p-1 bg-amber-100 text-amber-700 rounded-md shrink-0 mt-0.5">
-              <Laptop className="w-3.5 h-3.5" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-bold text-amber-900">Bản nháp trên máy này</h4>
-              <p className="text-amber-800 mt-0.5 leading-relaxed">
-                Các bài học trong mục này chỉ lưu tạm trong trình duyệt hiện tại của thiết bị này. Để tránh mất mát dữ liệu và học tập trên các thiết bị khác, hãy chuyển chúng lên tài khoản đám mây Google.
-              </p>
-              {user && (folders.length > 0 || uncategorizedLessons.length > 0) && (
-                <div className="flex items-center gap-1.5 mt-2">
-                  <button
-                    type="button"
-                    onClick={handleMigrateLocalToCloud}
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-2.5 py-1 rounded-md text-[10px] transition active:scale-95 cursor-pointer flex items-center gap-1 shadow-xs"
-                  >
-                    {isCloudLoading ? (
-                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                    ) : (
-                      <Cloud className="w-2.5 h-2.5" />
-                    )}
-                    <span>Chuyển tất cả lên đám mây</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Local to Cloud Migration Banner */}
-      {activeTab === 'cloud' && user && (folders.length > 0 || uncategorizedLessons.length > 0) && showMigrationBanner && (
-        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 p-3 rounded-xl mb-4 text-[11px] animate-fadeIn">
-          <div className="flex items-start gap-2.5">
-            <div className="p-1 bg-indigo-100 text-indigo-700 rounded-md shrink-0 mt-0.5">
-              <ArrowUpFromLine className="w-3.5 h-3.5" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-bold text-slate-800">Tải bài học từ máy này lên đám mây?</h4>
-              <p className="text-slate-600 mt-0.5 leading-relaxed">
-                Bạn đang có <strong className="text-indigo-700">{folders.length} thư mục</strong> và <strong className="text-indigo-700">{uncategorizedLessons.length} bài học</strong> lưu tạm trên trình duyệt này. Đồng bộ lên tài khoản Google để lưu trữ đám mây vĩnh viễn và học ở mọi thiết bị.
-              </p>
-              <div className="flex items-center gap-1.5 mt-2">
-                <button
-                  type="button"
-                  onClick={handleMigrateLocalToCloud}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2.5 py-1 rounded-md transition active:scale-95 cursor-pointer flex items-center gap-1"
-                >
-                  {isCloudLoading ? (
-                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                  ) : (
-                    <Cloud className="w-2.5 h-2.5" />
-                  )}
-                  <span>Đồng bộ lên đám mây</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowMigrationBanner(false)}
-                  className="bg-white hover:bg-slate-50 text-slate-500 hover:text-slate-700 border border-slate-200 font-semibold px-2 py-1 rounded-md transition active:scale-95 cursor-pointer"
-                >
-                  Để sau
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* 3. Inline Status Message Alert */}
       {statusMessage && (
-        <div className={`p-2 rounded-lg text-xs font-semibold mb-3 ${
-          statusMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-          statusMessage.type === 'error' ? 'bg-rose-50 text-rose-700 border border-rose-100' :
-          'bg-indigo-50 text-indigo-700 border border-indigo-100'
+        <div className={`p-2 px-3 rounded-xl text-xs font-semibold mb-3 animate-fadeIn ${
+          statusMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100/60' :
+          statusMessage.type === 'error' ? 'bg-rose-50 text-rose-700 border border-rose-100/60' :
+          'bg-indigo-50 text-indigo-700 border border-indigo-100/60'
         }`}>
           {statusMessage.text}
         </div>
       )}
 
-      {/* Cloud Authentication Required View */}
+      {/* 4. Cloud Auth Prompt if Not Authenticated */}
       {activeTab === 'cloud' && !user && (
-        <div className="bg-slate-50/50 border border-slate-150 rounded-xl p-5 text-center">
+        <div id="cloud-auth-prompt" className="bg-slate-50/50 border border-slate-200/65 rounded-2xl p-6 text-center animate-fadeIn my-2">
           <Cloud className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-          <h4 className="font-bold text-slate-750 text-xs">Yêu cầu Đăng nhập Tài khoản</h4>
-          <p className="text-slate-500 text-[10px] mt-1 max-w-[280px] mx-auto leading-relaxed">
-            Đăng nhập bằng tài khoản Google để tự động sao lưu, tạo thư mục và khôi phục các giáo án của bạn trên mọi thiết bị mà không cần file thủ công.
+          <h4 className="font-bold text-slate-800 text-xs">Yêu cầu Đăng nhập Tài khoản</h4>
+          <p className="text-slate-500 text-[10px] mt-1.5 max-w-[320px] mx-auto leading-relaxed">
+            Đăng nhập bằng tài khoản Google để tự động sao lưu, tạo thư mục và đồng bộ các giáo án của bạn trên mọi thiết bị hoàn toàn miễn phí.
           </p>
           <button
             type="button"
+            id="google-signin-btn"
             onClick={signInWithGoogle}
-            className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95 cursor-pointer"
+            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95 cursor-pointer"
           >
             <LogIn className="w-3.5 h-3.5" />
             <span>Đăng nhập bằng Google</span>
           </button>
-          <p className="text-[9px] text-slate-400 mt-2">Bảo mật tuyệt đối, khôi phục tức thì</p>
         </div>
       )}
 
-      {/* Primary Actions Workspace */}
-      {(activeTab === 'local' || (activeTab === 'cloud' && user)) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
-          <button
-            type="button"
-            onClick={() => {
-              setShowSaveLessonForm(!showSaveLessonForm);
-              setShowNewFolderInput(false);
-            }}
-            className={`px-3 py-2 text-xs font-bold rounded-xl border flex items-center justify-center gap-1.5 transition cursor-pointer select-none ${
-              showSaveLessonForm
-                ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-                : 'bg-indigo-600 text-white border-transparent hover:bg-indigo-700 shadow-xs'
-            }`}
-          >
-            {showSaveLessonForm ? (
-              <>
-                <X className="w-3.5 h-3.5" />
-                Đóng form lưu
-              </>
-            ) : (
-              <>
-                <Save className="w-3.5 h-3.5" />
-                {activeTab === 'cloud' ? 'Lưu lên tài khoản đám mây' : 'Lưu bản nháp trên máy này'}
-              </>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setShowNewFolderInput(!showNewFolderInput);
-              setShowSaveLessonForm(false);
-            }}
-            className="px-3 py-2 text-xs font-semibold bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-slate-700 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
-          >
-            <FolderPlus className="w-3.5 h-3.5 text-slate-500" />
-            Tạo thư mục mới
-          </button>
-        </div>
-      )}
-
-      {/* Form: Save Current Lesson */}
-      {(activeTab === 'local' || (activeTab === 'cloud' && user)) && showSaveLessonForm && (
-        <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl mb-4 space-y-2.5 animate-fadeIn">
-          <h4 className="text-xs font-bold text-indigo-850 flex items-center gap-1">
+      {/* 5. Save Current Lesson Form */}
+      {((activeTab === 'local') || (activeTab === 'cloud' && user)) && showSaveLessonForm && (
+        <div id="save-lesson-form" className="p-4 bg-indigo-50/40 border border-indigo-100/60 rounded-xl mb-4 space-y-3 animate-fadeIn">
+          <h4 className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            Lưu văn bản đang soạn thành bài giảng mới ({activeTab === 'cloud' ? 'Lưu lên tài khoản đám mây' : 'Lưu bản nháp trên máy'}):
+            <span>Lưu văn bản đang soạn thành bài giảng mới:</span>
           </h4>
           
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Tên bài học</label>
-            <input 
-              type="text" 
-              placeholder="Ví dụ: Bài đọc quả táo, pop corn..."
-              value={newLessonTitle}
-              onChange={(e) => setNewLessonTitle(e.target.value)}
-              className="w-full text-xs font-sans bg-white border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider font-extrabold text-slate-450 mb-1">Tên bài học</label>
+              <input 
+                type="text" 
+                id="save-lesson-title-input"
+                placeholder="Ví dụ: Bài đọc quả táo, Tiếng Anh Du Lịch..."
+                value={newLessonTitle}
+                onChange={(e) => setNewLessonTitle(e.target.value)}
+                className="w-full text-xs font-sans bg-white border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase tracking-wider font-extrabold text-slate-450 mb-1">Thư mục chứa</label>
+              <select
+                id="save-lesson-folder-select"
+                value={targetFolderId}
+                onChange={(e) => setTargetFolderId(e.target.value)}
+                className="w-full text-xs bg-white border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="unassigned">-- Chưa phân loại (Bài lẻ) --</option>
+                {activeTab === 'cloud' ? (
+                  cloudFolders.map(f => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))
+                ) : (
+                  folders.map(f => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))
+                )}
+              </select>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Chọn thư mục chứa</label>
-            <select
-              value={targetFolderId}
-              onChange={(e) => setTargetFolderId(e.target.value)}
-              className="w-full text-xs bg-white border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="unassigned">-- Không xếp thư mục (Chưa phân loại) --</option>
-              {activeTab === 'cloud' ? (
-                cloudFolders.map(f => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))
-              ) : (
-                folders.map(f => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))
-              )}
-            </select>
-          </div>
-
-          <div className="p-2 bg-white/70 border border-indigo-100 rounded-lg text-[10px] text-indigo-700 leading-relaxed font-medium">
-            💡 <strong>Tự động lưu kèm:</strong> Toàn bộ cấu hình bài học (Tốc độ, thời gian nghỉ / delay, chế độ giọng đọc, tuỳ chọn giọng ngôn ngữ) cùng các liên kết <strong>hình ảnh của từng từ/câu thoại</strong> sẽ được tự động đính kèm và khôi phục khi nạp lại.
+          <div className="text-[10px] text-indigo-700/80 leading-relaxed font-medium bg-white/50 border border-indigo-100/40 p-2.5 rounded-lg">
+            💡 Tự động đính kèm và đồng bộ: Tốc độ đọc, thời gian nghỉ, giọng đọc và các liên kết hình ảnh minh họa cho từng từ thoại.
           </div>
 
           <div className="flex gap-2 justify-end pt-1">
             <button
               type="button"
+              id="cancel-save-lesson-btn"
               onClick={() => setShowSaveLessonForm(false)}
-              className="px-2.5 py-1 text-[10px] font-bold text-slate-500 hover:bg-slate-200/50 rounded-lg transition"
+              className="px-3 py-1.5 text-[10px] font-bold text-slate-500 hover:bg-slate-200/50 rounded-lg transition cursor-pointer"
             >
               Hủy
             </button>
             <button
               type="button"
+              id="submit-save-lesson-btn"
               onClick={activeTab === 'cloud' ? handleSaveCurrentCloudLesson : handleSaveCurrentLesson}
-              className="px-3 py-1 text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-xs transition cursor-pointer"
+              className="px-3.5 py-1.5 text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-2xs transition cursor-pointer"
             >
-              {isCloudLoading ? 'Đang lưu...' : (activeTab === 'cloud' ? 'Lưu lên đám mây' : 'Lưu bản nháp')}
+              Lưu bài giảng
             </button>
           </div>
         </div>
       )}
 
-      {/* Form: Create Folder */}
-      {(activeTab === 'local' || (activeTab === 'cloud' && user)) && showNewFolderInput && (
-        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl mb-4 space-y-2.5 animate-fadeIn">
-          <h4 className="text-xs font-bold text-slate-700">Tạo tên thư mục mới ({activeTab === 'cloud' ? 'Thư mục đám mây' : 'Thư mục nháp'}):</h4>
-          <div className="flex gap-1.5">
+      {/* 6. Create Folder Form */}
+      {((activeTab === 'local') || (activeTab === 'cloud' && user)) && showNewFolderInput && (
+        <div id="create-folder-form" className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-xl mb-4 space-y-2.5 animate-fadeIn">
+          <h4 className="text-xs font-bold text-slate-700">Tạo thư mục mới trong thư viện:</h4>
+          <div className="flex gap-2">
             <input 
               type="text" 
-              placeholder="Nhập tên thư mục..."
+              id="new-folder-name-input"
+              placeholder="Ví dụ: Du lịch, Giao tiếp song ngữ..."
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
               className="flex-1 text-xs font-sans bg-white border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
@@ -1024,410 +945,100 @@ export default function LessonLibrary({
             />
             <button
               type="button"
+              id="submit-create-folder-btn"
               onClick={activeTab === 'cloud' ? handleCreateCloudFolder : handleCreateFolder}
-              className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 text-xs font-bold rounded-lg transition cursor-pointer"
+              className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 text-xs font-bold rounded-lg transition cursor-pointer"
             >
-              Tạo
+              Tạo mới
             </button>
           </div>
         </div>
       )}
 
-      {/* MAIN LIST OF FOLDERS & ACCORDIONS */}
-      <div className="space-y-2 max-h-[350px] overflow-y-auto scrollbar-thin pr-1">
-        
-        {isCloudLoading && (
-          <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
-            <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-            <span className="text-[10px] font-bold">Đang tải dữ liệu đám mây...</span>
-          </div>
-        )}
+      {/* 7. Loading state spinner */}
+      {isCloudLoading && (
+        <div id="library-loading-spinner" className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2">
+          <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+          <span className="text-[11px] font-bold">Đang cập nhật thư viện đám mây...</span>
+        </div>
+      )}
 
-        {!isCloudLoading && (
-          <>
-            {(() => {
-              const displayFolders = activeTab === 'cloud' 
-                ? cloudFolders.map(cf => ({
-                    id: cf.id,
-                    name: cf.name,
-                    lessons: cloudLessons.filter(cl => cl.folderId === cf.id).map(cl => ({
-                      id: cl.id,
-                      title: cl.title,
-                      rawText: cl.rawText,
-                      speechList: cl.speechList,
-                      settings: cl.settings,
-                      createdAt: cl.createdAt
-                    }))
-                  }))
-                : folders;
+      {/* 8. Main Library Content Renderer (Gallery or List View) */}
+      {!isCloudLoading && (activeTab !== 'cloud' || user) && (
+        viewMode === 'gallery' ? (
+          <LibraryGallery
+            folders={filteredFolders}
+            uncategorizedLessons={filteredUncategorized}
+            selectedFolderId={selectedFolderId}
+            setSelectedFolderId={setSelectedFolderId}
+            activeTab={activeTab}
+            editingFolderId={editingFolderId}
+            editingFolderName={editingFolderName}
+            setEditingFolderName={setEditingFolderName}
+            handleStartRenameFolder={handleStartRenameFolder}
+            handleSaveRenameFolder={handleSaveRenameFolder}
+            handleSaveRenameCloudFolder={handleSaveRenameCloudFolder}
+            setEditingFolderId={setEditingFolderId}
+            editingLessonId={editingLessonId}
+            editingLessonTitle={editingLessonTitle}
+            setEditingLessonTitle={setEditingLessonTitle}
+            handleStartRenameLesson={handleStartRenameLesson}
+            handleSaveRenameLesson={handleSaveRenameLesson}
+            handleSaveRenameCloudLesson={handleSaveRenameCloudLesson}
+            setEditingLessonId={setEditingLessonId}
+            setDeleteConfirmTarget={setDeleteConfirmTarget}
+            onLoadLesson={activeTab === 'cloud' ? handleLoadCloudLesson : handleLoadLesson}
+          />
+        ) : (
+          <LibraryList
+            folders={filteredFolders}
+            uncategorizedLessons={filteredUncategorized}
+            selectedFolderId={selectedFolderId}
+            setSelectedFolderId={setSelectedFolderId}
+            activeTab={activeTab}
+            editingFolderId={editingFolderId}
+            editingFolderName={editingFolderName}
+            setEditingFolderName={setEditingFolderName}
+            handleStartRenameFolder={handleStartRenameFolder}
+            handleSaveRenameFolder={handleSaveRenameFolder}
+            handleSaveRenameCloudFolder={handleSaveRenameCloudFolder}
+            setEditingFolderId={setEditingFolderId}
+            editingLessonId={editingLessonId}
+            editingLessonTitle={editingLessonTitle}
+            setEditingLessonTitle={setEditingLessonTitle}
+            handleStartRenameLesson={handleStartRenameLesson}
+            handleSaveRenameLesson={handleSaveRenameLesson}
+            handleSaveRenameCloudLesson={handleSaveRenameCloudLesson}
+            setEditingLessonId={setEditingLessonId}
+            setDeleteConfirmTarget={setDeleteConfirmTarget}
+            onLoadLesson={activeTab === 'cloud' ? handleLoadCloudLesson : handleLoadLesson}
+          />
+        )
+      )}
 
-              const displayUncategorized = activeTab === 'cloud'
-                ? cloudLessons.filter(cl => cl.folderId === null).map(cl => ({
-                    id: cl.id,
-                    title: cl.title,
-                    rawText: cl.rawText,
-                    speechList: cl.speechList,
-                    settings: cl.settings,
-                    createdAt: cl.createdAt
-                  }))
-                : uncategorizedLessons;
-
-              if (displayFolders.length === 0 && displayUncategorized.length === 0) {
-                return (
-                  <div className="text-center py-8 text-slate-400 text-xs">
-                    {activeTab === 'cloud' 
-                      ? 'Thư viện đám mây trống. Hãy bấm "Lưu bài hiện tại" để đồng bộ!'
-                      : 'Thư viện máy trống. Hãy bắt đầu bằng cách lưu bài đang soạn!'}
-                  </div>
-                );
-              }
-
-              return (
-                <>
-                  {/* Dynamic Folders */}
-                  {displayFolders.map(folder => {
-                    const isExpanded = !!expandedFolders[folder.id];
-                    const isEditing = editingFolderId === folder.id;
-
-                    return (
-                      <div key={folder.id} className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50/30">
-                        {/* Folder main bar */}
-                        <div 
-                          className="flex items-center justify-between p-2.5 hover:bg-slate-50 transition-colors cursor-pointer select-none"
-                          onClick={() => {
-                            if (!isEditing) toggleFolder(folder.id);
-                          }}
-                        >
-                          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                            <div className="text-slate-400">
-                              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                            </div>
-                            <div className={isExpanded ? "text-indigo-600" : "text-slate-500"}>
-                              <Folder className="w-4 h-4 fill-current opacity-80" />
-                            </div>
-                            
-                            {isEditing ? (
-                              <input
-                                type="text"
-                                value={editingFolderName}
-                                onChange={(e) => setEditingFolderName(e.target.value)}
-                                className="text-xs bg-white border border-indigo-455 focus:ring-1 focus:ring-indigo-500 rounded p-1 font-bold text-slate-800 flex-1"
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') activeTab === 'cloud' ? handleSaveRenameCloudFolder() : handleSaveRenameFolder();
-                                  if (e.key === 'Escape') setEditingFolderId(null);
-                                }}
-                                autoFocus
-                              />
-                            ) : (
-                              <span className="text-xs font-bold text-slate-700 truncate">
-                                {folder.name}
-                                <span className="text-[10px] text-slate-400 ml-1.5 font-normal">({folder.lessons.length} bài)</span>
-                              </span>
-                            )}
-                          </div>
-
-
-                          {/* Folder Actions */}
-                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                            {isEditing ? (
-                              <>
-                                <button 
-                                  type="button" 
-                                  onClick={activeTab === 'cloud' ? handleSaveRenameCloudFolder : handleSaveRenameFolder}
-                                  className="p-1 text-emerald-650 hover:bg-emerald-50 rounded cursor-pointer"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
-                                <button 
-                                  type="button" 
-                                  onClick={() => setEditingFolderId(null)}
-                                  className="p-1 text-rose-650 hover:bg-rose-50 rounded cursor-pointer"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartRenameFolder(folder.id, folder.name)}
-                                  className="p-1 text-slate-400 hover:text-slate-650 hover:bg-slate-100 rounded cursor-pointer"
-                                  title="Đổi tên thư mục"
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                </button>
-                                
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setDeleteConfirmTarget({
-                                      type: 'folder',
-                                      id: folder.id,
-                                      title: folder.name
-                                    });
-                                  }}
-                                  className="p-1 text-slate-400 hover:text-rose-650 hover:bg-rose-50 rounded cursor-pointer"
-                                  title="Xóa thư mục"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Folder child lessons block */}
-                        {isExpanded && (
-                          <div className="bg-white border-t border-slate-100/80 p-1.5 pl-5 space-y-1 animate-fadeIn duration-150">
-                            {folder.lessons.length === 0 ? (
-                              <div className="text-[10px] text-slate-400 py-2 pl-3">
-                                Thư mục này rỗng. Nhấp "Lưu bài hiện tại" để thêm bài.
-                              </div>
-                            ) : (
-                              folder.lessons.map(lesson => {
-                                const isLessonEditing = editingLessonId === lesson.id;
-                                const lineCount = lesson.rawText.split('\n').filter(l => l.trim().length > 0).length;
-
-                                return (
-                                  <div key={lesson.id} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 select-none group border border-transparent hover:border-slate-100">
-                                    <div className="flex items-center gap-1.5 flex-1 min-w-0 pr-1.5">
-                                      <div className="text-slate-400 flex-shrink-0">
-                                        <FileText className="w-3.5 h-3.5" />
-                                      </div>
-
-                                      {isLessonEditing ? (
-                                        <input
-                                          type="text"
-                                          value={editingLessonTitle}
-                                          onChange={(e) => setEditingLessonTitle(e.target.value)}
-                                          className="text-[11px] bg-white border border-indigo-400 rounded px-1.5 py-0.5 text-slate-800 flex-1"
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') activeTab === 'cloud' ? handleSaveRenameCloudLesson() : handleSaveRenameLesson(folder.id);
-                                            if (e.key === 'Escape') setEditingLessonId(null);
-                                          }}
-                                          autoFocus
-                                        />
-                                      ) : (
-                                        <div 
-                                          className="flex-1 min-w-0 cursor-pointer"
-                                          onClick={() => activeTab === 'cloud' ? handleLoadCloudLesson(lesson as any) : handleLoadLesson(lesson)}
-                                          title="Click để tải bài giảng phát âm này"
-                                        >
-                                          <span className="text-xs text-slate-650 hover:text-indigo-650 font-medium truncate block">
-                                            {lesson.title}
-                                          </span>
-                                          <span className="text-[9px] text-slate-400 block">
-                                            {lineCount} dòng • {new Date(lesson.createdAt).toLocaleDateString('vi-VN')}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div className="flex items-center gap-1 shrink-0 opacity-80 md:opacity-40 group-hover:opacity-100 transition-opacity">
-                                      {isLessonEditing ? (
-                                        <>
-                                          <button
-                                            type="button"
-                                            onClick={() => activeTab === 'cloud' ? handleSaveRenameCloudLesson() : handleSaveRenameLesson(folder.id)}
-                                            className="p-1 text-emerald-650 hover:bg-emerald-50 rounded cursor-pointer"
-                                          >
-                                            <Check className="w-3 h-3" />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => setEditingLessonId(null)}
-                                            className="p-1 text-rose-650 hover:bg-rose-50 rounded cursor-pointer"
-                                          >
-                                            <X className="w-3 h-3" />
-                                          </button>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <button
-                                            type="button"
-                                            onClick={() => activeTab === 'cloud' ? handleLoadCloudLesson(lesson as any) : handleLoadLesson(lesson)}
-                                            className="p-1 text-indigo-600 hover:bg-indigo-50 rounded text-[9px] font-bold px-1.5 cursor-pointer"
-                                            title="Nạp bài giảng"
-                                          >
-                                            Nạp
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => handleStartRenameLesson(lesson.id, lesson.title)}
-                                            className="p-1 text-slate-400 hover:text-slate-650 hover:bg-slate-100 rounded cursor-pointer"
-                                            title="Đổi tên"
-                                          >
-                                            <Edit2 className="w-2.5 h-2.5" />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setDeleteConfirmTarget({
-                                                type: 'lesson',
-                                                id: lesson.id,
-                                                title: lesson.title,
-                                                folderId: folder.id
-                                              });
-                                            }}
-                                            className="p-1 text-slate-400 hover:text-rose-650 hover:bg-rose-50 rounded cursor-pointer"
-                                            title="Xóa bài học"
-                                          >
-                                            <Trash2 className="w-2.5 h-2.5" />
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-        {/* Uncategorized / No-Folder Lessons list */}
-        {displayUncategorized.length > 0 && (
-          <div className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50/20">
-            <div className="p-2 flex items-center justify-between text-slate-500 text-xs font-bold leading-normal">
-              <span className="flex items-center gap-1.5 pl-1.5">
-                <FileDown className="w-4 h-4 text-slate-400" />
-                Chưa Phân Loại
-                <span className="text-[10px] text-slate-400 font-normal">({displayUncategorized.length} bài)</span>
-              </span>
-            </div>
-
-            <div className="bg-white border-t border-slate-100 p-1.5 space-y-1">
-              {displayUncategorized.map(lesson => {
-                const isLessonEditing = editingLessonId === lesson.id;
-                const lineCount = lesson.rawText.split('\n').filter(l => l.trim().length > 0).length;
-
-                return (
-                  <div key={lesson.id} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 select-none group border border-transparent hover:border-slate-100">
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0 pr-1.5">
-                      <div className="text-slate-400 flex-shrink-0">
-                        <FileText className="w-3.5 h-3.5" />
-                      </div>
-
-                      {isLessonEditing ? (
-                        <input
-                          type="text"
-                          value={editingLessonTitle}
-                          onChange={(e) => setEditingLessonTitle(e.target.value)}
-                          className="text-[11px] bg-white border border-indigo-400 rounded px-1.5 py-0.5 text-slate-800 flex-1"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') activeTab === 'cloud' ? handleSaveRenameCloudLesson() : handleSaveRenameLesson();
-                            if (e.key === 'Escape') setEditingLessonId(null);
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <div 
-                          className="flex-1 min-w-0 cursor-pointer"
-                          onClick={() => activeTab === 'cloud' ? handleLoadCloudLesson(lesson as any) : handleLoadLesson(lesson)}
-                          title="Click để tải bài giảng phát âm này"
-                        >
-                          <span className="text-xs text-slate-650 hover:text-indigo-650 font-medium truncate block">
-                            {lesson.title}
-                          </span>
-                          <span className="text-[9px] text-slate-400 block">
-                            {lineCount} dòng • {new Date(lesson.createdAt).toLocaleDateString('vi-VN')}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0 opacity-80 md:opacity-40 group-hover:opacity-100 transition-opacity">
-                      {isLessonEditing ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => activeTab === 'cloud' ? handleSaveRenameCloudLesson() : handleSaveRenameLesson()}
-                            className="p-1 text-emerald-650 hover:bg-emerald-50 rounded cursor-pointer"
-                          >
-                            <Check className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingLessonId(null)}
-                            className="p-1 text-rose-650 hover:bg-rose-50 rounded cursor-pointer"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => activeTab === 'cloud' ? handleLoadCloudLesson(lesson as any) : handleLoadLesson(lesson)}
-                            className="p-1 text-indigo-600 hover:bg-indigo-50 rounded text-[9px] font-bold px-1.5 cursor-pointer"
-                            title="Nạp bài giảng"
-                          >
-                            Nạp
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleStartRenameLesson(lesson.id, lesson.title)}
-                            className="p-1 text-slate-400 hover:text-slate-650 hover:bg-slate-100 rounded cursor-pointer"
-                            title="Đổi tên"
-                          >
-                            <Edit2 className="w-2.5 h-2.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDeleteConfirmTarget({
-                                type: 'lesson',
-                                id: lesson.id,
-                                title: lesson.title
-                              });
-                            }}
-                            className="p-1 text-slate-400 hover:text-rose-650 hover:bg-rose-50 rounded cursor-pointer"
-                            title="Xóa bài học"
-                          >
-                            <Trash2 className="w-2.5 h-2.5" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-                </>
-              );
-            })()}
-          </>
-        )}
-      </div>
-
-      {/* Custom Deletion Confirmation Dialog Modal */}
+      {/* 9. Custom Deletion Confirmation Dialog Modal */}
       {deleteConfirmTarget && (
         <div id="delete-confirm-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-100 animate-scaleUp text-left">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-150 animate-scaleUp text-left">
             <div className="flex items-start gap-3">
               <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shrink-0">
                 <Trash2 className="w-5 h-5" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-xs font-bold text-slate-900">
+                <h4 className="text-xs font-extrabold text-slate-900">
                   {deleteConfirmTarget.type === 'folder' ? 'Xác nhận xóa thư mục?' : 'Xác nhận xóa bài học?'}
                 </h4>
-                <p className="text-[11px] text-slate-550 mt-1.5 leading-relaxed">
+                <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
                   {deleteConfirmTarget.type === 'folder' ? (
                     <>
-                      Bạn đang xóa thư mục <strong className="text-slate-800">"{deleteConfirmTarget.title}"</strong>. Hãy chọn cách xử lý cho các bài học bên trong:
+                      Bạn đang xóa thư mục <strong className="text-slate-850">"{deleteConfirmTarget.title}"</strong>. Hãy chọn cách xử lý cho các bài học bên trong:
                     </>
                   ) : (
                     <>
-                      Bạn có chắc chắn muốn xóa vĩnh viễn bài giảng <strong className="text-slate-800">"{deleteConfirmTarget.title}"</strong> không? Hành động này không thể hoàn tác.
+                      Bạn có chắc chắn muốn xóa vĩnh viễn bài giảng <strong className="text-slate-850">"{deleteConfirmTarget.title}"</strong> không? Hành động này không thể hoàn tác.
                     </>
                   )}
-                </p>
+                </div>
               </div>
             </div>
 
@@ -1436,6 +1047,7 @@ export default function LessonLibrary({
                 <div className="space-y-1.5 w-full">
                   <button
                     type="button"
+                    id="confirm-delete-folder-keep-lessons-btn"
                     onClick={() => {
                       if (activeTab === 'cloud') {
                         handleDeleteCloudFolder(deleteConfirmTarget.id, true);
@@ -1444,12 +1056,13 @@ export default function LessonLibrary({
                       }
                       setDeleteConfirmTarget(null);
                     }}
-                    className="w-full px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-650 text-slate-700 rounded-lg text-[10px] font-semibold cursor-pointer text-center border border-transparent transition"
+                    className="w-full px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-650 text-slate-700 rounded-lg text-[10px] font-bold cursor-pointer text-center border border-transparent transition"
                   >
                     Xóa thư mục (Giữ các bài trong "Chưa Phân Loại")
                   </button>
                   <button
                     type="button"
+                    id="confirm-delete-folder-all-btn"
                     onClick={() => {
                       if (activeTab === 'cloud') {
                         handleDeleteCloudFolder(deleteConfirmTarget.id, false);
@@ -1458,14 +1071,15 @@ export default function LessonLibrary({
                       }
                       setDeleteConfirmTarget(null);
                     }}
-                    className="w-full px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-semibold cursor-pointer text-center transition"
+                    className="w-full px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold cursor-pointer text-center transition"
                   >
                     Xóa tất cả (Thư mục & Bài học bên trong)
                   </button>
                   <button
                     type="button"
+                    id="cancel-delete-folder-btn"
                     onClick={() => setDeleteConfirmTarget(null)}
-                    className="w-full px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 rounded-lg text-[10px] font-semibold cursor-pointer text-center transition"
+                    className="w-full px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 rounded-lg text-[10px] font-bold cursor-pointer text-center transition"
                   >
                     Hủy bỏ
                   </button>
@@ -1474,13 +1088,15 @@ export default function LessonLibrary({
                 <div className="flex items-center justify-end gap-2">
                   <button
                     type="button"
+                    id="cancel-delete-lesson-btn"
                     onClick={() => setDeleteConfirmTarget(null)}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-semibold cursor-pointer text-center transition"
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-650 rounded-lg text-[10px] font-bold cursor-pointer text-center transition"
                   >
                     Hủy bỏ
                   </button>
                   <button
                     type="button"
+                    id="confirm-delete-lesson-btn"
                     onClick={() => {
                       if (activeTab === 'cloud') {
                         handleDeleteCloudLesson(deleteConfirmTarget.id);
@@ -1489,7 +1105,7 @@ export default function LessonLibrary({
                       }
                       setDeleteConfirmTarget(null);
                     }}
-                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-semibold cursor-pointer text-center transition"
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold cursor-pointer text-center transition"
                   >
                     Xóa vĩnh viễn
                   </button>
