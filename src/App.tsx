@@ -42,6 +42,7 @@ import { useGeminiApiKey } from './features/premium-tts/useGeminiApiKey';
 import { usePremiumTts } from './features/premium-tts/usePremiumTts';
 import { getPremiumVoiceForLang } from './features/premium-tts/premiumVoices';
 import { usePremiumVoiceSettings } from './features/premium-tts/usePremiumVoiceSettings';
+import { premiumTtsCacheStore } from './features/premium-tts/premiumTtsCacheStore';
 import ImageSearchModal from './components/ImageSearchModal';
 import TheaterPlayer from './components/TheaterPlayer';
 import ShareModal from './components/ShareModal';
@@ -774,6 +775,11 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
   } = useGeminiApiKey();
 
   const { generateTts } = usePremiumTts();
+
+  // Clear premium audio cache when API key changes
+  useEffect(() => {
+    premiumTtsCacheStore.clear();
+  }, [userGeminiApiKey]);
 
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume);
@@ -1596,6 +1602,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
   const handleClearAll = () => {
     handleStopAll();
     setSpeechList([]);
+    premiumTtsCacheStore.clear();
   };
 
   // Apply templates

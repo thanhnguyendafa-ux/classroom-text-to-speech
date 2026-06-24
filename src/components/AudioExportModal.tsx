@@ -19,7 +19,7 @@ import {
 import { SpeechItem, LanguageCode } from '../types';
 import { encodeMonoMp3 } from '../audio/mp3Encoder';
 import { getPremiumVoiceForLang } from '../features/premium-tts/premiumVoices';
-import { generatePremiumTts } from '../features/premium-tts/premiumTtsClient';
+import { premiumTtsCacheStore } from '../features/premium-tts/premiumTtsCacheStore';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -295,8 +295,8 @@ export default function AudioExportModal({
         
         addLog(`Gọi API câu ${i + 1}/${itemsToExport.length} [${itemLang}]: "${item.text.substring(0, 30)}..."`);
         
-        // 1. Fetch from Gemini endpoint using shared helper
-        const audioUrl = await generatePremiumTts({
+        // 1. Fetch from Gemini endpoint using shared helper (utilizing shared cache)
+        const audioUrl = await premiumTtsCacheStore.getOrCreateAudioUrl({
           text: item.text,
           voice: chosenVoice,
           lang: itemLang,
