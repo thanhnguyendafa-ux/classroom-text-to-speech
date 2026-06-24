@@ -86,16 +86,18 @@ interface LessonLibraryProps {
     universalImageUrl: string;
   };
   onLoadLesson: (lesson: SavedLesson) => void;
+  cloudRefreshVersion?: number;
 }
 
 export default function LessonLibrary({ 
   currentRawText, 
   currentSpeechList, 
   currentSettings, 
-  onLoadLesson 
+  onLoadLesson,
+  cloudRefreshVersion
 }: LessonLibraryProps) {
   const { user, signInWithGoogle } = useAuth();
-  const [activeTab, setActiveTab] = useState<'local' | 'cloud'>('local');
+  const [activeTab, setActiveTab] = useState<'local' | 'cloud'>('cloud');
   const [cloudFolders, setCloudFolders] = useState<CloudFolder[]>([]);
   const [cloudLessons, setCloudLessons] = useState<CloudLesson[]>([]);
   const [isCloudLoading, setIsCloudLoading] = useState<boolean>(false);
@@ -126,7 +128,7 @@ export default function LessonLibrary({
     if (user && activeTab === 'cloud') {
       fetchCloudData();
     }
-  }, [user, activeTab]);
+  }, [user, activeTab, cloudRefreshVersion]);
   
   // UI toggles & input states
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
@@ -778,18 +780,6 @@ export default function LessonLibrary({
       <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold">
         <button
           type="button"
-          onClick={() => setActiveTab('local')}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg transition cursor-pointer select-none ${
-            activeTab === 'local'
-              ? 'bg-white text-indigo-700 shadow-2xs'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Laptop className="w-3.5 h-3.5" />
-          <span>Trên máy này</span>
-        </button>
-        <button
-          type="button"
           onClick={() => setActiveTab('cloud')}
           className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg transition cursor-pointer select-none ${
             activeTab === 'cloud'
@@ -800,7 +790,52 @@ export default function LessonLibrary({
           <Cloud className="w-3.5 h-3.5" />
           <span>Tài khoản đám mây</span>
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('local')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg transition cursor-pointer select-none ${
+            activeTab === 'local'
+              ? 'bg-white text-indigo-700 shadow-2xs'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Laptop className="w-3.5 h-3.5" />
+          <span>Bản nháp trên máy này</span>
+        </button>
       </div>
+
+      {/* Local Tab draft warning banner */}
+      {activeTab === 'local' && (
+        <div className="bg-amber-50/60 border border-amber-200/80 p-3 rounded-xl mb-4 text-[11px] animate-fadeIn">
+          <div className="flex items-start gap-2.5">
+            <div className="p-1 bg-amber-100 text-amber-700 rounded-md shrink-0 mt-0.5">
+              <Laptop className="w-3.5 h-3.5" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-bold text-amber-900">Bản nháp trên máy này</h4>
+              <p className="text-amber-800 mt-0.5 leading-relaxed">
+                Các bài học trong mục này chỉ lưu tạm trong trình duyệt hiện tại của thiết bị này. Để tránh mất mát dữ liệu và học tập trên các thiết bị khác, hãy chuyển chúng lên tài khoản đám mây Google.
+              </p>
+              {user && (folders.length > 0 || uncategorizedLessons.length > 0) && (
+                <div className="flex items-center gap-1.5 mt-2">
+                  <button
+                    type="button"
+                    onClick={handleMigrateLocalToCloud}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-2.5 py-1 rounded-md text-[10px] transition active:scale-95 cursor-pointer flex items-center gap-1 shadow-xs"
+                  >
+                    {isCloudLoading ? (
+                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                    ) : (
+                      <Cloud className="w-2.5 h-2.5" />
+                    )}
+                    <span>Chuyển tất cả lên đám mây</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Local to Cloud Migration Banner */}
       {activeTab === 'cloud' && user && (folders.length > 0 || uncategorizedLessons.length > 0) && showMigrationBanner && (
@@ -893,7 +928,7 @@ export default function LessonLibrary({
             ) : (
               <>
                 <Save className="w-3.5 h-3.5" />
-                Lưu bài hiện tại
+                {activeTab === 'cloud' ? 'Lưu lên tài khoản đám mây' : 'Lưu bản nháp trên máy này'}
               </>
             )}
           </button>
@@ -917,7 +952,7 @@ export default function LessonLibrary({
         <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl mb-4 space-y-2.5 animate-fadeIn">
           <h4 className="text-xs font-bold text-indigo-850 flex items-center gap-1">
             <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            Lưu văn bản đang soạn thành bài giảng mới ({activeTab === 'cloud' ? 'Lưu Cloud' : 'Lưu Trên Máy'}):
+            Lưu văn bản đang soạn thành bài giảng mới ({activeTab === 'cloud' ? 'Lưu lên tài khoản đám mây' : 'Lưu bản nháp trên máy'}):
           </h4>
           
           <div>
@@ -968,7 +1003,7 @@ export default function LessonLibrary({
               onClick={activeTab === 'cloud' ? handleSaveCurrentCloudLesson : handleSaveCurrentLesson}
               className="px-3 py-1 text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-xs transition cursor-pointer"
             >
-              {isCloudLoading ? 'Đang lưu...' : 'Xác nhận lưu'}
+              {isCloudLoading ? 'Đang lưu...' : (activeTab === 'cloud' ? 'Lưu lên đám mây' : 'Lưu bản nháp')}
             </button>
           </div>
         </div>
@@ -977,7 +1012,7 @@ export default function LessonLibrary({
       {/* Form: Create Folder */}
       {(activeTab === 'local' || (activeTab === 'cloud' && user)) && showNewFolderInput && (
         <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl mb-4 space-y-2.5 animate-fadeIn">
-          <h4 className="text-xs font-bold text-slate-700">Tạo tên thư mục mới ({activeTab === 'cloud' ? 'Thư mục Cloud' : 'Thư mục trên máy'}):</h4>
+          <h4 className="text-xs font-bold text-slate-700">Tạo tên thư mục mới ({activeTab === 'cloud' ? 'Thư mục đám mây' : 'Thư mục nháp'}):</h4>
           <div className="flex gap-1.5">
             <input 
               type="text" 

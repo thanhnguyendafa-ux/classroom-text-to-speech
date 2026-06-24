@@ -92,7 +92,7 @@ export const LessonBuilderView: React.FC<LessonBuilderViewProps> = ({
             title={currentLessonId ? "Lưu đè thay đổi lên đám mây" : "Lưu bài học mới lên đám mây"}
           >
             <Save className="w-3.5 h-3.5" />
-            <span>{currentLessonId ? 'Lưu thay đổi' : 'Lưu bài học'}</span>
+            <span>{currentLessonId ? 'Lưu thay đổi đám mây' : 'Lưu lên tài khoản đám mây'}</span>
           </button>
 
           {/* Save as copy (only displayed if lesson already exists) */}

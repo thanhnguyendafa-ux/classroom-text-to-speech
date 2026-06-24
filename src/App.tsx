@@ -108,20 +108,48 @@ export default function App() {
   const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
   const [currentLessonTitle, setCurrentLessonTitle] = useState<string>('Bài học mẫu: Bắp rang bơ');
   const [isSavingCloudLesson, setIsSavingCloudLesson] = useState<boolean>(false);
+  const [cloudRefreshVersion, setCloudRefreshVersion] = useState<number>(0);
+  const [toast, setToast] = useState<{
+    type: 'success' | 'error' | 'info';
+    message: string;
+    description?: string;
+    action?: {
+      label: string;
+      onClick: () => void;
+    };
+  } | null>(null);
+
+  const showToast = (
+    type: 'success' | 'error' | 'info',
+    message: string,
+    description?: string,
+    action?: { label: string; onClick: () => void }
+  ) => {
+    setToast({ type, message, description, action });
+  };
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const handleSaveLesson = async () => {
     if (!user) {
-      alert('Vui lòng đăng nhập để lưu bài học lên đám mây.');
+      showToast('error', 'Yêu cầu đăng nhập', 'Vui lòng đăng nhập để lưu bài học lên đám mây.');
       return;
     }
     const trimmedTitle = currentLessonTitle.trim();
     if (!trimmedTitle) {
-      alert('Vui lòng nhập tiêu đề cho bài giảng');
+      showToast('error', 'Thiếu tiêu đề', 'Vui lòng nhập tiêu đề cho bài giảng.');
       return;
     }
     
     if (!rawText.trim()) {
-      alert('Nội dung bài học trống, không thể lưu!');
+      showToast('error', 'Nội dung trống', 'Nội dung bài học trống, không thể lưu!');
       return;
     }
     
@@ -148,7 +176,16 @@ export default function App() {
             universalImageUrl
           }
         });
-        alert(`Đã lưu thay đổi bài học "${trimmedTitle}" thành công!`);
+        setCloudRefreshVersion(prev => prev + 1);
+        showToast(
+          'success',
+          'Đã cập nhật bài học',
+          `Bài học "${trimmedTitle}" đã được cập nhật thành công lên đám mây.`,
+          {
+            label: 'Đi tới Bài học',
+            onClick: () => setActiveSection('lessons')
+          }
+        );
       } else {
         // Create new lesson
         const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -173,11 +210,20 @@ export default function App() {
           folderId: null
         });
         setCurrentLessonId(newId);
-        alert(`Đã lưu bài học đám mây "${trimmedTitle}" thành công!`);
+        setCloudRefreshVersion(prev => prev + 1);
+        showToast(
+          'success',
+          'Đã lưu lên tài khoản đám mây',
+          `Bài học "${trimmedTitle}" đã được tạo thành công trong danh sách của bạn.`,
+          {
+            label: 'Đi tới Bài học',
+            onClick: () => setActiveSection('lessons')
+          }
+        );
       }
     } catch (err) {
       console.error('Error saving lesson:', err);
-      alert('Không thể lưu bài giảng lên đám mây.');
+      showToast('error', 'Lỗi lưu trữ', 'Không thể lưu bài giảng lên đám mây.');
     } finally {
       setIsSavingCloudLesson(false);
     }
@@ -187,7 +233,7 @@ export default function App() {
     if (!user) return;
     const trimmedTitle = `${currentLessonTitle.trim()} (Bản sao)`;
     if (!rawText.trim()) {
-      alert('Nội dung bài học trống, không thể lưu!');
+      showToast('error', 'Nội dung trống', 'Nội dung bài học trống, không thể lưu!');
       return;
     }
     
@@ -216,10 +262,19 @@ export default function App() {
       });
       setCurrentLessonId(newId);
       setCurrentLessonTitle(trimmedTitle);
-      alert(`Đã lưu bản sao bài học "${trimmedTitle}" thành công!`);
+      setCloudRefreshVersion(prev => prev + 1);
+      showToast(
+        'success',
+        'Đã lưu bản sao thành công',
+        `Đã tạo bản sao bài học "${trimmedTitle}" trên tài khoản đám mây của bạn.`,
+        {
+          label: 'Đi tới Bài học',
+          onClick: () => setActiveSection('lessons')
+        }
+      );
     } catch (err) {
       console.error('Error saving lesson copy:', err);
-      alert('Không thể lưu bản sao bài giảng.');
+      showToast('error', 'Lỗi lưu trữ', 'Không thể lưu bản sao bài giảng.');
     } finally {
       setIsSavingCloudLesson(false);
     }
@@ -1762,6 +1817,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
               useUniversalImage,
               universalImageUrl
             }}
+            cloudRefreshVersion={cloudRefreshVersion}
             onLoadLesson={(lesson) => {
               // 1. Restore raw text editor
               setRawText(lesson.rawText);
@@ -2320,6 +2376,54 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
         selectedPremiumVoiceJa={selectedPremiumVoiceJa}
         selectedPremiumVoiceKo={selectedPremiumVoiceKo}
       />
+
+      {/* Sleek Toast Notifications */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-[999] max-w-sm w-full bg-slate-900 border border-slate-800 text-white rounded-2xl shadow-xl p-4 flex gap-3.5 items-start font-sans"
+          >
+            <div className="flex-1 space-y-1">
+              <h4 className="text-xs font-extrabold flex items-center gap-1.5">
+                {toast.type === 'success' && <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />}
+                {toast.type === 'error' && <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />}
+                {toast.type === 'info' && <span className="inline-block w-2.5 h-2.5 rounded-full bg-sky-500 shrink-0" />}
+                {toast.message}
+              </h4>
+              {toast.description && (
+                <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                  {toast.description}
+                </p>
+              )}
+            </div>
+            
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <button 
+                type="button"
+                onClick={() => setToast(null)}
+                className="text-slate-400 hover:text-white p-0.5 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+              {toast.action && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    toast.action?.onClick();
+                    setToast(null);
+                  }}
+                  className="mt-1 text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1.5 rounded-lg transition active:scale-95 cursor-pointer shadow-sm"
+                >
+                  {toast.action.label}
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

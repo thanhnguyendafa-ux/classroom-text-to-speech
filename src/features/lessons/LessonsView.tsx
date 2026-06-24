@@ -21,13 +21,15 @@ interface LessonsViewProps {
     universalImageUrl: string;
   };
   onLoadLesson: (lesson: SavedLesson) => void;
+  cloudRefreshVersion?: number;
 }
 
 export const LessonsView: React.FC<LessonsViewProps> = ({
   currentRawText,
   currentSpeechList,
   currentSettings,
-  onLoadLesson
+  onLoadLesson,
+  cloudRefreshVersion
 }) => {
   return (
     <div id="lessons-view-container" className="max-w-5xl mx-auto space-y-6">
@@ -50,6 +52,7 @@ export const LessonsView: React.FC<LessonsViewProps> = ({
             currentSpeechList={currentSpeechList}
             currentSettings={currentSettings}
             onLoadLesson={onLoadLesson}
+            cloudRefreshVersion={cloudRefreshVersion}
           />
         </div>
       </div>
