@@ -64,10 +64,10 @@ service cloud.firestore {
           && (!data.keys().hasAny(['settings']) || data.settings is map);
     }
 
-    // Public Playlist creation and reading (unchanged and secure)
+    // Public Playlist creation and reading (now requires auth to maintain private domain)
     match /playlists/{playlistId} {
-      allow get: if isValidId(playlistId);
-      allow create: if isValidId(playlistId) && isValidPlaylist(incoming());
+      allow get: if request.auth != null && isValidId(playlistId);
+      allow create: if request.auth != null && isValidId(playlistId) && isValidPlaylist(incoming());
       allow update, delete: if false;
     }
 

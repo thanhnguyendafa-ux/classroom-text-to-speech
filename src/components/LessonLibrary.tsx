@@ -157,9 +157,29 @@ export default function LessonLibrary({
   // Load library from local storage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedFoldersJson = localStorage.getItem('library_folders');
-      const savedUncategorizedJson = localStorage.getItem('library_uncategorized');
-      const seedVersion = localStorage.getItem('library_seed_version_v3');
+      const uid = user ? user.uid : 'global';
+      const foldersKey = `library_folders_${uid}`;
+      const uncategorizedKey = `library_uncategorized_${uid}`;
+      const seedKey = `library_seed_version_v3_${uid}`;
+
+      let savedFoldersJson = localStorage.getItem(foldersKey);
+      let savedUncategorizedJson = localStorage.getItem(uncategorizedKey);
+      let seedVersion = localStorage.getItem(seedKey);
+
+      // Migrating legacy data if exists for this user
+      if (!savedFoldersJson && !savedUncategorizedJson && user) {
+        const legacyFolders = localStorage.getItem('library_folders');
+        const legacyUncategorized = localStorage.getItem('library_uncategorized');
+        if (legacyFolders || legacyUncategorized) {
+          savedFoldersJson = legacyFolders;
+          savedUncategorizedJson = legacyUncategorized;
+          seedVersion = localStorage.getItem('library_seed_version_v3');
+          
+          if (savedFoldersJson) localStorage.setItem(foldersKey, savedFoldersJson);
+          if (savedUncategorizedJson) localStorage.setItem(uncategorizedKey, savedUncategorizedJson);
+          if (seedVersion) localStorage.setItem(seedKey, seedVersion || 'true');
+        }
+      }
       
       if (seedVersion === 'true' && (savedFoldersJson || savedUncategorizedJson)) {
         if (savedFoldersJson) {
@@ -217,15 +237,15 @@ export default function LessonLibrary({
         
         setFolders(initialFolders);
         setUncategorizedLessons(initialUncategorized);
-        localStorage.setItem('library_folders', JSON.stringify(initialFolders));
-        localStorage.setItem('library_uncategorized', JSON.stringify(initialUncategorized));
-        localStorage.setItem('library_seed_version_v3', 'true');
+        localStorage.setItem(foldersKey, JSON.stringify(initialFolders));
+        localStorage.setItem(uncategorizedKey, JSON.stringify(initialUncategorized));
+        localStorage.setItem(seedKey, 'true');
         
         // Expand the seed folder by default
         setExpandedFolders({ 'folder-seed-v3': true });
       }
     }
-  }, []);
+  }, [user]);
 
   const flashMessage = (text: string, type: 'success' | 'error' | 'info') => {
     setStatusMessage({ text, type });
@@ -431,8 +451,9 @@ export default function LessonLibrary({
 
   // Helper to persist to localStorage
   const saveToStorage = (updatedFolders: SavedFolder[], updatedUncategorized: SavedLesson[]) => {
-    localStorage.setItem('library_folders', JSON.stringify(updatedFolders));
-    localStorage.setItem('library_uncategorized', JSON.stringify(updatedUncategorized));
+    const uid = user ? user.uid : 'global';
+    localStorage.setItem(`library_folders_${uid}`, JSON.stringify(updatedFolders));
+    localStorage.setItem(`library_uncategorized_${uid}`, JSON.stringify(updatedUncategorized));
   };
 
   // Folders management
