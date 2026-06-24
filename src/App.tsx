@@ -53,6 +53,8 @@ import { PlaybackController } from './components/PlaybackController';
 import { SpeechListBoard } from './components/SpeechListBoard';
 import CompactHeader from './components/CompactHeader';
 import AppWorkspace from './components/AppWorkspace';
+import { useSharedPlaylistLoader } from './features/shared-playlist/useSharedPlaylistLoader';
+import SharedPlaylistBanner from './features/shared-playlist/SharedPlaylistBanner';
 
 
 // Helper regex to detect language characters
@@ -674,69 +676,26 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
     };
   }, []);
 
-  const [shareLoading, setShareLoading] = useState<boolean>(false);
-
-  // Load shared playlist configurations on app mount
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const shareId = params.get('share');
-    if (!shareId) {
-      // Auto-create initial playlist with the default raw text
-      handleCreateList();
-      return;
-    }
-
-    const loadSharedPlaylist = async () => {
-      setShareLoading(true);
-      try {
-        const res = await fetch(`/api/share-playlist/${shareId}`);
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Không thể tìm thấy liên kết chia sẻ.");
-        }
-        const data = await res.json();
-        
-        // Populate state values
-        if (Array.isArray(data.speechList)) {
-          setSpeechList(data.speechList);
-          setRawText(data.speechList.map((item: any) => item.text).join('\n'));
-        }
-        if (typeof data.speed === 'number') {
-          setSpeed(data.speed);
-        }
-        if (typeof data.volume === 'number') {
-          setVolume(data.volume);
-        }
-        if (typeof data.autoAdvance === 'boolean') {
-          setAutoAdvance(data.autoAdvance);
-        }
-        if (typeof data.timeBetweenLines === 'number') {
-          setTimeBetweenLines(data.timeBetweenLines);
-        }
-        if (data.playlistLoopMode === 'once' || data.playlistLoopMode === 'infinite') {
-          handlePlaylistLoopModeChange(data.playlistLoopMode);
-        }
-        if (data.engineMode === 'browser' || data.engineMode === 'premium') {
-          setEngineMode(data.engineMode);
-        }
-
-        // Clean the address bar parameters perfectly without full-reloading
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, '', newUrl);
-
-        // Alert user
-        alert("🎉 Đã tải thành công chuỗi bài học luyện tiếng được chia sẻ công khai!");
-      } catch (err: any) {
-        console.error("Shared playlist loading error:", err);
-        alert(`Không thể tải bài tập chia sẻ: ${err.message || "Rất tiếc, đã có lỗi xảy ra."}`);
-      } finally {
-        setShareLoading(false);
-      }
-    };
-
-    loadSharedPlaylist();
-  }, []);
+  // Shared playlist background loader hook
+  const {
+    shareLoading,
+    bannerMessage,
+    bannerType,
+    loadedDetails,
+    closeBanner,
+    handleRetry,
+    handleCreateNew,
+  } = useSharedPlaylistLoader({
+    setSpeechList,
+    setRawText,
+    setSpeed,
+    setVolume,
+    setAutoAdvance,
+    setTimeBetweenLines,
+    setPlaylistLoopMode: handlePlaylistLoopModeChange,
+    setEngineMode,
+    handleCreateList,
+  });
 
   // Helper to assign cover images dynamically
   const handleAssignImage = (imageUrl: string) => {
@@ -2127,6 +2086,16 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
         }}
         item={selectedItemForImageSearch}
         onAssignImage={handleAssignImage}
+      />
+
+      {/* Shared Playlist Imported Banner Notification */}
+      <SharedPlaylistBanner
+        message={bannerMessage}
+        type={bannerType}
+        loadedDetails={loadedDetails}
+        onClose={closeBanner}
+        onRetry={handleRetry}
+        onCreateNew={handleCreateNew}
       />
 
       {/* Share Playlist Modal */}

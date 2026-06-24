@@ -14,6 +14,7 @@ import {
   imageSearchLimiter,
   sharePlaylistLimiter,
 } from "./src/server/rateLimiter";
+import { checkFirestoreConnection } from "./src/server/storage";
 
 dotenv.config();
 
@@ -22,6 +23,20 @@ const PORT = 3000;
 
 // Set payload body size limit to prevent oversized request attacks
 app.use(express.json({ limit: "500kb" }));
+
+// 0. API Health and Connection Status Check
+app.get("/api/health", async (req, res) => {
+  try {
+    const isOk = await checkFirestoreConnection();
+    res.json({
+      status: isOk ? "ok" : "error",
+      service: "classroom-text-to-speech-api",
+      firestore: isOk ? "connected" : "disconnected"
+    });
+  } catch (err: any) {
+    res.status(500).json({ status: "error", message: err.message });
+  }
+});
 
 // 1. Unsplash Image Search with Rate Limiting
 app.get("/api/search-images", async (req, res) => {

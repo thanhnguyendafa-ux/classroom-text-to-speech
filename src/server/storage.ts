@@ -131,19 +131,21 @@ export class PlaylistStorageManager {
   }
 }
 
-// Validate Connection to Firestore on startup as mandated by the skill
-async function testConnection() {
+// Validate Connection to Firestore on request/health check
+export async function checkFirestoreConnection() {
   const testPath = "test/connection";
   try {
     const docRef = doc(db, "test", "connection");
     await getDocFromServer(docRef);
     console.log("[Firestore] Firestore connection is ready.");
+    return true;
   } catch (error) {
     if (error instanceof Error && error.message.includes("the client is offline")) {
       console.error("[Firestore] Please check your Firebase configuration. Client is offline.");
     } else {
       console.log("[Firestore] Tested connection (non-existent doc expected or offline check).", error);
     }
+    return false;
   }
 }
-testConnection();
+

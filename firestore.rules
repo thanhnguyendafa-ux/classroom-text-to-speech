@@ -24,7 +24,7 @@ service cloud.firestore {
           && data.speed is number
           && data.speed >= 0.1 && data.speed <= 3.0
           && data.volume is number
-          && data.volume >= 0.0 && data.volume <= 1.0
+          && data.volume >= 0.0 && data.volume <= 2.0
           && data.autoAdvance is bool
           && data.timeBetweenLines is number
           && data.timeBetweenLines >= 0.0 && data.timeBetweenLines <= 60.0
