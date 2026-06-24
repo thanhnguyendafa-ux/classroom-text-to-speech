@@ -43,6 +43,9 @@ import { usePremiumTts } from './features/premium-tts/usePremiumTts';
 import { getPremiumVoiceForLang } from './features/premium-tts/premiumVoices';
 import { usePremiumVoiceSettings } from './features/premium-tts/usePremiumVoiceSettings';
 import { premiumTtsCacheStore } from './features/premium-tts/premiumTtsCacheStore';
+import { usePremiumAudioPreparation } from './features/premium-tts/persistent-audio/usePremiumAudioPreparation';
+import PremiumAudioPreparationPanel from './features/premium-tts/persistent-audio/PremiumAudioPreparationPanel';
+import { resolvePremiumAudio } from './features/premium-tts/persistent-audio/premiumAudioResolver';
 import ImageSearchModal from './components/ImageSearchModal';
 import TheaterPlayer from './components/TheaterPlayer';
 import ShareModal from './components/ShareModal';
@@ -321,6 +324,25 @@ export default function App() {
     selectedPremiumVoiceJa,
     selectedPremiumVoiceKo,
   };
+
+  const {
+    manifests,
+    progress: preparationProgress,
+    isPreparing: isPreparingAudio,
+    isLoadingManifest: isLoadingManifests,
+    error: preparationError,
+    startPreparation,
+    stopPreparation,
+    deletePreparedAudio,
+    cleanUnusedAudio
+  } = usePremiumAudioPreparation({
+    userId: user?.uid || null,
+    lessonId: currentLessonId,
+    speechList,
+    userGeminiApiKey,
+    premiumVoiceSettings
+  });
+
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<any>(null);
   const lastNodesRef = useRef<any>(null);
@@ -1311,7 +1333,16 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
       const chosenVoice = getPremiumVoiceForLang(langCode, premiumVoiceSettings);
 
       try {
-        const audioUrl = await generateTts(item.text, chosenVoice, langCode, userGeminiApiKey);
+        const audioUrl = await resolvePremiumAudio({
+          userId: user?.uid || null,
+          lessonId: currentLessonId,
+          text: item.text,
+          lang: langCode,
+          voice: chosenVoice,
+          apiKey: userGeminiApiKey,
+          mode: 'prefer-saved',
+          manifests
+        });
 
         const playIteration = () => {
           if (activePlayingIdRef.current !== item.id) {
@@ -2375,6 +2406,8 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
         selectedPremiumVoiceZhTw={selectedPremiumVoiceZhTw}
         selectedPremiumVoiceJa={selectedPremiumVoiceJa}
         selectedPremiumVoiceKo={selectedPremiumVoiceKo}
+        userId={user?.uid || null}
+        lessonId={currentLessonId}
       />
 
       {/* Sleek Toast Notifications */}

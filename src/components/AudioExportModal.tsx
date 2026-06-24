@@ -20,6 +20,7 @@ import { SpeechItem, LanguageCode } from '../types';
 import { encodeMonoMp3 } from '../audio/mp3Encoder';
 import { getPremiumVoiceForLang } from '../features/premium-tts/premiumVoices';
 import { premiumTtsCacheStore } from '../features/premium-tts/premiumTtsCacheStore';
+import { resolvePremiumAudio } from '../features/premium-tts/persistent-audio/premiumAudioResolver';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -47,6 +48,10 @@ interface AudioExportModalProps {
   selectedPremiumVoiceZhTw: string;
   selectedPremiumVoiceJa: string;
   selectedPremiumVoiceKo: string;
+
+  // Persistent audio preparation props
+  userId: string | null;
+  lessonId: string | null;
 }
 
 export default function AudioExportModal({
@@ -70,7 +75,9 @@ export default function AudioExportModal({
   selectedPremiumVoiceZhCn,
   selectedPremiumVoiceZhTw,
   selectedPremiumVoiceJa,
-  selectedPremiumVoiceKo
+  selectedPremiumVoiceKo,
+  userId,
+  lessonId
 }: AudioExportModalProps) {
   // Config states
   const [selectedRange, setSelectedRange] = useState<'all' | string>('all');
@@ -296,11 +303,14 @@ export default function AudioExportModal({
         addLog(`Gọi API câu ${i + 1}/${itemsToExport.length} [${itemLang}]: "${item.text.substring(0, 30)}..."`);
         
         // 1. Fetch from Gemini endpoint using shared helper (utilizing shared cache)
-        const audioUrl = await premiumTtsCacheStore.getOrCreateAudioUrl({
+        const audioUrl = await resolvePremiumAudio({
+          userId,
+          lessonId,
           text: item.text,
           voice: chosenVoice,
           lang: itemLang,
-          apiKey: userGeminiApiKey
+          apiKey: userGeminiApiKey,
+          mode: 'prefer-saved'
         });
         
         const rawPcm = extractPcmFromWavDataUrl(audioUrl);

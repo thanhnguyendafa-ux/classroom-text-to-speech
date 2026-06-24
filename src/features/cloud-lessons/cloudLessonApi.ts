@@ -10,6 +10,8 @@ import {
   orderBy 
 } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase/firebaseClient';
+import { cleanupLessonAudioAssets } from '../premium-tts/persistent-audio/premiumAudioManifestApi';
+import { cleanupLessonAudioStorage } from '../premium-tts/persistent-audio/premiumAudioStorageApi';
 
 export enum OperationType {
   CREATE = 'create',
@@ -215,6 +217,17 @@ export async function updateLesson(
 export async function deleteLesson(uid: string, lessonId: string): Promise<void> {
   const path = `users/${uid}/lessons/${lessonId}`;
   try {
+    try {
+      await cleanupLessonAudioAssets(uid, lessonId);
+    } catch (err) {
+      console.warn('[cloudLessonApi] Failed to clean up audio assets manifest on lesson deletion:', err);
+    }
+    try {
+      await cleanupLessonAudioStorage(uid, lessonId);
+    } catch (err) {
+      console.warn('[cloudLessonApi] Failed to clean up audio assets storage on lesson deletion:', err);
+    }
+
     const lessonRef = doc(db, 'users', uid, 'lessons', lessonId);
     await deleteDoc(lessonRef);
   } catch (error) {

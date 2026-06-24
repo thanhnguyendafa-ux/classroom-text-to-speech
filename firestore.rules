@@ -64,6 +64,24 @@ service cloud.firestore {
           && (!data.keys().hasAny(['settings']) || data.settings is map);
     }
 
+    function isValidPremiumAudioAsset(data) {
+      return data.keys().hasAll(['assetId', 'cacheKey', 'textHash', 'textPreview', 'lang', 'voice', 'status', 'sourceVersion', 'createdAt', 'updatedAt'])
+          && data.keys().size() >= 10
+          && data.assetId is string && data.assetId.size() <= 128
+          && data.cacheKey is string && data.cacheKey.size() <= 1000
+          && data.textHash is string && data.textHash.size() <= 64
+          && data.textPreview is string && data.textPreview.size() <= 500
+          && data.lang is string && data.lang.size() <= 16
+          && data.voice is string && data.voice.size() <= 64
+          && data.status is string && (data.status == 'ready' || data.status == 'pending' || data.status == 'failed')
+          && data.sourceVersion is string && data.sourceVersion == 'premium-tts-v1'
+          && data.createdAt is number
+          && data.updatedAt is number
+          && (!data.keys().hasAny(['storagePath']) || (data.storagePath is string || data.storagePath == null))
+          && (!data.keys().hasAny(['errorCode']) || (data.errorCode is string || data.errorCode == null))
+          && (!data.keys().hasAny(['errorMessage']) || (data.errorMessage is string || data.errorMessage == null));
+    }
+
     // Public Playlist creation and reading (now requires auth to maintain private domain)
     match /playlists/{playlistId} {
       allow get: if request.auth != null && isValidId(playlistId);
@@ -91,6 +109,14 @@ service cloud.firestore {
         allow create: if request.auth != null && request.auth.uid == userId && isValidId(lessonId) && isValidLesson(incoming());
         allow update: if request.auth != null && request.auth.uid == userId && isValidId(lessonId) && isValidLesson(incoming());
         allow delete: if request.auth != null && request.auth.uid == userId && isValidId(lessonId);
+
+        // Nested Audio Assets Manifests
+        match /audioAssets/{assetId} {
+          allow read: if request.auth != null && request.auth.uid == userId;
+          allow create: if request.auth != null && request.auth.uid == userId && isValidId(assetId) && isValidPremiumAudioAsset(incoming());
+          allow update: if request.auth != null && request.auth.uid == userId && isValidId(assetId) && isValidPremiumAudioAsset(incoming());
+          allow delete: if request.auth != null && request.auth.uid == userId && isValidId(assetId);
+        }
       }
     }
   }

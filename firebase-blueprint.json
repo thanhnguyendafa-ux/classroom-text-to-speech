@@ -75,6 +75,27 @@
         "updatedAt": { "type": "number" }
       },
       "required": ["title", "rawText", "createdAt", "updatedAt"]
+    },
+    "PremiumAudioAsset": {
+      "title": "PremiumAudioAsset",
+      "description": "Metadata manifest for persistent premium audio assets",
+      "type": "object",
+      "properties": {
+        "assetId": { "type": "string" },
+        "cacheKey": { "type": "string" },
+        "textHash": { "type": "string" },
+        "textPreview": { "type": "string" },
+        "lang": { "type": "string" },
+        "voice": { "type": "string" },
+        "status": { "type": "string", "enum": ["ready", "pending", "failed"] },
+        "storagePath": { "type": "string" },
+        "errorCode": { "type": "string" },
+        "errorMessage": { "type": "string" },
+        "sourceVersion": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["assetId", "cacheKey", "textHash", "textPreview", "lang", "voice", "status", "sourceVersion", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -93,6 +114,10 @@
     "users/{userId}/lessons/{lessonId}": {
       "schema": "Lesson",
       "description": "Cloud lessons owned by the user"
+    },
+    "users/{userId}/lessons/{lessonId}/audioAssets/{assetId}": {
+      "schema": "PremiumAudioAsset",
+      "description": "Metadata manifests of cached premium audio pieces"
     }
   }
 }
