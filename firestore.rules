@@ -7,7 +7,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Helper functions for validation
+    // Reusable, hardened helpers
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -36,11 +36,62 @@ service cloud.firestore {
           && data.createdAt.size() <= 64;
     }
 
-    // Playlists collection rules
+    function isValidUser(data) {
+      return data.keys().hasAll(['displayName', 'email', 'photoURL', 'createdAt', 'lastLoginAt'])
+          && data.keys().size() == 5
+          && data.displayName is string && data.displayName.size() <= 120
+          && data.email is string && data.email.size() <= 120
+          && (data.photoURL is string || data.photoURL == null)
+          && data.createdAt is number
+          && data.lastLoginAt is number;
+    }
+
+    function isValidFolder(data) {
+      return data.keys().hasAll(['name', 'createdAt', 'updatedAt'])
+          && data.keys().size() == 3
+          && data.name is string && data.name.size() <= 120
+          && data.createdAt is number
+          && data.updatedAt is number;
+    }
+
+    function isValidLesson(data) {
+      return data.title is string && data.title.size() <= 200
+          && data.rawText is string && data.rawText.size() <= 100000
+          && data.createdAt is number
+          && data.updatedAt is number
+          && (!data.keys().hasAny(['folderId']) || (data.folderId is string || data.folderId == null))
+          && (!data.keys().hasAny(['speechList']) || data.speechList is list)
+          && (!data.keys().hasAny(['settings']) || data.settings is map);
+    }
+
+    // Public Playlist creation and reading (unchanged and secure)
     match /playlists/{playlistId} {
       allow get: if isValidId(playlistId);
       allow create: if isValidId(playlistId) && isValidPlaylist(incoming());
       allow update, delete: if false;
+    }
+
+    // Secure User, Folder, and Lesson isolated domains
+    match /users/{userId} {
+      allow get: if request.auth != null && request.auth.uid == userId && isValidId(userId);
+      allow create, update: if request.auth != null && request.auth.uid == userId && isValidId(userId) && isValidUser(incoming());
+      allow delete: if false;
+
+      // User's own Folders
+      match /folders/{folderId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId && isValidId(folderId) && isValidFolder(incoming());
+        allow update: if request.auth != null && request.auth.uid == userId && isValidId(folderId) && isValidFolder(incoming());
+        allow delete: if request.auth != null && request.auth.uid == userId && isValidId(folderId);
+      }
+
+      // User's own Lessons
+      match /lessons/{lessonId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId && isValidId(lessonId) && isValidLesson(incoming());
+        allow update: if request.auth != null && request.auth.uid == userId && isValidId(lessonId) && isValidLesson(incoming());
+        allow delete: if request.auth != null && request.auth.uid == userId && isValidId(lessonId);
+      }
     }
   }
 }

@@ -1,0 +1,223 @@
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  orderBy 
+} from 'firebase/firestore';
+import { db, auth } from '../../lib/firebase/firebaseClient';
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid || null,
+      email: auth.currentUser?.email || null,
+      emailVerified: auth.currentUser?.emailVerified || null,
+      isAnonymous: auth.currentUser?.isAnonymous || null,
+      tenantId: auth.currentUser?.tenantId || null,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+export interface CloudFolder {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CloudLesson {
+  id: string;
+  title: string;
+  rawText: string;
+  folderId: string | null;
+  speechList?: any[];
+  settings?: any;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// 1. User Profile API
+export async function createOrUpdateUserProfile(
+  uid: string, 
+  displayName: string, 
+  email: string, 
+  photoURL: string | null
+): Promise<void> {
+  const path = `users/${uid}`;
+  try {
+    const userRef = doc(db, 'users', uid);
+    const existingSnap = await getDoc(userRef);
+    const now = Date.now();
+    
+    if (existingSnap.exists()) {
+      await updateDoc(userRef, {
+        displayName,
+        email,
+        photoURL,
+        lastLoginAt: now
+      });
+    } else {
+      await setDoc(userRef, {
+        displayName,
+        email,
+        photoURL,
+        createdAt: now,
+        lastLoginAt: now
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+// 2. Folder API
+export async function listFolders(uid: string): Promise<CloudFolder[]> {
+  const path = `users/${uid}/folders`;
+  try {
+    const foldersRef = collection(db, 'users', uid, 'folders');
+    const q = query(foldersRef, orderBy('createdAt', 'asc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as CloudFolder[];
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
+export async function createFolder(uid: string, folderId: string, name: string): Promise<void> {
+  const path = `users/${uid}/folders/${folderId}`;
+  try {
+    const folderRef = doc(db, 'users', uid, 'folders', folderId);
+    const now = Date.now();
+    await setDoc(folderRef, {
+      name,
+      createdAt: now,
+      updatedAt: now
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function updateFolder(uid: string, folderId: string, name: string): Promise<void> {
+  const path = `users/${uid}/folders/${folderId}`;
+  try {
+    const folderRef = doc(db, 'users', uid, 'folders', folderId);
+    await updateDoc(folderRef, {
+      name,
+      updatedAt: Date.now()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteFolder(uid: string, folderId: string): Promise<void> {
+  const path = `users/${uid}/folders/${folderId}`;
+  try {
+    const folderRef = doc(db, 'users', uid, 'folders', folderId);
+    await deleteDoc(folderRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// 3. Lessons API
+export async function listLessons(uid: string): Promise<CloudLesson[]> {
+  const path = `users/${uid}/lessons`;
+  try {
+    const lessonsRef = collection(db, 'users', uid, 'lessons');
+    const q = query(lessonsRef, orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as CloudLesson[];
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
+export async function createLesson(uid: string, lessonId: string, lesson: Omit<CloudLesson, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
+  const path = `users/${uid}/lessons/${lessonId}`;
+  try {
+    const lessonRef = doc(db, 'users', uid, 'lessons', lessonId);
+    const now = Date.now();
+    await setDoc(lessonRef, {
+      ...lesson,
+      createdAt: now,
+      updatedAt: now
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function updateLesson(
+  uid: string, 
+  lessonId: string, 
+  updates: Partial<Omit<CloudLesson, 'id' | 'createdAt'>>
+): Promise<void> {
+  const path = `users/${uid}/lessons/${lessonId}`;
+  try {
+    const lessonRef = doc(db, 'users', uid, 'lessons', lessonId);
+    await updateDoc(lessonRef, {
+      ...updates,
+      updatedAt: Date.now()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteLesson(uid: string, lessonId: string): Promise<void> {
+  const path = `users/${uid}/lessons/${lessonId}`;
+  try {
+    const lessonRef = doc(db, 'users', uid, 'lessons', lessonId);
+    await deleteDoc(lessonRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}

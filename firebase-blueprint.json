@@ -36,12 +36,63 @@
         "createdAt": { "type": "string" }
       },
       "required": ["speechList", "speed", "volume", "autoAdvance", "timeBetweenLines", "playlistLoopMode", "engineMode", "createdAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile document containing metadata",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "lastLoginAt": { "type": "number" }
+      },
+      "required": ["displayName", "email", "createdAt", "lastLoginAt"]
+    },
+    "Folder": {
+      "title": "Folder",
+      "description": "Folders created by users to group lessons",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["name", "createdAt", "updatedAt"]
+    },
+    "Lesson": {
+      "title": "Lesson",
+      "description": "Personal lessons saved on cloud",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "folderId": { "type": "string" },
+        "rawText": { "type": "string" },
+        "speechList": { "type": "array" },
+        "settings": { "type": "object" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["title", "rawText", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
     "playlists/{playlistId}": {
       "schema": "Playlist",
       "description": "Collection of shared pronunciation practice playlists"
+    },
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profile metadata"
+    },
+    "users/{userId}/folders/{folderId}": {
+      "schema": "Folder",
+      "description": "Folders owned by the user"
+    },
+    "users/{userId}/lessons/{lessonId}": {
+      "schema": "Lesson",
+      "description": "Cloud lessons owned by the user"
     }
   }
 }

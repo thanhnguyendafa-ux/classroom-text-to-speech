@@ -6,8 +6,12 @@ import {
   Key, 
   Share2, 
   Download,
-  Info
+  Info,
+  LogIn,
+  LogOut,
+  Loader2
 } from 'lucide-react';
+import { useAuth } from '../features/auth/useAuth';
 
 interface CompactHeaderProps {
   engineMode: 'browser' | 'premium';
@@ -24,6 +28,9 @@ export const CompactHeader: React.FC<CompactHeaderProps> = ({
   onOpenExport,
   onOpenShare
 }) => {
+  const { user, isAuthLoading, signInWithGoogle, signOut } = useAuth();
+  const [showDropdown, setShowDropdown] = React.useState(false);
+
   return (
     <header id="compact-app-header" className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -108,6 +115,70 @@ export const CompactHeader: React.FC<CompactHeaderProps> = ({
               <Download className="w-3 h-3" />
               <span>Xuất MP3</span>
             </button>
+
+            {/* Google Authentication Section */}
+            <div className="pl-1.5 border-l border-slate-200 flex items-center">
+              {isAuthLoading ? (
+                <div className="flex items-center space-x-1 px-2.5 py-1 text-[11px] text-slate-550 font-semibold bg-slate-50 rounded-lg border border-slate-100">
+                  <Loader2 className="w-3 h-3 animate-spin text-indigo-500" />
+                  <span>Đang tải...</span>
+                </div>
+              ) : user ? (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowDropdown(!showDropdown)}
+                    className="flex items-center gap-1.5 p-0.5 pr-2 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-lg transition text-slate-700 cursor-pointer text-left"
+                  >
+                    {user.photoURL ? (
+                      <img
+                        src={user.photoURL}
+                        alt={user.displayName || 'Avatar'}
+                        referrerPolicy="no-referrer"
+                        className="w-5 h-5 rounded-md object-cover"
+                      />
+                    ) : (
+                      <div className="w-5 h-5 bg-indigo-100 text-indigo-600 rounded-md flex items-center justify-center font-bold text-[10px]">
+                        {(user.displayName || 'G')[0].toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-[10px] font-bold max-w-[80px] truncate">
+                      {user.displayName?.split(' ').pop() || 'Tài khoản'}
+                    </span>
+                  </button>
+                  
+                  {showDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
+                      <div className="absolute right-0 mt-1.5 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-2.5 px-3 z-50 text-left animate-fadeIn">
+                        <div className="pb-2 border-b border-slate-100 mb-2">
+                          <p className="text-[11px] font-extrabold text-slate-800 truncate">{user.displayName}</p>
+                          <p className="text-[9px] text-slate-500 truncate mt-0.5">{user.email}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            signOut();
+                            setShowDropdown(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-[11px] text-rose-600 hover:bg-rose-50 rounded-lg font-bold transition cursor-pointer text-left"
+                        >
+                          <LogOut className="w-3 h-3 text-rose-500" />
+                          <span>Đăng xuất</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={signInWithGoogle}
+                  className="text-[11px] font-bold px-2.5 py-1 bg-white hover:bg-slate-50 border border-indigo-250 hover:border-indigo-400 rounded-lg text-indigo-700 transition flex items-center gap-1 cursor-pointer"
+                  title="Đăng nhập Google để lưu trữ bài học lên cloud"
+                >
+                  <LogIn className="w-3 h-3 text-indigo-600" />
+                  <span>Đăng nhập</span>
+                </button>
+              )}
+            </div>
           </div>
 
         </div>
