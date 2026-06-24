@@ -1,19 +1,66 @@
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, setDoc, getDoc, getDocFromServer } from "firebase/firestore";
 import fs from "fs";
 import path from "path";
 
-// Detect Vercel environments
-const isVercel = !!process.env.VERCEL;
+// Initialize Firebase using firebase-applet-config.json
+const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+let firebaseConfig: any = {};
+try {
+  firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+} catch (err) {
+  console.error("Failed to read firebase-applet-config.json:", err);
+}
 
-// Define directories for local file persistence
-const DATA_DIR = isVercel ? "/tmp" : path.join(process.cwd(), "data");
-const PLAYLISTS_FILE = path.join(DATA_DIR, "shared_playlists.json");
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
-// In-memory cache for fast subsequent reads (per sandbox/worker container)
-let inMemoryPlaylists: Record<string, any> = {};
+// Error handling types and helpers as required by firebase-integration skill
+export enum OperationType {
+  CREATE = "create",
+  UPDATE = "update",
+  DELETE = "delete",
+  LIST = "list",
+  GET = "get",
+  WRITE = "write",
+}
 
-/**
- * Interfaces for backend storage provider
- */
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: null,
+      email: null,
+      emailVerified: null,
+      isAnonymous: null,
+      tenantId: null,
+      providerInfo: [],
+    },
+    operationType,
+    path,
+  };
+  console.error("Firestore Error: ", JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+// Interfaces for backend storage provider
 export interface PlaylistPayload {
   speechList: any[];
   speed: number;
@@ -25,128 +72,78 @@ export interface PlaylistPayload {
   createdAt: string;
 }
 
+// In-memory cache for fast subsequent reads
+let inMemoryPlaylists: Record<string, any> = {};
+
 /**
- * Shared storage engine to support:
- * 1. Local Express / Docker server (reads/writes in workspace `data/` dir)
- * 2. Vercel Serverless Function (writes to `/tmp/` to avoid Read-Only file system)
- * 3. Durable persistence on Vercel (optional, zero-dependency REST client for Vercel KV if configured)
+ * Shared storage engine using Firebase Firestore
  */
 export class PlaylistStorageManager {
   /**
-   * Safe helper to load all playlists from disk for local mode
-   */
-  private static loadPlaylistsFromFile(): Record<string, any> {
-    try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-      if (fs.existsSync(PLAYLISTS_FILE)) {
-        const content = fs.readFileSync(PLAYLISTS_FILE, "utf-8");
-        return JSON.parse(content);
-      }
-    } catch (err) {
-      console.error("Error reading shared playlists file:", err);
-    }
-    return {};
-  }
-
-  /**
-   * Check if Vercel KV integration is configured in environment variables
-   */
-  private static isKvEnabled(): boolean {
-    return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-  }
-
-  /**
-   * Save playlist details
+   * Save playlist details to Firestore
    */
   public static async savePlaylist(shareId: string, data: PlaylistPayload): Promise<void> {
-    // 1. Try Vercel KV database if configured
-    if (this.isKvEnabled()) {
-      try {
-        const url = `${process.env.KV_REST_API_URL}/set/playlist:${shareId}`;
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(data),
-        });
-
-        if (response.ok) {
-          console.log(`[Storage] Successfully saved playlist:${shareId} to Vercel KV.`);
-          inMemoryPlaylists[shareId] = data;
-          return;
-        }
-        console.error(`[Storage] Vercel KV save returned status ${response.status}`);
-      } catch (err) {
-        console.error("[Storage] Failed to save to Vercel KV, falling back to local file system:", err);
-      }
-    }
-
-    // 2. Fallback to Local system / Serverless tmp file system
+    const documentPath = `playlists/${shareId}`;
     try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-      const current = this.loadPlaylistsFromFile();
-      current[shareId] = data;
-      fs.writeFileSync(PLAYLISTS_FILE, JSON.stringify(current, null, 2), "utf-8");
-      
+      const docRef = doc(db, "playlists", shareId);
+      await setDoc(docRef, {
+        speechList: data.speechList,
+        speed: data.speed,
+        volume: data.volume,
+        autoAdvance: data.autoAdvance,
+        timeBetweenLines: data.timeBetweenLines,
+        playlistLoopMode: data.playlistLoopMode,
+        engineMode: data.engineMode,
+        createdAt: data.createdAt,
+      });
+
       inMemoryPlaylists[shareId] = data;
-      console.log(`[Storage] Successfully saved playlist:${shareId} to disk at ${PLAYLISTS_FILE}.`);
-    } catch (err) {
-      console.error("[Storage] Failed saving playlist data to file:", err);
-      throw new Error("Không thể ghi tệp cấu hình chia sẻ.");
+      console.log(`[Firestore] Successfully saved playlist:${shareId} to Firestore.`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, documentPath);
     }
   }
 
   /**
-   * Retrieve playlist details by ID
+   * Retrieve playlist details by ID from Firestore
    */
   public static async getPlaylist(shareId: string): Promise<PlaylistPayload | null> {
-    // check in-memory cache first
+    // Check in-memory cache first
     if (inMemoryPlaylists[shareId]) {
       return inMemoryPlaylists[shareId];
     }
 
-    // 1. Try Vercel KV database if configured
-    if (this.isKvEnabled()) {
-      try {
-        const url = `${process.env.KV_REST_API_URL}/get/playlist:${shareId}`;
-        const response = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}`,
-          },
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          // Upstash REST API returns { result: "..." } or { result: null }
-          if (result && result.result) {
-            const data = typeof result.result === "string" ? JSON.parse(result.result) : result.result;
-            inMemoryPlaylists[shareId] = data;
-            return data;
-          }
-        }
-      } catch (err) {
-        console.error("[Storage] Failed to fetch from Vercel KV, trying local disk:", err);
-      }
-    }
-
-    // 2. Fallback to Disk loader
+    const documentPath = `playlists/${shareId}`;
     try {
-      const allFromFile = this.loadPlaylistsFromFile();
-      const playlist = allFromFile[shareId];
-      if (playlist) {
-        inMemoryPlaylists[shareId] = playlist;
-        return playlist;
+      const docRef = doc(db, "playlists", shareId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data() as PlaylistPayload;
+        inMemoryPlaylists[shareId] = data;
+        return data;
       }
-    } catch (err) {
-      console.error("[Storage] Failed seeking playlist in local file system:", err);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, documentPath);
     }
 
     return null;
   }
 }
+
+// Validate Connection to Firestore on startup as mandated by the skill
+async function testConnection() {
+  const testPath = "test/connection";
+  try {
+    const docRef = doc(db, "test", "connection");
+    await getDocFromServer(docRef);
+    console.log("[Firestore] Firestore connection is ready.");
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("the client is offline")) {
+      console.error("[Firestore] Please check your Firebase configuration. Client is offline.");
+    } else {
+      console.log("[Firestore] Tested connection (non-existent doc expected or offline check).", error);
+    }
+  }
+}
+testConnection();

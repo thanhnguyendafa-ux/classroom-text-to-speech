@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net (default deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions for validation
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidPlaylist(data) {
+      return data.keys().hasAll(['speechList', 'speed', 'volume', 'autoAdvance', 'timeBetweenLines', 'playlistLoopMode', 'engineMode', 'createdAt'])
+          && data.keys().size() == 8
+          && data.speechList is list
+          && data.speechList.size() <= 200
+          && data.speed is number
+          && data.speed >= 0.1 && data.speed <= 3.0
+          && data.volume is number
+          && data.volume >= 0.0 && data.volume <= 1.0
+          && data.autoAdvance is bool
+          && data.timeBetweenLines is number
+          && data.timeBetweenLines >= 0.0 && data.timeBetweenLines <= 60.0
+          && data.playlistLoopMode is string
+          && (data.playlistLoopMode == 'once' || data.playlistLoopMode == 'infinite')
+          && data.engineMode is string
+          && (data.engineMode == 'browser' || data.engineMode == 'premium')
+          && data.createdAt is string
+          && data.createdAt.size() <= 64;
+    }
+
+    // Playlists collection rules
+    match /playlists/{playlistId} {
+      allow get: if isValidId(playlistId);
+      allow create: if isValidId(playlistId) && isValidPlaylist(incoming());
+      allow update, delete: if false;
+    }
+  }
+}

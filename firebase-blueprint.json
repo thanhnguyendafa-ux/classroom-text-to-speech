@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "SpeechItem": {
+      "title": "SpeechItem",
+      "description": "A single spoken line within a pronunciation practice playlist",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "detectedLang": { "type": "string" },
+        "selectedLang": { "type": "string" },
+        "resolvedLang": { "type": "string" },
+        "repeats": { "type": "number" },
+        "delaySec": { "type": "number" },
+        "speed": { "type": "number" },
+        "setId": { "type": "string" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["id", "text", "detectedLang", "selectedLang", "resolvedLang", "repeats"]
+    },
+    "Playlist": {
+      "title": "Playlist",
+      "description": "A structured practice playlist with audio speech options",
+      "type": "object",
+      "properties": {
+        "speechList": {
+          "type": "array",
+          "description": "List of pronunciation and speech elements"
+        },
+        "speed": { "type": "number" },
+        "volume": { "type": "number" },
+        "autoAdvance": { "type": "boolean" },
+        "timeBetweenLines": { "type": "number" },
+        "playlistLoopMode": { "type": "string", "enum": ["once", "infinite"] },
+        "engineMode": { "type": "string", "enum": ["browser", "premium"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["speechList", "speed", "volume", "autoAdvance", "timeBetweenLines", "playlistLoopMode", "engineMode", "createdAt"]
+    }
+  },
+  "firestore": {
+    "playlists/{playlistId}": {
+      "schema": "Playlist",
+      "description": "Collection of shared pronunciation practice playlists"
+    }
+  }
+}
