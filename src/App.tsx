@@ -55,6 +55,11 @@ import CompactHeader from './components/CompactHeader';
 import AppWorkspace from './components/AppWorkspace';
 import { useSharedPlaylistLoader } from './features/shared-playlist/useSharedPlaylistLoader';
 import SharedPlaylistBanner from './features/shared-playlist/SharedPlaylistBanner';
+import { useAuth } from './features/auth/useAuth';
+import { createLesson, updateLesson } from './features/cloud-lessons/cloudLessonApi';
+import AppShell from './features/app-shell/AppShell';
+import LessonsView from './features/lessons/LessonsView';
+import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
 
 
 // Helper regex to detect language characters
@@ -97,6 +102,136 @@ export default function App() {
 
   // Engine Mode: 'browser' (native speech) vs 'premium' (Gemini AI TTS)
   const [engineMode, setEngineMode] = useState<'browser' | 'premium'>('browser');
+
+  const { user } = useAuth();
+  const [activeSection, setActiveSection] = useState<'lessons' | 'builder'>('lessons');
+  const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
+  const [currentLessonTitle, setCurrentLessonTitle] = useState<string>('Bài học mẫu: Bắp rang bơ');
+  const [isSavingCloudLesson, setIsSavingCloudLesson] = useState<boolean>(false);
+
+  const handleSaveLesson = async () => {
+    if (!user) {
+      alert('Vui lòng đăng nhập để lưu bài học lên đám mây.');
+      return;
+    }
+    const trimmedTitle = currentLessonTitle.trim();
+    if (!trimmedTitle) {
+      alert('Vui lòng nhập tiêu đề cho bài giảng');
+      return;
+    }
+    
+    if (!rawText.trim()) {
+      alert('Nội dung bài học trống, không thể lưu!');
+      return;
+    }
+    
+    setIsSavingCloudLesson(true);
+    try {
+      if (currentLessonId) {
+        // Update existing lesson
+        await updateLesson(user.uid, currentLessonId, {
+          title: trimmedTitle,
+          rawText: rawText,
+          speechList: speechList,
+          settings: {
+            speed,
+            timeBetweenLines,
+            rowLayoutMode,
+            engineMode,
+            selectedPremiumVoiceEn,
+            selectedPremiumVoiceVi,
+            selectedEnVoiceName,
+            selectedViVoiceName,
+            autoGroupSet,
+            setMultiplier,
+            useUniversalImage,
+            universalImageUrl
+          }
+        });
+        alert(`Đã lưu thay đổi bài học "${trimmedTitle}" thành công!`);
+      } else {
+        // Create new lesson
+        const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        await createLesson(user.uid, newId, {
+          title: trimmedTitle,
+          rawText: rawText,
+          speechList: speechList,
+          settings: {
+            speed,
+            timeBetweenLines,
+            rowLayoutMode,
+            engineMode,
+            selectedPremiumVoiceEn,
+            selectedPremiumVoiceVi,
+            selectedEnVoiceName,
+            selectedViVoiceName,
+            autoGroupSet,
+            setMultiplier,
+            useUniversalImage,
+            universalImageUrl
+          },
+          folderId: null
+        });
+        setCurrentLessonId(newId);
+        alert(`Đã lưu bài học đám mây "${trimmedTitle}" thành công!`);
+      }
+    } catch (err) {
+      console.error('Error saving lesson:', err);
+      alert('Không thể lưu bài giảng lên đám mây.');
+    } finally {
+      setIsSavingCloudLesson(false);
+    }
+  };
+
+  const handleSaveLessonAsCopy = async () => {
+    if (!user) return;
+    const trimmedTitle = `${currentLessonTitle.trim()} (Bản sao)`;
+    if (!rawText.trim()) {
+      alert('Nội dung bài học trống, không thể lưu!');
+      return;
+    }
+    
+    setIsSavingCloudLesson(true);
+    try {
+      const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      await createLesson(user.uid, newId, {
+        title: trimmedTitle,
+        rawText: rawText,
+        speechList: speechList,
+        settings: {
+          speed,
+          timeBetweenLines,
+          rowLayoutMode,
+          engineMode,
+          selectedPremiumVoiceEn,
+          selectedPremiumVoiceVi,
+          selectedEnVoiceName,
+          selectedViVoiceName,
+          autoGroupSet,
+          setMultiplier,
+          useUniversalImage,
+          universalImageUrl
+        },
+        folderId: null
+      });
+      setCurrentLessonId(newId);
+      setCurrentLessonTitle(trimmedTitle);
+      alert(`Đã lưu bản sao bài học "${trimmedTitle}" thành công!`);
+    } catch (err) {
+      console.error('Error saving lesson copy:', err);
+      alert('Không thể lưu bản sao bài giảng.');
+    } finally {
+      setIsSavingCloudLesson(false);
+    }
+  };
+
+  const handleCreateNewLesson = () => {
+    setRawText('');
+    setSpeechList([]);
+    setCurrentLessonId(null);
+    setCurrentLessonTitle('Bài học mới');
+    setActiveSection('builder');
+  };
   
   const {
     selectedPremiumVoiceEn,
@@ -1593,7 +1728,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
   const koreanVoices = voices.filter(v => v.lang.toLowerCase().startsWith('ko'));
 
   return (
-    <div id="classroom-tts-root" className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 pb-20">
+    <div id="classroom-tts-root" className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900">
       
       {/* Compact workspace-optimized Header */}
       <CompactHeader
@@ -1604,13 +1739,86 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
         onOpenShare={() => setIsShareModalOpen(true)}
       />
 
-      <main id="app-main" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-        
-        {/* Dynamic Slotted Workspace component */}
-        <AppWorkspace
-          speechCount={speechList.length}
-          leftColumn={
-            <>
+      <AppShell
+        activeSection={activeSection}
+        onSectionChange={setActiveSection}
+        onCreateNewLesson={handleCreateNewLesson}
+      >
+        {activeSection === 'lessons' ? (
+          <LessonsView
+            currentRawText={rawText}
+            currentSpeechList={speechList}
+            currentSettings={{
+              speed,
+              timeBetweenLines,
+              rowLayoutMode,
+              engineMode,
+              selectedPremiumVoiceEn,
+              selectedPremiumVoiceVi,
+              selectedEnVoiceName,
+              selectedViVoiceName,
+              autoGroupSet,
+              setMultiplier,
+              useUniversalImage,
+              universalImageUrl
+            }}
+            onLoadLesson={(lesson) => {
+              // 1. Restore raw text editor
+              setRawText(lesson.rawText);
+              
+              // 2. Restore all configurations
+              if (lesson.settings) {
+                const s = lesson.settings as any;
+                if (typeof s.speed === 'number') setSpeed(s.speed);
+                if (typeof s.timeBetweenLines === 'number') setTimeBetweenLines(s.timeBetweenLines);
+                if (typeof s.rowLayoutMode === 'string') setRowLayoutMode(s.rowLayoutMode);
+                if (typeof s.engineMode === 'string') setEngineMode(s.engineMode);
+                if (typeof s.selectedPremiumVoiceEn === 'string') setSelectedPremiumVoiceEn(s.selectedPremiumVoiceEn);
+                if (typeof s.selectedPremiumVoiceVi === 'string') setSelectedPremiumVoiceVi(s.selectedPremiumVoiceVi);
+                if (typeof s.selectedPremiumVoiceZhCn === 'string') setSelectedPremiumVoiceZhCn(s.selectedPremiumVoiceZhCn);
+                if (typeof s.selectedPremiumVoiceZhTw === 'string') setSelectedPremiumVoiceZhTw(s.selectedPremiumVoiceZhTw);
+                if (typeof s.selectedPremiumVoiceJa === 'string') setSelectedPremiumVoiceJa(s.selectedPremiumVoiceJa);
+                if (typeof s.selectedPremiumVoiceKo === 'string') setSelectedPremiumVoiceKo(s.selectedPremiumVoiceKo);
+                if (typeof s.selectedEnVoiceName === 'string') setSelectedEnVoiceName(s.selectedEnVoiceName);
+                if (typeof s.selectedViVoiceName === 'string') setSelectedViVoiceName(s.selectedViVoiceName);
+                if (typeof s.selectedZhCnVoiceName === 'string') setSelectedZhCnVoiceName(s.selectedZhCnVoiceName);
+                if (typeof s.selectedZhTwVoiceName === 'string') setSelectedZhTwVoiceName(s.selectedZhTwVoiceName);
+                if (typeof s.selectedJaVoiceName === 'string') setSelectedJaVoiceName(s.selectedJaVoiceName);
+                if (typeof s.selectedKoVoiceName === 'string') setSelectedKoVoiceName(s.selectedKoVoiceName);
+                if (typeof s.autoGroupSet === 'boolean') handleAutoGroupSetChange(s.autoGroupSet);
+                if (typeof s.setMultiplier === 'number') handleSetMultiplierChange(s.setMultiplier);
+                if (typeof s.useUniversalImage === 'boolean') handleUseUniversalImageChange(s.useUniversalImage);
+                if (typeof s.universalImageUrl === 'string') handleUniversalImageUrlChange(s.universalImageUrl);
+              }
+
+              // 3. Restore list of cards & its custom images
+              if (Array.isArray(lesson.speechList) && lesson.speechList.length > 0) {
+                setSpeechList(lesson.speechList);
+              } else {
+                handleCreateList(lesson.rawText);
+              }
+
+              // Set active lesson identification
+              setCurrentLessonId(lesson.id);
+              setCurrentLessonTitle(lesson.title);
+              
+              // Transition to builder workspace
+              setActiveSection('builder');
+            }}
+          />
+        ) : (
+          <LessonBuilderView
+            currentLessonId={currentLessonId}
+            currentLessonTitle={currentLessonTitle}
+            setCurrentLessonTitle={setCurrentLessonTitle}
+            onSaveLesson={handleSaveLesson}
+            onSaveAsCopy={handleSaveLessonAsCopy}
+            isSaving={isSavingCloudLesson}
+            onOpenExport={() => setIsAudioExportModalOpen(true)}
+            onOpenShare={() => setIsShareModalOpen(true)}
+            speechCount={speechList.length}
+            leftColumn={
+              <>
               {/* Standard Text Editor Input */}
               <LessonInputPanel
                 rawText={rawText}
@@ -1624,61 +1832,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
                 onApplyTemplate={handleApplyTemplate}
               />
 
-              {/* Local Lesson & Folder Library Panel */}
-              <LessonLibrary 
-                currentRawText={rawText} 
-                currentSpeechList={speechList}
-                currentSettings={{
-                  speed,
-                  timeBetweenLines,
-                  rowLayoutMode,
-                  engineMode,
-                  selectedPremiumVoiceEn,
-                  selectedPremiumVoiceVi,
-                  selectedEnVoiceName,
-                  selectedViVoiceName,
-                  autoGroupSet,
-                  setMultiplier,
-                  useUniversalImage,
-                  universalImageUrl
-                }}
-                onLoadLesson={(lesson) => {
-                  // 1. Restore raw text editor
-                  setRawText(lesson.rawText);
-                  
-                  // 2. Restore all configurations
-                  if (lesson.settings) {
-                    const s = lesson.settings as any;
-                    if (typeof s.speed === 'number') setSpeed(s.speed);
-                    if (typeof s.timeBetweenLines === 'number') setTimeBetweenLines(s.timeBetweenLines);
-                    if (typeof s.rowLayoutMode === 'string') setRowLayoutMode(s.rowLayoutMode);
-                    if (typeof s.engineMode === 'string') setEngineMode(s.engineMode);
-                    if (typeof s.selectedPremiumVoiceEn === 'string') setSelectedPremiumVoiceEn(s.selectedPremiumVoiceEn);
-                    if (typeof s.selectedPremiumVoiceVi === 'string') setSelectedPremiumVoiceVi(s.selectedPremiumVoiceVi);
-                    if (typeof s.selectedPremiumVoiceZhCn === 'string') setSelectedPremiumVoiceZhCn(s.selectedPremiumVoiceZhCn);
-                    if (typeof s.selectedPremiumVoiceZhTw === 'string') setSelectedPremiumVoiceZhTw(s.selectedPremiumVoiceZhTw);
-                    if (typeof s.selectedPremiumVoiceJa === 'string') setSelectedPremiumVoiceJa(s.selectedPremiumVoiceJa);
-                    if (typeof s.selectedPremiumVoiceKo === 'string') setSelectedPremiumVoiceKo(s.selectedPremiumVoiceKo);
-                    if (typeof s.selectedEnVoiceName === 'string') setSelectedEnVoiceName(s.selectedEnVoiceName);
-                    if (typeof s.selectedViVoiceName === 'string') setSelectedViVoiceName(s.selectedViVoiceName);
-                    if (typeof s.selectedZhCnVoiceName === 'string') setSelectedZhCnVoiceName(s.selectedZhCnVoiceName);
-                    if (typeof s.selectedZhTwVoiceName === 'string') setSelectedZhTwVoiceName(s.selectedZhTwVoiceName);
-                    if (typeof s.selectedJaVoiceName === 'string') setSelectedJaVoiceName(s.selectedJaVoiceName);
-                    if (typeof s.selectedKoVoiceName === 'string') setSelectedKoVoiceName(s.selectedKoVoiceName);
-                    if (typeof s.autoGroupSet === 'boolean') handleAutoGroupSetChange(s.autoGroupSet);
-                    if (typeof s.setMultiplier === 'number') handleSetMultiplierChange(s.setMultiplier);
-                    if (typeof s.useUniversalImage === 'boolean') handleUseUniversalImageChange(s.useUniversalImage);
-                    if (typeof s.universalImageUrl === 'string') handleUniversalImageUrlChange(s.universalImageUrl);
-                  }
 
-                  // 3. Restore list of cards & its custom images
-                  if (Array.isArray(lesson.speechList) && lesson.speechList.length > 0) {
-                    setSpeechList(lesson.speechList);
-                  } else {
-                    handleCreateList(lesson.rawText);
-                  }
-                }}
-              />
 
               {/* ChatGPT Prompt Builder Helper Card */}
               <div id="gpt-prompt-helper-box" className="bg-gradient-to-br from-indigo-50/70 via-slate-50 to-pink-50/70 border border-slate-200 rounded-2xl p-5 shadow-xs text-left">
@@ -2073,9 +2227,9 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
               </div>
             </>
           }
-        />
-
-      </main>
+          />
+        )}
+      </AppShell>
 
       {/* Modern Search & Assign Image Modal */}
       <ImageSearchModal
