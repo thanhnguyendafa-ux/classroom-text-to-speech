@@ -17,6 +17,69 @@ export interface SpeechItem {
   imageUrl?: string; // Associated image URL for display during theater play
 }
 
+export type EngineMode = 'browser' | 'premium';
+export type RowLayoutMode = 'below' | 'side';
+export type PlaylistLoopMode = 'once' | 'infinite';
+
+export interface LessonSettings {
+  speed: number;
+  volume?: number;
+  autoAdvance?: boolean;
+  timeBetweenLines: number;
+  rowLayoutMode: RowLayoutMode;
+  engineMode: EngineMode;
+
+  selectedPremiumVoiceEn: string;
+  selectedPremiumVoiceVi: string;
+  selectedPremiumVoiceZhCn: string;
+  selectedPremiumVoiceZhTw: string;
+  selectedPremiumVoiceJa: string;
+  selectedPremiumVoiceKo: string;
+
+  selectedEnVoiceName: string;
+  selectedViVoiceName: string;
+  selectedZhCnVoiceName: string;
+  selectedZhTwVoiceName: string;
+  selectedJaVoiceName: string;
+  selectedKoVoiceName: string;
+
+  autoGroupSet: boolean;
+  setMultiplier: number;
+  useUniversalImage: boolean;
+  universalImageUrl: string;
+}
+
+export interface LessonDocument {
+  schemaVersion: 1;
+  id: string;
+  title: string;
+  rawText: string;
+  folderId: string | null;
+  speechList: SpeechItem[];
+  settings: LessonSettings;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface LessonDraft {
+  title: string;
+  rawText: string;
+  folderId: string | null;
+  speechList: SpeechItem[];
+  settings: LessonSettings;
+}
+
+export interface SharePlaylistPayload {
+  speechList: SpeechItem[];
+  speed: number;
+  volume: number;
+  autoAdvance: boolean;
+  timeBetweenLines: number;
+  playlistLoopMode: PlaylistLoopMode;
+  engineMode: EngineMode;
+  createdAt?: string;
+}
+
 export interface VoiceOption {
   voice: SpeechSynthesisVoice;
   name: string;

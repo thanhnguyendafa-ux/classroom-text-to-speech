@@ -24,7 +24,8 @@ import {
   ArrowUpFromLine
 } from 'lucide-react';
 
-import { SpeechItem } from '../types';
+import { LessonDocument, LessonDraft, LessonSettings, SpeechItem } from '../types';
+import { buildLessonDraft, hydrateLessonDocument } from '../domain/lessonModel';
 import { useAuth } from '../features/auth/useAuth';
 import { 
   CloudFolder, 
@@ -44,27 +45,10 @@ import { MigrationNotice } from '../features/lessons/components/MigrationNotice'
 import { LibraryGallery } from '../features/lessons/components/LibraryGallery';
 import { LibraryList } from '../features/lessons/components/LibraryList';
 
-export interface SavedLesson {
-  id: string;
-  title: string;
-  rawText: string;
-  speechList?: SpeechItem[];
-  settings?: {
-    speed?: number;
-    timeBetweenLines?: number;
-    rowLayoutMode?: 'below' | 'side';
-    engineMode?: 'browser' | 'premium';
-    selectedPremiumVoiceEn?: string;
-    selectedPremiumVoiceVi?: string;
-    selectedEnVoiceName?: string;
-    selectedViVoiceName?: string;
-    autoGroupSet?: boolean;
-    setMultiplier?: number;
-    useUniversalImage?: boolean;
-    universalImageUrl?: string;
-  };
-  createdAt: number;
-}
+export type SavedLesson = Omit<LessonDocument, 'folderId' | 'updatedAt'> & {
+  folderId?: string | null;
+  updatedAt?: number;
+};
 
 export interface SavedFolder {
   id: string;
@@ -76,20 +60,7 @@ export interface SavedFolder {
 interface LessonLibraryProps {
   currentRawText: string;
   currentSpeechList: SpeechItem[];
-  currentSettings: {
-    speed: number;
-    timeBetweenLines: number;
-    rowLayoutMode: 'below' | 'side';
-    engineMode: 'browser' | 'premium';
-    selectedPremiumVoiceEn: string;
-    selectedPremiumVoiceVi: string;
-    selectedEnVoiceName: string;
-    selectedViVoiceName: string;
-    autoGroupSet: boolean;
-    setMultiplier: number;
-    useUniversalImage: boolean;
-    universalImageUrl: string;
-  };
+  currentSettings: LessonSettings;
   onLoadLesson: (lesson: SavedLesson) => void;
   cloudRefreshVersion?: number;
 }
@@ -559,13 +530,21 @@ export default function LessonLibrary({
       return;
     }
     
-    const newLesson: SavedLesson = {
-      id: `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    const now = Date.now();
+    const draft = buildLessonDraft({
       title: trimmedTitle,
       rawText: currentRawText,
       speechList: currentSpeechList,
       settings: currentSettings,
-      createdAt: Date.now()
+      folderId: targetFolderId === 'unassigned' ? null : targetFolderId,
+    });
+
+    const newLesson: SavedLesson = {
+      schemaVersion: 1,
+      id: `lesson-${now}-${Math.random().toString(36).substring(2, 7)}`,
+      ...draft,
+      createdAt: now,
+      updatedAt: now,
     };
     
     if (targetFolderId === 'unassigned') {
@@ -706,17 +685,28 @@ export default function LessonLibrary({
               // Add non-duplicate lessons
               impFold.lessons.forEach(impL => {
                 if (!existingFolder.lessons.some(l => l.title.toLowerCase() === impL.title.toLowerCase())) {
+                  const hydrated = hydrateLessonDocument(
+                    `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                    impL
+                  );
+
                   existingFolder.lessons.push({
-                    ...impL,
-                    // safe fresh ID
-                    id: `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+                    ...hydrated,
+                    folderId: existingFolder.id,
                   });
                 }
               });
             } else {
               mergedFolders.push({
-                ...impFold,
-                id: `folder-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+                id: `folder-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                name: typeof impFold.name === 'string' ? impFold.name : 'Thư mục đã nhập',
+                createdAt: typeof impFold.createdAt === 'number' ? impFold.createdAt : Date.now(),
+                lessons: Array.isArray(impFold.lessons)
+                  ? impFold.lessons.map((lesson) => hydrateLessonDocument(
+                      `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                      lesson
+                    ))
+                  : [],
               });
             }
           });
@@ -725,9 +715,14 @@ export default function LessonLibrary({
           let mergedUncategorized = [...uncategorizedLessons];
           importedUncategorized.forEach((impL: SavedLesson) => {
             if (!mergedUncategorized.some(l => l.title.toLowerCase() === impL.title.toLowerCase())) {
+              const hydrated = hydrateLessonDocument(
+                `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                impL
+              );
+
               mergedUncategorized.push({
-                ...impL,
-                id: `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+                ...hydrated,
+                folderId: null,
               });
             }
           });

@@ -17,23 +17,14 @@ service cloud.firestore {
     }
 
     function isValidPlaylist(data) {
-      return data.keys().hasAll(['speechList', 'speed', 'volume', 'autoAdvance', 'timeBetweenLines', 'playlistLoopMode', 'engineMode', 'createdAt'])
-          && data.keys().size() == 8
+      return data.keys().hasAll(['title', 'rawText', 'speechList', 'settings', 'createdAt', 'updatedAt', 'schemaVersion'])
+          && data.title is string && data.title.size() <= 200
+          && data.rawText is string && data.rawText.size() <= 100000
           && data.speechList is list
-          && data.speechList.size() <= 200
-          && data.speed is number
-          && data.speed >= 0.1 && data.speed <= 3.0
-          && data.volume is number
-          && data.volume >= 0.0 && data.volume <= 2.0
-          && data.autoAdvance is bool
-          && data.timeBetweenLines is number
-          && data.timeBetweenLines >= 0.0 && data.timeBetweenLines <= 60.0
-          && data.playlistLoopMode is string
-          && (data.playlistLoopMode == 'once' || data.playlistLoopMode == 'infinite')
-          && data.engineMode is string
-          && (data.engineMode == 'browser' || data.engineMode == 'premium')
-          && data.createdAt is string
-          && data.createdAt.size() <= 64;
+          && data.settings is map
+          && data.createdAt is number
+          && data.updatedAt is number
+          && data.schemaVersion is number;
     }
 
     function isValidUser(data) {

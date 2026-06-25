@@ -12,6 +12,8 @@ import {
 import { db, auth } from '../../lib/firebase/firebaseClient';
 import { cleanupLessonAudioAssets } from '../premium-tts/persistent-audio/premiumAudioManifestApi';
 import { cleanupLessonAudioStorage } from '../premium-tts/persistent-audio/premiumAudioStorageApi';
+import { LessonDocument, LessonDraft } from '../../types';
+import { hydrateLessonDocument } from '../../domain/lessonModel';
 
 export enum OperationType {
   CREATE = 'create',
@@ -67,16 +69,7 @@ export interface CloudFolder {
   updatedAt: number;
 }
 
-export interface CloudLesson {
-  id: string;
-  title: string;
-  rawText: string;
-  folderId: string | null;
-  speechList?: any[];
-  settings?: any;
-  createdAt: number;
-  updatedAt: number;
-}
+export type CloudLesson = LessonDocument;
 
 // 1. User Profile API
 export async function createOrUpdateUserProfile(
@@ -173,21 +166,22 @@ export async function listLessons(uid: string): Promise<CloudLesson[]> {
     const lessonsRef = collection(db, 'users', uid, 'lessons');
     const q = query(lessonsRef, orderBy('createdAt', 'desc'));
     const snap = await getDocs(q);
-    return snap.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as CloudLesson[];
+    return snap.docs.map(snapshot =>
+      hydrateLessonDocument(snapshot.id, snapshot.data())
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
   }
 }
 
-export async function createLesson(uid: string, lessonId: string, lesson: Omit<CloudLesson, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
+export async function createLesson(uid: string, lessonId: string, lesson: LessonDraft): Promise<void> {
   const path = `users/${uid}/lessons/${lessonId}`;
   try {
     const lessonRef = doc(db, 'users', uid, 'lessons', lessonId);
     const now = Date.now();
     await setDoc(lessonRef, {
+      schemaVersion: 1,
+      id: lessonId,
       ...lesson,
       createdAt: now,
       updatedAt: now
@@ -200,7 +194,7 @@ export async function createLesson(uid: string, lessonId: string, lesson: Omit<C
 export async function updateLesson(
   uid: string, 
   lessonId: string, 
-  updates: Partial<Omit<CloudLesson, 'id' | 'createdAt'>>
+  updates: Partial<LessonDraft>
 ): Promise<void> {
   const path = `users/${uid}/lessons/${lessonId}`;
   try {

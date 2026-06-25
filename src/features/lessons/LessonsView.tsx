@@ -1,25 +1,12 @@
 import React from 'react';
 import LessonLibrary, { SavedLesson } from '../../components/LessonLibrary';
-import { SpeechItem } from '../../types';
+import { SpeechItem, LessonSettings } from '../../types';
 import { BookOpen } from 'lucide-react';
 
 interface LessonsViewProps {
   currentRawText: string;
   currentSpeechList: SpeechItem[];
-  currentSettings: {
-    speed: number;
-    timeBetweenLines: number;
-    rowLayoutMode: 'below' | 'side';
-    engineMode: 'browser' | 'premium';
-    selectedPremiumVoiceEn: string;
-    selectedPremiumVoiceVi: string;
-    selectedEnVoiceName: string;
-    selectedViVoiceName: string;
-    autoGroupSet: boolean;
-    setMultiplier: number;
-    useUniversalImage: boolean;
-    universalImageUrl: string;
-  };
+  currentSettings: LessonSettings;
   onLoadLesson: (lesson: SavedLesson) => void;
   cloudRefreshVersion?: number;
 }

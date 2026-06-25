@@ -186,16 +186,7 @@ export async function createSharedPlaylist(playlistBody: any): Promise<{ id: str
   const validated = validatePlaylistPayload(playlistBody);
 
   const shareId = generateShortId();
-  const payload: PlaylistPayload = {
-    speechList: validated.speechList,
-    speed: validated.speed,
-    volume: validated.volume,
-    autoAdvance: validated.autoAdvance,
-    timeBetweenLines: validated.timeBetweenLines,
-    playlistLoopMode: validated.playlistLoopMode,
-    engineMode: validated.engineMode,
-    createdAt: new Date().toISOString()
-  };
+  const payload: PlaylistPayload = validated;
 
   await PlaylistStorageManager.savePlaylist(shareId, payload);
   return { id: shareId };

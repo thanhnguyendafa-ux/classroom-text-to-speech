@@ -37,7 +37,8 @@ import {
   Radio
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { SpeechItem, LanguageCode } from './types';
+import { SpeechItem, LanguageCode, LessonSettings } from './types';
+import { buildLessonDraft, normalizeSpeechList, hydrateLessonDocument } from './domain/lessonModel';
 import { useGeminiApiKey } from './features/premium-tts/useGeminiApiKey';
 import { usePremiumTts } from './features/premium-tts/usePremiumTts';
 import { getPremiumVoiceForLang } from './features/premium-tts/premiumVoices';
@@ -160,25 +161,12 @@ export default function App() {
     try {
       if (currentLessonId) {
         // Update existing lesson
-        await updateLesson(user.uid, currentLessonId, {
+        await updateLesson(user.uid, currentLessonId, buildLessonDraft({
           title: trimmedTitle,
-          rawText: rawText,
-          speechList: speechList,
-          settings: {
-            speed,
-            timeBetweenLines,
-            rowLayoutMode,
-            engineMode,
-            selectedPremiumVoiceEn,
-            selectedPremiumVoiceVi,
-            selectedEnVoiceName,
-            selectedViVoiceName,
-            autoGroupSet,
-            setMultiplier,
-            useUniversalImage,
-            universalImageUrl
-          }
-        });
+          rawText,
+          speechList,
+          settings: getCurrentLessonSettings(),
+        }));
         setCloudRefreshVersion(prev => prev + 1);
         showToast(
           'success',
@@ -192,26 +180,13 @@ export default function App() {
       } else {
         // Create new lesson
         const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-        await createLesson(user.uid, newId, {
+        await createLesson(user.uid, newId, buildLessonDraft({
           title: trimmedTitle,
-          rawText: rawText,
-          speechList: speechList,
-          settings: {
-            speed,
-            timeBetweenLines,
-            rowLayoutMode,
-            engineMode,
-            selectedPremiumVoiceEn,
-            selectedPremiumVoiceVi,
-            selectedEnVoiceName,
-            selectedViVoiceName,
-            autoGroupSet,
-            setMultiplier,
-            useUniversalImage,
-            universalImageUrl
-          },
-          folderId: null
-        });
+          rawText,
+          speechList,
+          settings: getCurrentLessonSettings(),
+          folderId: null,
+        }));
         setCurrentLessonId(newId);
         setCloudRefreshVersion(prev => prev + 1);
         showToast(
@@ -243,26 +218,13 @@ export default function App() {
     setIsSavingCloudLesson(true);
     try {
       const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      await createLesson(user.uid, newId, {
+      await createLesson(user.uid, newId, buildLessonDraft({
         title: trimmedTitle,
-        rawText: rawText,
-        speechList: speechList,
-        settings: {
-          speed,
-          timeBetweenLines,
-          rowLayoutMode,
-          engineMode,
-          selectedPremiumVoiceEn,
-          selectedPremiumVoiceVi,
-          selectedEnVoiceName,
-          selectedViVoiceName,
-          autoGroupSet,
-          setMultiplier,
-          useUniversalImage,
-          universalImageUrl
-        },
-        folderId: null
-      });
+        rawText,
+        speechList,
+        settings: getCurrentLessonSettings(),
+        folderId: null,
+      }));
       setCurrentLessonId(newId);
       setCurrentLessonTitle(trimmedTitle);
       setCloudRefreshVersion(prev => prev + 1);
@@ -324,24 +286,6 @@ export default function App() {
     selectedPremiumVoiceJa,
     selectedPremiumVoiceKo,
   };
-
-  const {
-    manifests,
-    progress: preparationProgress,
-    isPreparing: isPreparingAudio,
-    isLoadingManifest: isLoadingManifests,
-    error: preparationError,
-    startPreparation,
-    stopPreparation,
-    deletePreparedAudio,
-    cleanUnusedAudio
-  } = usePremiumAudioPreparation({
-    userId: user?.uid || null,
-    lessonId: currentLessonId,
-    speechList,
-    userGeminiApiKey,
-    premiumVoiceSettings
-  });
 
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<any>(null);
@@ -796,6 +740,52 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
     clearApiKey,
   } = useGeminiApiKey();
 
+  const getCurrentLessonSettings = (): LessonSettings => ({
+    speed,
+    volume,
+    autoAdvance,
+    timeBetweenLines,
+    rowLayoutMode,
+    engineMode,
+
+    selectedPremiumVoiceEn,
+    selectedPremiumVoiceVi,
+    selectedPremiumVoiceZhCn,
+    selectedPremiumVoiceZhTw,
+    selectedPremiumVoiceJa,
+    selectedPremiumVoiceKo,
+
+    selectedEnVoiceName,
+    selectedViVoiceName,
+    selectedZhCnVoiceName,
+    selectedZhTwVoiceName,
+    selectedJaVoiceName,
+    selectedKoVoiceName,
+
+    autoGroupSet,
+    setMultiplier,
+    useUniversalImage,
+    universalImageUrl,
+  });
+
+  const {
+    manifests,
+    progress: preparationProgress,
+    isPreparing: isPreparingAudio,
+    isLoadingManifest: isLoadingManifests,
+    error: preparationError,
+    startPreparation,
+    stopPreparation,
+    deletePreparedAudio,
+    cleanUnusedAudio
+  } = usePremiumAudioPreparation({
+    userId: user?.uid || null,
+    lessonId: currentLessonId,
+    speechList,
+    userGeminiApiKey,
+    premiumVoiceSettings
+  });
+
   const { generateTts } = usePremiumTts();
 
   // Clear premium audio cache when API key changes
@@ -987,7 +977,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
         const parsed = JSON.parse(fileContent);
 
         // Try validation
-        let itemsToImport: SpeechItem[] = [];
+        let itemsToImport: any[] = [];
         if (Array.isArray(parsed)) {
           // If the exported file was just a raw array
           itemsToImport = parsed;
@@ -1003,24 +993,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
           return;
         }
 
-        // Clean & sanitize items (assign new random IDs if they are duplicate or missing to avoid React key conflicts)
-        const sanitizedItems: SpeechItem[] = itemsToImport.map(item => {
-          const detected = item.detectedLang || handleDetectLanguage(item.text || "");
-          const selected = item.selectedLang || "auto";
-          const resolved = item.resolvedLang || (selected === 'auto' ? detected : selected);
-          return {
-            id: item.id || `row-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-            text: item.text || "",
-            detectedLang: detected,
-            selectedLang: selected,
-            resolvedLang: resolved,
-            repeats: typeof item.repeats === 'number' ? item.repeats : 1,
-            delaySec: typeof item.delaySec === 'number' ? item.delaySec : 2,
-            speed: typeof item.speed === 'number' ? item.speed : 1.0,
-            setId: item.setId || undefined,
-            imageUrl: item.imageUrl || undefined
-          };
-        });
+        const sanitizedItems = normalizeSpeechList(itemsToImport);
 
         setSpeechList(sanitizedItems);
         
@@ -1834,60 +1807,50 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
           <LessonsView
             currentRawText={rawText}
             currentSpeechList={speechList}
-            currentSettings={{
-              speed,
-              timeBetweenLines,
-              rowLayoutMode,
-              engineMode,
-              selectedPremiumVoiceEn,
-              selectedPremiumVoiceVi,
-              selectedEnVoiceName,
-              selectedViVoiceName,
-              autoGroupSet,
-              setMultiplier,
-              useUniversalImage,
-              universalImageUrl
-            }}
+            currentSettings={getCurrentLessonSettings()}
             cloudRefreshVersion={cloudRefreshVersion}
             onLoadLesson={(lesson) => {
+              const normalizedLesson = hydrateLessonDocument(lesson.id, lesson);
+              const s = normalizedLesson.settings;
+
               // 1. Restore raw text editor
-              setRawText(lesson.rawText);
+              setRawText(normalizedLesson.rawText);
               
               // 2. Restore all configurations
-              if (lesson.settings) {
-                const s = lesson.settings as any;
-                if (typeof s.speed === 'number') setSpeed(s.speed);
-                if (typeof s.timeBetweenLines === 'number') setTimeBetweenLines(s.timeBetweenLines);
-                if (typeof s.rowLayoutMode === 'string') setRowLayoutMode(s.rowLayoutMode);
-                if (typeof s.engineMode === 'string') setEngineMode(s.engineMode);
-                if (typeof s.selectedPremiumVoiceEn === 'string') setSelectedPremiumVoiceEn(s.selectedPremiumVoiceEn);
-                if (typeof s.selectedPremiumVoiceVi === 'string') setSelectedPremiumVoiceVi(s.selectedPremiumVoiceVi);
-                if (typeof s.selectedPremiumVoiceZhCn === 'string') setSelectedPremiumVoiceZhCn(s.selectedPremiumVoiceZhCn);
-                if (typeof s.selectedPremiumVoiceZhTw === 'string') setSelectedPremiumVoiceZhTw(s.selectedPremiumVoiceZhTw);
-                if (typeof s.selectedPremiumVoiceJa === 'string') setSelectedPremiumVoiceJa(s.selectedPremiumVoiceJa);
-                if (typeof s.selectedPremiumVoiceKo === 'string') setSelectedPremiumVoiceKo(s.selectedPremiumVoiceKo);
-                if (typeof s.selectedEnVoiceName === 'string') setSelectedEnVoiceName(s.selectedEnVoiceName);
-                if (typeof s.selectedViVoiceName === 'string') setSelectedViVoiceName(s.selectedViVoiceName);
-                if (typeof s.selectedZhCnVoiceName === 'string') setSelectedZhCnVoiceName(s.selectedZhCnVoiceName);
-                if (typeof s.selectedZhTwVoiceName === 'string') setSelectedZhTwVoiceName(s.selectedZhTwVoiceName);
-                if (typeof s.selectedJaVoiceName === 'string') setSelectedJaVoiceName(s.selectedJaVoiceName);
-                if (typeof s.selectedKoVoiceName === 'string') setSelectedKoVoiceName(s.selectedKoVoiceName);
-                if (typeof s.autoGroupSet === 'boolean') handleAutoGroupSetChange(s.autoGroupSet);
-                if (typeof s.setMultiplier === 'number') handleSetMultiplierChange(s.setMultiplier);
-                if (typeof s.useUniversalImage === 'boolean') handleUseUniversalImageChange(s.useUniversalImage);
-                if (typeof s.universalImageUrl === 'string') handleUniversalImageUrlChange(s.universalImageUrl);
-              }
+              setSpeed(s.speed);
+              setTimeBetweenLines(s.timeBetweenLines);
+              setRowLayoutMode(s.rowLayoutMode);
+              setEngineMode(s.engineMode);
+
+              setSelectedPremiumVoiceEn(s.selectedPremiumVoiceEn);
+              setSelectedPremiumVoiceVi(s.selectedPremiumVoiceVi);
+              setSelectedPremiumVoiceZhCn(s.selectedPremiumVoiceZhCn);
+              setSelectedPremiumVoiceZhTw(s.selectedPremiumVoiceZhTw);
+              setSelectedPremiumVoiceJa(s.selectedPremiumVoiceJa);
+              setSelectedPremiumVoiceKo(s.selectedPremiumVoiceKo);
+
+              setSelectedEnVoiceName(s.selectedEnVoiceName);
+              setSelectedViVoiceName(s.selectedViVoiceName);
+              setSelectedZhCnVoiceName(s.selectedZhCnVoiceName);
+              setSelectedZhTwVoiceName(s.selectedZhTwVoiceName);
+              setSelectedJaVoiceName(s.selectedJaVoiceName);
+              setSelectedKoVoiceName(s.selectedKoVoiceName);
+
+              handleAutoGroupSetChange(s.autoGroupSet);
+              handleSetMultiplierChange(s.setMultiplier);
+              handleUseUniversalImageChange(s.useUniversalImage);
+              handleUniversalImageUrlChange(s.universalImageUrl);
 
               // 3. Restore list of cards & its custom images
-              if (Array.isArray(lesson.speechList) && lesson.speechList.length > 0) {
-                setSpeechList(lesson.speechList);
+              if (normalizedLesson.speechList.length > 0) {
+                setSpeechList(normalizedLesson.speechList);
               } else {
-                handleCreateList(lesson.rawText);
+                handleCreateList(normalizedLesson.rawText);
               }
 
               // Set active lesson identification
-              setCurrentLessonId(lesson.id);
-              setCurrentLessonTitle(lesson.title);
+              setCurrentLessonId(normalizedLesson.id);
+              setCurrentLessonTitle(normalizedLesson.title);
               
               // Transition to builder workspace
               setActiveSection('builder');

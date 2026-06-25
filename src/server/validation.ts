@@ -1,14 +1,7 @@
-import { SpeechItem, LanguageCode } from "../types";
+import { SpeechItem, LanguageCode, LessonDocument } from "../types";
+import { buildLessonDraft } from "../domain/lessonModel";
 
-export interface ValidatedPlaylistPayload {
-  speechList: SpeechItem[];
-  speed: number;
-  volume: number;
-  autoAdvance: boolean;
-  timeBetweenLines: number;
-  playlistLoopMode: "once" | "infinite";
-  engineMode: "browser" | "premium";
-}
+export type ValidatedPlaylistPayload = Omit<LessonDocument, 'id' | 'folderId'>;
 
 const VALID_LANGS: LanguageCode[] = ["en", "vi", "zh-cn", "zh-tw", "ja", "ko"];
 
@@ -92,48 +85,13 @@ export function validateSpeechItem(item: any): SpeechItem {
  * Validates the full payload of a shared playlist
  */
 export function validatePlaylistPayload(body: any): ValidatedPlaylistPayload {
-  if (!body || typeof body !== "object") {
-    throw new Error("Cấu hình chuỗi luyện nói không hợp lệ.");
-  }
-
-  if (!Array.isArray(body.speechList)) {
-    throw new Error("Danh sách câu luyện nói (speechList) phải là một mảng.");
-  }
-
-  if (body.speechList.length === 0) {
-    throw new Error("Danh sách câu luyện nói không được rỗng.");
-  }
-
-  if (body.speechList.length > 100) {
-    throw new Error("Mỗi chuỗi chia sẻ chỉ được chứa tối đa 100 câu luyện tập.");
-  }
-
-  const speechList = body.speechList.map((item: any) => validateSpeechItem(item));
-
-  const speed = typeof body.speed === "number" && !isNaN(body.speed)
-    ? Math.max(0.25, Math.min(3.0, body.speed))
-    : 1.0;
-
-  const volume = typeof body.volume === "number" && !isNaN(body.volume)
-    ? Math.max(0, Math.min(2.0, body.volume))
-    : 1.0;
-
-  const autoAdvance = typeof body.autoAdvance === "boolean" ? body.autoAdvance : true;
-
-  const timeBetweenLines = typeof body.timeBetweenLines === "number" && !isNaN(body.timeBetweenLines)
-    ? Math.max(0, Math.min(30, body.timeBetweenLines))
-    : 0.0;
-
-  const playlistLoopMode = body.playlistLoopMode === "infinite" ? "infinite" : "once";
-  const engineMode = body.engineMode === "premium" ? "premium" : "browser";
-
+  const draft = buildLessonDraft(body);
   return {
-    speechList,
-    speed,
-    volume,
-    autoAdvance,
-    timeBetweenLines,
-    playlistLoopMode,
-    engineMode
+    title: draft.title,
+    rawText: draft.rawText,
+    speechList: draft.speechList,
+    settings: draft.settings,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
   };
 }
