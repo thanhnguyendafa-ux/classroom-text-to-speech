@@ -205,12 +205,11 @@ export default function LessonLibrary({
         const defaultNestedChineseText = '苹果\nquả táo\n红苹果\nquả táo màu đỏ\n我喜欢吃红苹果。 /1.5\nTài thích ăn quả táo màu đỏ.\n买新鲜苹果\nmua táo tươi ngon\n妈妈去超市买新鲜苹果。 ;2\nMẹ đi siêu thị mua táo tươi ngon.';
 
         const initialUncategorized: SavedLesson[] = [
-          {
-            id: `lesson-seed-outer-1`,
+          hydrateLessonDocument('lesson-seed-outer-1', {
             title: 'Học Tiếng Anh Giao Tiếp (Mẫu Anh-Việt)',
             rawText: defaultOuterText,
-            createdAt: Date.now() - 100000
-          }
+            createdAt: Date.now() - 100000,
+          })
         ];
         
         const initialFolders: SavedFolder[] = [
@@ -218,18 +217,16 @@ export default function LessonLibrary({
             id: 'folder-seed-v3',
             name: 'Khóa Học Song Ngữ Giao Tiếp',
             lessons: [
-              {
-                id: 'lesson-seed-nested-eng',
+              hydrateLessonDocument('lesson-seed-nested-eng', {
                 title: 'Tiếng Anh Du Lịch (Mẫu Anh-Việt)',
                 rawText: defaultNestedEnglishText,
-                createdAt: Date.now() - 50000
-              },
-              {
-                id: 'lesson-seed-nested-zho',
+                createdAt: Date.now() - 50000,
+              }),
+              hydrateLessonDocument('lesson-seed-nested-zho', {
                 title: 'Tiếng Trung Giao Tiếp (Mẫu Trung-Việt)',
                 rawText: defaultNestedChineseText,
-                createdAt: Date.now() - 10000
-              }
+                createdAt: Date.now() - 10000,
+              })
             ],
             createdAt: Date.now()
           }
@@ -393,15 +390,7 @@ export default function LessonLibrary({
   };
 
   const handleLoadCloudLesson = (lesson: CloudLesson) => {
-    const mapped: SavedLesson = {
-      id: lesson.id,
-      title: lesson.title,
-      rawText: lesson.rawText,
-      speechList: lesson.speechList,
-      settings: lesson.settings,
-      createdAt: lesson.createdAt
-    };
-    onLoadLesson(mapped);
+    onLoadLesson(lesson);
     flashMessage(`Đã nạp bài học đám mây "${lesson.title}" thành công!`, 'success');
     const mainEl = document.getElementById('words-maker-box');
     if (mainEl) {

@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc, getDoc, getDocFromServer } from "firebase/firestore";
 import fs from "fs";
 import path from "path";
-import { LessonDocument } from "../types";
+import { SharePlaylistPayload } from "../types";
 
 // Initialize Firebase using firebase-applet-config.json
 const configPath = path.join(process.cwd(), "firebase-applet-config.json");
@@ -62,7 +62,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 // Interfaces for backend storage provider
-export type PlaylistPayload = Omit<LessonDocument, 'id' | 'folderId'>;
+export type PlaylistPayload = Required<SharePlaylistPayload>;
 
 // In-memory cache for fast subsequent reads
 let inMemoryPlaylists: Record<string, any> = {};
@@ -79,13 +79,14 @@ export class PlaylistStorageManager {
     try {
       const docRef = doc(db, "playlists", shareId);
       await setDoc(docRef, {
-        title: data.title,
-        rawText: data.rawText,
         speechList: data.speechList,
-        settings: data.settings,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-        schemaVersion: data.schemaVersion,
+        speed: data.speed,
+        volume: data.volume,
+        autoAdvance: data.autoAdvance,
+        timeBetweenLines: data.timeBetweenLines,
+        playlistLoopMode: data.playlistLoopMode,
+        engineMode: data.engineMode,
+        createdAt: data.createdAt || new Date().toISOString(),
       });
 
       inMemoryPlaylists[shareId] = data;

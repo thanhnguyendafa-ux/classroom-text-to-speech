@@ -46,13 +46,15 @@ service cloud.firestore {
     }
 
     function isValidLesson(data) {
-      return data.title is string && data.title.size() <= 200
+      return data.schemaVersion == 1
+          && data.title is string && data.title.size() <= 200
           && data.rawText is string && data.rawText.size() <= 100000
           && data.createdAt is number
           && data.updatedAt is number
           && (!data.keys().hasAny(['folderId']) || (data.folderId is string || data.folderId == null))
-          && (!data.keys().hasAny(['speechList']) || data.speechList is list)
-          && (!data.keys().hasAny(['settings']) || data.settings is map);
+          && data.speechList is list
+          && data.speechList.size() <= 200
+          && data.settings is map;
     }
 
     function isValidPremiumAudioAsset(data) {

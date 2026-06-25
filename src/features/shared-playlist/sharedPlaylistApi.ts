@@ -1,15 +1,6 @@
-import { SpeechItem } from "../../types";
+import { SharePlaylistPayload } from "../../types";
 
-export interface PlaylistPayload {
-  speechList: SpeechItem[];
-  speed: number;
-  volume: number;
-  autoAdvance: boolean;
-  timeBetweenLines: number;
-  playlistLoopMode: "once" | "infinite";
-  engineMode: "browser" | "premium";
-  createdAt?: string;
-}
+export type PlaylistPayload = SharePlaylistPayload;
 
 /**
  * Fetch a shared playlist by its short ID from the API.
