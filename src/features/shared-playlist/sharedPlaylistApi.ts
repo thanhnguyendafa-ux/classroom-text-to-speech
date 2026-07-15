@@ -1,4 +1,5 @@
 import { SharePlaylistPayload } from "../../types";
+import { authenticatedFetch } from '../../lib/firebase/authenticatedFetch';
 
 export type PlaylistPayload = SharePlaylistPayload;
 
@@ -6,7 +7,7 @@ export type PlaylistPayload = SharePlaylistPayload;
  * Fetch a shared playlist by its short ID from the API.
  */
 export async function fetchSharedPlaylist(shareId: string): Promise<PlaylistPayload> {
-  const response = await fetch(`/api/share-playlist/${shareId}`);
+  const response = await authenticatedFetch(`/api/share-playlist/${shareId}`);
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || "Không thể tìm thấy liên kết chia sẻ.");
@@ -18,7 +19,7 @@ export async function fetchSharedPlaylist(shareId: string): Promise<PlaylistPayl
  * Post a shared playlist payload to create a new share link.
  */
 export async function createSharedPlaylistApi(payload: PlaylistPayload): Promise<{ id: string }> {
-  const response = await fetch("/api/share-playlist", {
+  const response = await authenticatedFetch("/api/share-playlist", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { applicationDefault, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { resolveFirebaseAdminConfig, type FirebaseClientConfig } from './firebaseAdminConfig';
 
 function readClientConfig(): FirebaseClientConfig {
@@ -28,3 +29,5 @@ const adminApp = getApps().length > 0
 export const adminDb = adminConfig.databaseId
   ? getFirestore(adminApp, adminConfig.databaseId)
   : getFirestore(adminApp);
+
+export const adminAuth = getAuth(adminApp);

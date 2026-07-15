@@ -1,5 +1,6 @@
 import { createSharedPlaylist } from "../../src/server/handlers";
-import { applyRateLimitHeaders, getClientIp, sharePlaylistLimiter } from "../../src/server/rateLimiter";
+import { applyRateLimitHeaders, sharePlaylistLimiter } from "../../src/server/rateLimiter";
+import { getRequestRateLimitIdentity } from '../../src/server/requestIdentity';
 import { applySecurityHeaders } from "../../src/server/httpSecurity";
 import { sendApiError } from '../../src/server/apiError';
 
@@ -17,8 +18,14 @@ export default async function handler(req: any, res: any) {
   }
 
   // Rate Limiting on Serverless context
-  const ip = getClientIp(req);
-  const limitState = await sharePlaylistLimiter.consume(ip);
+  let identity: string;
+  try {
+    identity = await getRequestRateLimitIdentity(req);
+  } catch (error) {
+    sendApiError(res, error, 'share-playlist-auth');
+    return;
+  }
+  const limitState = await sharePlaylistLimiter.consume(identity);
   applyRateLimitHeaders(res, limitState);
   if (!limitState.success) {
     res.status(429).json({

@@ -9,7 +9,6 @@ import {
   getSharedPlaylist,
 } from "./src/server/handlers";
 import {
-  getClientIp,
   applyRateLimitHeaders,
   ttsLimiter,
   imageSearchLimiter,
@@ -18,6 +17,7 @@ import {
 import { checkFirestoreConnection } from "./src/server/storage";
 import { applySecurityHeaders } from "./src/server/httpSecurity";
 import { sendApiError } from './src/server/apiError';
+import { getRequestRateLimitIdentity } from './src/server/requestIdentity';
 
 dotenv.config();
 
@@ -47,8 +47,14 @@ app.get("/api/health", async (req, res) => {
 
 // 1. Unsplash Image Search with Rate Limiting
 app.get("/api/search-images", async (req, res) => {
-  const ip = getClientIp(req);
-  const rateLimit = await imageSearchLimiter.consume(ip);
+  let identity: string;
+  try {
+    identity = await getRequestRateLimitIdentity(req);
+  } catch (error) {
+    sendApiError(res, error, 'image-search-auth');
+    return;
+  }
+  const rateLimit = await imageSearchLimiter.consume(identity);
   applyRateLimitHeaders(res, rateLimit);
   if (!rateLimit.success) {
     res.status(429).json({
@@ -69,8 +75,14 @@ app.get("/api/search-images", async (req, res) => {
 
 // 2. High-performance Gemini TTS with Rate Limiting
 app.post("/api/tts", async (req, res) => {
-  const ip = getClientIp(req);
-  const rateLimit = await ttsLimiter.consume(ip);
+  let identity: string;
+  try {
+    identity = await getRequestRateLimitIdentity(req);
+  } catch (error) {
+    sendApiError(res, error, 'tts-auth');
+    return;
+  }
+  const rateLimit = await ttsLimiter.consume(identity);
   applyRateLimitHeaders(res, rateLimit);
   if (!rateLimit.success) {
     res.status(429).json({
@@ -90,8 +102,14 @@ app.post("/api/tts", async (req, res) => {
 
 // 3. Share custom playlist with Rate Limiting
 app.post("/api/share-playlist", async (req, res) => {
-  const ip = getClientIp(req);
-  const rateLimit = await sharePlaylistLimiter.consume(ip);
+  let identity: string;
+  try {
+    identity = await getRequestRateLimitIdentity(req);
+  } catch (error) {
+    sendApiError(res, error, 'share-playlist-auth');
+    return;
+  }
+  const rateLimit = await sharePlaylistLimiter.consume(identity);
   applyRateLimitHeaders(res, rateLimit);
   if (!rateLimit.success) {
     res.status(429).json({

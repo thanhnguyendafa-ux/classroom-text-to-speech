@@ -43,7 +43,7 @@ export async function generatePremiumTts({
     throw new Error('Nội dung văn bản trống.');
   }
 
-  const response = await fetch('/api/tts', {
+  const response = await authenticatedFetch('/api/tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -72,3 +72,4 @@ export async function generatePremiumTts({
 
   return data.audioUrl;
 }
+import { authenticatedFetch } from '../../lib/firebase/authenticatedFetch';

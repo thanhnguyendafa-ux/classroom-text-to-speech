@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Globe, X, Check, Image as ImageIcon, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import { SpeechItem } from '../types';
+import { authenticatedFetch } from '../lib/firebase/authenticatedFetch';
 
 interface SearchResult {
   id: string;
@@ -40,7 +41,7 @@ export default function ImageSearchModal({ isOpen, onClose, item, onAssignImage 
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/search-images?q=${encodeURIComponent(query)}`);
+      const response = await authenticatedFetch(`/api/search-images?q=${encodeURIComponent(query)}`);
       if (!response.ok) {
         throw new Error('Không thể tải kết quả tìm kiếm ảnh.');
       }
