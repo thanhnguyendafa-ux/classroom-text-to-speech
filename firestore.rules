@@ -57,7 +57,9 @@ service cloud.firestore {
           && (!data.keys().hasAny(['folderId']) || (data.folderId is string || data.folderId == null))
           && data.speechList is list
           && data.speechList.size() <= 200
-          && data.settings is map;
+          && data.settings is map
+          && (!data.keys().hasAny(['deletionStatus']) || data.deletionStatus == 'deleting' || data.deletionStatus == 'cleanup_failed')
+          && (!data.keys().hasAny(['deletionError']) || data.deletionError is string || data.deletionError == null);
     }
 
     function isValidPremiumAudioAsset(data) {

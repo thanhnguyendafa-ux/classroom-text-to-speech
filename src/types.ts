@@ -60,6 +60,8 @@ export interface LessonDocument {
   settings: LessonSettings;
   createdAt: number;
   updatedAt: number;
+  deletionStatus?: 'deleting' | 'cleanup_failed';
+  deletionError?: string | null;
 }
 
 export interface LessonDraft {
@@ -68,6 +70,8 @@ export interface LessonDraft {
   folderId: string | null;
   speechList: SpeechItem[];
   settings: LessonSettings;
+  deletionStatus?: 'deleting' | 'cleanup_failed';
+  deletionError?: string | null;
 }
 
 export interface SharePlaylistPayload {

@@ -16,6 +16,7 @@ import { cleanupLessonAudioStorage } from '../premium-tts/persistent-audio/premi
 import { LessonDocument, LessonDraft } from '../../types';
 import { hydrateLessonDocument } from '../../domain/lessonModel';
 import { assertExpectedRevision, LessonConflictError, nextRevision } from '../../domain/lessonRevision';
+import { summarizeCleanupResults } from '../../domain/lessonDeletion';
 
 export enum OperationType {
   CREATE = 'create',
@@ -222,19 +223,20 @@ export async function updateLesson(
 export async function deleteLesson(uid: string, lessonId: string): Promise<void> {
   const path = `users/${uid}/lessons/${lessonId}`;
   try {
-    try {
-      await cleanupLessonAudioAssets(uid, lessonId);
-    } catch (err) {
-      console.warn('[cloudLessonApi] Failed to clean up audio assets manifest on lesson deletion:', err);
+    await updateLesson(uid, lessonId, { deletionStatus: 'deleting', deletionError: null });
+    const cleanupResults = await Promise.allSettled([
+      cleanupLessonAudioAssets(uid, lessonId),
+      cleanupLessonAudioStorage(uid, lessonId),
+    ]);
+    const summary = summarizeCleanupResults(cleanupResults);
+    if (!summary.canFinalize) {
+      await updateLesson(uid, lessonId, {
+        deletionStatus: 'cleanup_failed',
+        deletionError: `${summary.failureCount} cleanup operation(s) failed`,
+      });
+      throw new Error('Không thể xóa hoàn toàn dữ liệu âm thanh. Bài học được giữ lại để thử lại an toàn.');
     }
-    try {
-      await cleanupLessonAudioStorage(uid, lessonId);
-    } catch (err) {
-      console.warn('[cloudLessonApi] Failed to clean up audio assets storage on lesson deletion:', err);
-    }
-
-    const lessonRef = doc(db, 'users', uid, 'lessons', lessonId);
-    await deleteDoc(lessonRef);
+    await deleteDoc(doc(db, 'users', uid, 'lessons', lessonId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

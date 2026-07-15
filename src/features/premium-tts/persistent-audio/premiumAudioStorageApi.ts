@@ -32,10 +32,9 @@ export async function cleanupLessonAudioStorage(userId: string, lessonId: string
   const dirRef = ref(storage, dirPath);
   try {
     const listResult = await listAll(dirRef);
-    const deletePromises = listResult.items.map((item) => deleteObject(item));
-    await Promise.all(deletePromises);
-  } catch (err) {
-    // If the folder is empty or doesn't exist, listAll can fail/return empty, which is fine
-    console.log(`[premiumAudioStorageApi] Cleanup storage completed for lesson ${lessonId}.`);
+    await Promise.all(listResult.items.map(item => deleteObject(item)));
+  } catch (err: any) {
+    if (err?.code === 'storage/object-not-found') return;
+    throw err;
   }
 }

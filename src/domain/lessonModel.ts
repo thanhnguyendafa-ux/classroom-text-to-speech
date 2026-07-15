@@ -139,6 +139,11 @@ export function hydrateLessonDocument(id: string, input: unknown): LessonDocumen
     settings: normalizeLessonSettings(data.settings),
     createdAt: clamp(data.createdAt, now, 0, Number.MAX_SAFE_INTEGER),
     updatedAt: clamp(data.updatedAt, now, 0, Number.MAX_SAFE_INTEGER),
+    deletionStatus:
+      data.deletionStatus === 'deleting' || data.deletionStatus === 'cleanup_failed'
+        ? data.deletionStatus
+        : undefined,
+    deletionError: typeof data.deletionError === 'string' ? data.deletionError : null,
   };
 }
 
