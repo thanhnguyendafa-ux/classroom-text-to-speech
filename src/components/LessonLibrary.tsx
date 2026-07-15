@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 import { LessonDocument, LessonDraft, LessonSettings, SpeechItem } from '../types';
-import { buildLessonDraft, hydrateLessonDocument } from '../domain/lessonModel';
+import { buildLessonDraft } from '../domain/lessonModel';
 import { useAuth } from '../features/auth/useAuth';
 import {
   CloudFolder,
@@ -49,6 +49,7 @@ import { mergeLibraryBackup, parseLibraryBackup, serializeLibraryBackup } from '
 import { migrateLocalLibraryToCloud } from '../features/lessons/libraryCloudMigration';
 import type { LibraryDisplayFolder, LibraryDisplayLesson } from '../features/lessons/libraryDisplayModel';
 import { createCloudLibraryService } from '../features/lessons/cloudLibraryService';
+import { createDefaultLocalLibrarySeed } from '../features/lessons/localLibrarySeed';
 export type { SavedFolder, SavedLesson } from '../features/lessons/localLibraryRepository';
 
 const cloudLibraryService = createCloudLibraryService({ listFolders, listLessons, createFolder, updateFolder, deleteFolder, createLesson, updateLesson, deleteLesson });
@@ -155,46 +156,10 @@ export default function LessonLibrary({
         setFolders(snapshot.folders);
         setUncategorizedLessons(snapshot.uncategorized);
       } else {
-        // Default seed datasets matching exactly: 1 folder, 2 files inside, 1 file outside (including English-Vietnamese & Chinese-Vietnamese)
-        const defaultOuterText = 'sunflower\nhoa hướng dương\nbright sunflower\nhoa hướng dương rực rỡ\nI saw a bright sunflower. /1.5\nTôi đã thấy một bông hoa hướng dương rực rỡ.\nplanting sunflower seeds\ngieo hạt hoa hướng dương\nWe are planting sunflower seeds in the garden. ;2\nChúng tôi đang gieo hạt hoa hướng dương trong vườn.';
-
-        const defaultNestedEnglishText = 'popcorn\nbắp rang\ndelicious popcorn\nbắp rang ngon lành\nI love eating delicious popcorn. /1.5\nMình rất thích ăn bắp rang ngon lành.\nsharing popcorn\nchia sẻ bắp rang\nWe are sharing popcorn while watching a movie. ;2\nChúng mình đang chung nhau ăn bắp rang khi xem phim.';
-
-        const defaultNestedChineseText = '苹果\nquả táo\n红苹果\nquả táo màu đỏ\n我喜欢吃红苹果。 /1.5\nTài thích ăn quả táo màu đỏ.\n买新鲜苹果\nmua táo tươi ngon\n妈妈去超市买新鲜苹果。 ;2\nMẹ đi siêu thị mua táo tươi ngon.';
-
-        const initialUncategorized: SavedLesson[] = [
-          hydrateLessonDocument('lesson-seed-outer-1', {
-            title: 'Học Tiếng Anh Giao Tiếp (Mẫu Anh-Việt)',
-            rawText: defaultOuterText,
-            createdAt: Date.now() - 100000,
-          })
-        ];
-
-        const initialFolders: SavedFolder[] = [
-          {
-            id: 'folder-seed-v3',
-            name: 'Khóa Học Song Ngữ Giao Tiếp',
-            lessons: [
-              hydrateLessonDocument('lesson-seed-nested-eng', {
-                title: 'Tiếng Anh Du Lịch (Mẫu Anh-Việt)',
-                rawText: defaultNestedEnglishText,
-                createdAt: Date.now() - 50000,
-              }),
-              hydrateLessonDocument('lesson-seed-nested-zho', {
-                title: 'Tiếng Trung Giao Tiếp (Mẫu Trung-Việt)',
-                rawText: defaultNestedChineseText,
-                createdAt: Date.now() - 10000,
-              })
-            ],
-            createdAt: Date.now()
-          }
-        ];
-
-        setFolders(initialFolders);
-        setUncategorizedLessons(initialUncategorized);
-        localLibraryRepository.save({ folders: initialFolders, uncategorized: initialUncategorized });
-
-        // Expand the seed folder by default
+        const initial = createDefaultLocalLibrarySeed(Date.now());
+        setFolders(initial.folders);
+        setUncategorizedLessons(initial.uncategorized);
+        localLibraryRepository.save(initial);
         setExpandedFolders({ 'folder-seed-v3': true });
       }
     }
