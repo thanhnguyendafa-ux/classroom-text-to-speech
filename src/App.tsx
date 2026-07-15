@@ -64,19 +64,13 @@ import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
 import { usePlaybackState } from './features/playback/usePlaybackState';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
 import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
+import { buildSpeechItems, detectLanguage, parseLineSymbols } from './features/lesson-editor/speechItemFactory';
 
 const ImageSearchModal = React.lazy(() => import('./components/ImageSearchModal'));
 const TheaterPlayer = React.lazy(() => import('./components/TheaterPlayer'));
 const ShareModal = React.lazy(() => import('./components/ShareModal'));
 const AudioExportModal = React.lazy(() => import('./components/AudioExportModal'));
 
-
-// Helper regex to detect language characters
-const JAPANESE_CHARACTER_REGEX = /[\u3040-\u309F\u30A0-\u30FF]/;
-const KOREAN_CHARACTER_REGEX = /[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/;
-const CHINESE_TRADITIONAL_UNIQUE_CHARS = /[體廣門見劃設對華遷萬國學會東億個開鳳龍聽擊買賣車愛東漢義鋸齒靈丽響讓觀認邊發變禮藝]/;
-const CHINESE_CHARACTER_REGEX = /[\u4E00-\u9FFF]/;
-const VIETNAMESE_DIACRITICS_REGEX = /[àáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệđìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵĂÂÊÔƠƯĐ]/i;
 
 export default function App() {
   const [rawText, setRawText] = useState<string>(
@@ -738,118 +732,21 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  // Helper function to extract custom codes /seconds and ;repeats from text lines
-  const parseLineSymbols = (
-    rawLine: string,
-    defaultRepeats: number = 1,
-    defaultDelay: number = 2.0
-  ) => {
-    let cleanText = rawLine;
-    let repeats = defaultRepeats;
-    let delaySec = defaultDelay;
-
-    // Pattern for /seconds (can be float or integer)
-    const delayRegex = /\/\s*(\d+(?:\.\d+)?)\b/;
-    const delayMatch = cleanText.match(delayRegex);
-    if (delayMatch) {
-      delaySec = parseFloat(delayMatch[1]);
-      cleanText = cleanText.replace(delayRegex, '').trim();
-    }
-
-    // Pattern for ;repeats (integer)
-    const repeatRegex = /;\s*(\d+)\b/;
-    const repeatMatch = cleanText.match(repeatRegex);
-    if (repeatMatch) {
-      repeats = parseInt(repeatMatch[1], 10);
-      cleanText = cleanText.replace(repeatRegex, '').trim();
-    }
-
-    // Clean extra whitespace resulting from stripping
-    cleanText = cleanText.replace(/\s+/g, ' ').trim();
-
-    return { cleanText, repeats, delaySec };
-  };
-
-  // Helper function to detect language of a given line
-  const handleDetectLanguage = (line: string): LanguageCode => {
-    const trimmed = line.trim();
-    if (KOREAN_CHARACTER_REGEX.test(trimmed)) return 'ko';
-    if (JAPANESE_CHARACTER_REGEX.test(trimmed)) return 'ja';
-    if (CHINESE_CHARACTER_REGEX.test(trimmed)) {
-      return CHINESE_TRADITIONAL_UNIQUE_CHARS.test(trimmed) ? 'zh-tw' : 'zh-cn';
-    }
-    if (VIETNAMESE_DIACRITICS_REGEX.test(trimmed)) return 'vi';
-    return 'en';
-  };
-
-  // Create the main interactive speaker list
   function handleCreateList(textOverride?: string) {
     const sourceText = typeof textOverride === 'string' ? textOverride : rawText;
-    const lines = sourceText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-
-    // First map all raw lines to structured helper item objects
-    const parsedLines = lines.map((lineText) => {
-      const { cleanText, repeats, delaySec } = parseLineSymbols(lineText, 1, timeBetweenLines);
-      const detected = handleDetectLanguage(cleanText);
-      return {
-        text: cleanText,
-        detectedLang: detected,
-        selectedLang: 'auto' as const,
-        resolvedLang: detected,
-        repeats: repeats,
-        delaySec: delaySec,
-        speed: speed
-      };
+    const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const newList = buildSpeechItems({
+      sourceText,
+      timeBetweenLines,
+      speed,
+      autoGroupSet,
+      setMultiplier,
+      createId: (kind, index) => `${kind}-${nonce}-${index}`,
     });
-
-    const newList: SpeechItem[] = [];
-    let itemIdx = 0;
-
-    if (autoGroupSet) {
-      const M = Math.max(1, setMultiplier);
-      // Group consecutive parsed lines as pairs
-      for (let i = 0; i < parsedLines.length - 1; i += 2) {
-        const item1 = parsedLines[i];
-        const item2 = parsedLines[i + 1];
-
-        // Duplicate each set pair M times sequentially
-        for (let m = 0; m < M; m++) {
-          const newSetId = `set-${Date.now()}-${i}-m${m}-${Math.random().toString(36).substr(2, 5)}`;
-          newList.push({
-            ...item1,
-            id: `row-${Date.now()}-${itemIdx++}-${Math.random().toString(36).substr(2, 5)}`,
-            setId: newSetId
-          });
-          newList.push({
-            ...item2,
-            id: `row-${Date.now()}-${itemIdx++}-${Math.random().toString(36).substr(2, 5)}`,
-            setId: newSetId
-          });
-        }
-      }
-
-      // Handle odd leftover line
-      if (parsedLines.length % 2 !== 0) {
-        const oddItem = parsedLines[parsedLines.length - 1];
-        newList.push({
-          ...oddItem,
-          id: `row-${Date.now()}-${itemIdx++}-${Math.random().toString(36).substr(2, 5)}`
-        });
-      }
-    } else {
-      // Normal single row creation
-      parsedLines.forEach((item, idx) => {
-        newList.push({
-          ...item,
-          id: `row-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`
-        });
-      });
-    }
 
     setSpeechList(newList);
     handleStopAll();
   }
-
   // Add single custom row
   const handleAddSingleRow = (e: React.FormEvent) => {
     e.preventDefault();
@@ -857,7 +754,7 @@ export default function App() {
 
     // Parse symbols from the text if provided in the quick action form
     const { cleanText, repeats, delaySec } = parseLineSymbols(newRowText.trim(), newRowRepeats, newRowDelay);
-    const detected = handleDetectLanguage(cleanText);
+    const detected = detectLanguage(cleanText);
     const resolved: LanguageCode = newRowLang === 'auto' ? detected : newRowLang;
 
     const newItem: SpeechItem = {
@@ -1410,7 +1307,7 @@ export default function App() {
         const rawNewText = editingText.trim();
         // Parse custom speed and repetition codes if typed during manual edit
         const { cleanText, repeats, delaySec } = parseLineSymbols(rawNewText, item.repeats, item.delaySec);
-        const detected = handleDetectLanguage(cleanText);
+        const detected = detectLanguage(cleanText);
         const resolved = item.selectedLang === 'auto' ? detected : item.selectedLang;
         return {
           ...item,
