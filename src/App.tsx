@@ -63,6 +63,7 @@ import LessonsView from './features/lessons/LessonsView';
 import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
 import { usePlaybackState } from './features/playback/usePlaybackState';
 import { createBrowserCountdownController, type CountdownController } from './features/playback/countdownController';
+import { createBrowserAudioPlaybackAdapter } from './features/playback/audioPlaybackAdapter';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
 import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
 import { buildSpeechItems, detectLanguage, parseLineSymbols } from './features/lesson-editor/speechItemFactory';
@@ -289,23 +290,9 @@ export default function App() {
     selectedPremiumVoiceKo,
   };
 
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<any>(null);
-  const lastNodesRef = useRef<any>(null);
+  const audioPlaybackAdapterRef = useRef<ReturnType<typeof createBrowserAudioPlaybackAdapter> | null>(null);
+  if (!audioPlaybackAdapterRef.current) audioPlaybackAdapterRef.current = createBrowserAudioPlaybackAdapter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const clearWebAudioNodes = () => {
-    if (lastNodesRef.current) {
-      try {
-        lastNodesRef.current.source.disconnect();
-        lastNodesRef.current.gain.disconnect();
-      } catch (e) {
-        console.error("Lỗi khi giải phóng Web Audio:", e);
-      }
-      lastNodesRef.current = null;
-    }
-  };
-
   const {
     playingItemId,
     playingState,
@@ -750,11 +737,8 @@ export default function App() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current = null;
-    }
-    clearWebAudioNodes();
+    audioPlaybackAdapterRef.current?.stop();
+
     clearWaitTimers();
 
     isSpeechSynthesisPausedRef.current = false;
@@ -914,39 +898,8 @@ export default function App() {
           }
 
           const audio = new Audio(audioUrl);
-          currentAudioRef.current = audio;
+          audioPlaybackAdapterRef.current?.attach(audio, volume);
           audio.playbackRate = item.speed !== undefined ? item.speed : speed;
-
-          // Apply audio volume booster using Web Audio Gain Node if volume is > 1.0
-          if (volume > 1.0) {
-            try {
-              if (!audioContextRef.current) {
-                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-              }
-              const ctx = audioContextRef.current;
-              if (ctx.state === 'suspended') {
-                ctx.resume();
-              }
-
-              clearWebAudioNodes();
-
-              const source = ctx.createMediaElementSource(audio);
-              const gainNode = ctx.createGain();
-
-              audio.volume = 1.0; // Max normal volume on element
-              gainNode.gain.setValueAtTime(volume, ctx.currentTime);
-
-              source.connect(gainNode);
-              gainNode.connect(ctx.destination);
-
-              lastNodesRef.current = { source, gain: gainNode };
-            } catch (err) {
-              console.error("Web Audio API volume boost error:", err);
-              audio.volume = 1.0;
-            }
-          } else {
-            audio.volume = volume;
-          }
 
           audio.onplay = () => {
             setPlayingItemId(item.id);
@@ -1076,11 +1029,8 @@ export default function App() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current = null;
-    }
-    clearWebAudioNodes();
+    audioPlaybackAdapterRef.current?.stop();
+
     clearWaitTimers();
     activePlayingIdRef.current = null;
     stopPlayback();
@@ -1101,10 +1051,8 @@ export default function App() {
           isSpeechSynthesisPausedRef.current = true;
         }
       } else {
-        if (currentAudioRef.current) {
-          currentAudioRef.current.pause();
-          isPremiumAudioPausedRef.current = true;
-        }
+        audioPlaybackAdapterRef.current?.pause();
+        isPremiumAudioPausedRef.current = true;
       }
     }
     // Case 2: In a countdown timer delay (repeat countdown or auto advance countdown)
@@ -1128,13 +1076,12 @@ export default function App() {
         setPlayingState('playing');
       }
     } else if (isPremiumAudioPausedRef.current) {
-      if (currentAudioRef.current) {
-        currentAudioRef.current.play().catch(err => {
-          console.error("Failed to resume Premium Audio:", err);
-        });
+      void audioPlaybackAdapterRef.current?.resume().then(() => {
         isPremiumAudioPausedRef.current = false;
         setPlayingState('playing');
-      }
+      }).catch(err => {
+        console.error("Failed to resume Premium Audio:", err);
+      });
     }
     // Case 2: Resume the controller-owned countdown.
     else {
