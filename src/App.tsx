@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode, LessonSettings } from './types';
-import { buildLessonDraft, normalizeSpeechList, hydrateLessonDocument } from './domain/lessonModel';
+import { buildLessonDraft, hydrateLessonDocument } from './domain/lessonModel';
 import { useGeminiApiKey } from './features/premium-tts/useGeminiApiKey';
 import { usePremiumTts } from './features/premium-tts/usePremiumTts';
 import { getPremiumVoiceForLang } from './features/premium-tts/premiumVoices';
@@ -68,6 +68,7 @@ import { createWindowBrowserSpeechAdapter } from './features/playback/browserSpe
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
 import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
 import { buildSpeechItems, detectLanguage, parseLineSymbols } from './features/lesson-editor/speechItemFactory';
+import { parseSpeechListImport } from './features/lesson-editor/speechListImport';
 import { duplicateSet, joinWithNext, ungroupSet, updateSpeechItem } from './features/lesson-editor/speechItemCommands';
 
 const ImageSearchModal = React.lazy(() => import('./components/ImageSearchModal'));
@@ -641,43 +642,15 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const fileContent = event.target?.result as string;
-        const parsed = JSON.parse(fileContent);
-
-        // Try validation
-        let itemsToImport: any[] = [];
-        if (Array.isArray(parsed)) {
-          // If the exported file was just a raw array
-          itemsToImport = parsed;
-        } else if (parsed && Array.isArray(parsed.items)) {
-          // If the exported file is wrapped in our metadata format
-          itemsToImport = parsed.items;
-        } else {
-          throw new Error("Định dạng file không chính thức hoặc bị hỏng.");
-        }
-
-        if (itemsToImport.length === 0) {
-          alert("File rỗng hoặc không chứa câu thoại hợp lệ.");
-          return;
-        }
-
-        const sanitizedItems = normalizeSpeechList(itemsToImport);
-
+        const sanitizedItems = parseSpeechListImport(String(event.target?.result ?? ''));
         setSpeechList(sanitizedItems);
-
-        // Also update the raw text area with the imported texts for display synchronization
-        const rawImportText = sanitizedItems.map(it => it.text).join('\n');
-        setRawText(rawImportText);
-
-        alert(`Nhập thành công ${sanitizedItems.length} câu thoại từ file backup! Tất cả thiết lập, thời gian chờ nghỉ (delay), số lần lặp và hình ảnh gán sẵn đã được khôi phục nguyên vẹn.`);
-      } catch (err: any) {
+        setRawText(sanitizedItems.map(item => item.text).join('\n'));
+        alert(`Nháº­p thĂ nh cĂ´ng ${sanitizedItems.length} cĂ¢u thoáº¡i tá»« file backup! Táº¥t cáº£ thiáº¿t láº­p, thá»i gian chá» nghá»‰ (delay), sá»‘ láº§n láº·p vĂ  hĂ¬nh áº£nh gĂ¡n sẵn Ä‘Ă£ Ä‘Æ°á»£c khĂ´i phá»¥c nguyĂªn váº¹n.`);
+      } catch (err: unknown) {
         console.error(err);
-        alert(`Không thể đọc file: ${err.message || "Định dạng JSON không hợp lệ."}`);
+        alert(`KhĂ´ng thá»ƒ Ä‘á»c file: ${err instanceof Error ? err.message : 'Äá»‹nh dáº¡ng JSON khĂ´ng há»£p lá»‡.'}`);
       } finally {
-        // Reset the file input so the user can import the same file again if desired
-        if (e.target) {
-          e.target.value = '';
-        }
+        e.target.value = '';
       }
     };
     reader.readAsText(file);
@@ -924,9 +897,9 @@ export default function App() {
 
         playIteration();
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Premium audio generation failed:", err);
-        alert(err.message || "Không thể tải giọng đọc AI Premium. Hãy đảm bảo API Key đã được cấp hoặc chuyển về chế độ Trình duyệt của máy.");
+        alert(err instanceof Error ? err.message : "Không thể tải giọng đọc AI Premium. Hãy đảm bảo API Key đã được cấp hoặc chuyển về chế độ Trình duyệt của máy.");
         setPlayingItemId(null);
         setCurrentRepeatIndex(0);
         setPlayingState('idle');
