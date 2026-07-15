@@ -46,6 +46,7 @@ import { LibraryGallery } from '../features/lessons/components/LibraryGallery';
 import { LibraryList } from '../features/lessons/components/LibraryList';
 import { createBrowserLocalLibraryRepository, type SavedFolder, type SavedLesson } from '../features/lessons/localLibraryRepository';
 import { mergeLibraryBackup, parseLibraryBackup, serializeLibraryBackup } from '../features/lessons/libraryBackup';
+import { migrateLocalLibraryToCloud } from '../features/lessons/libraryCloudMigration';
 export type { SavedFolder, SavedLesson } from '../features/lessons/localLibraryRepository';
 
 
@@ -353,26 +354,7 @@ export default function LessonLibrary({
     if (!user) return;
     setIsCloudLoading(true);
     try {
-      await Promise.all([
-        ...folders.map(async folder => {
-          await createFolder(user.uid, folder.id, folder.name);
-          await Promise.all(folder.lessons.map(lesson => createLesson(user.uid, lesson.id, {
-            title: lesson.title,
-            rawText: lesson.rawText,
-            speechList: lesson.speechList || [],
-            settings: lesson.settings || {},
-            folderId: folder.id
-          })));
-        }),
-        ...uncategorizedLessons.map(lesson => createLesson(user.uid, lesson.id, {
-          title: lesson.title,
-          rawText: lesson.rawText,
-          speechList: lesson.speechList || [],
-          settings: lesson.settings || {},
-          folderId: null
-        }))
-      ]);
-
+      await migrateLocalLibraryToCloud(user.uid, { folders, uncategorized: uncategorizedLessons }, { createFolder, createLesson });
       await fetchCloudData();
       localLibraryRepository.clear();
       localLibraryRepository.markCloudMigrated();
@@ -380,10 +362,10 @@ export default function LessonLibrary({
       setUncategorizedLessons([]);
       setActiveTab('cloud');
       setShowMigrationBanner(false);
-      flashMessage('Đã chuyển toàn bộ thư mục & bài giảng lên đám mây. Thư viện đám mây hiện là dữ liệu chính.', 'success');
+      flashMessage('ÄĂ£ chuyá»ƒn toĂ n bá»™ thÆ° má»¥c & bĂ i giáº£ng lĂªn Ä‘Ă¡m mĂ¢y. ThÆ° viá»‡n Ä‘Ă¡m mĂ¢y hiá»‡n lĂ  dá»¯ liá»‡u chĂ­nh.', 'success');
     } catch (err) {
       console.error('Migration error:', err);
-      flashMessage('Đã xảy ra lỗi khi đồng bộ dữ liệu lên đám mây.', 'error');
+      flashMessage('ÄĂ£ xáº£y ra lá»—i khi Ä‘á»“ng bá»™ dá»¯ liá»‡u lĂªn Ä‘Ă¡m mĂ¢y.', 'error');
     } finally {
       setIsCloudLoading(false);
     }
