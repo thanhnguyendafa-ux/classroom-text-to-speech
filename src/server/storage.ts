@@ -49,9 +49,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 // Interfaces for backend storage provider
 export type PlaylistPayload = Required<SharePlaylistPayload>;
 
-// In-memory cache for fast subsequent reads
-let inMemoryPlaylists: Record<string, any> = {};
-
 /**
  * Shared storage engine using Firebase Firestore
  */
@@ -74,7 +71,6 @@ export class PlaylistStorageManager {
         createdAt: data.createdAt || new Date().toISOString(),
       });
 
-      inMemoryPlaylists[shareId] = data;
       console.log(`[Firestore] Successfully saved playlist:${shareId} to Firestore.`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, documentPath);
@@ -85,18 +81,12 @@ export class PlaylistStorageManager {
    * Retrieve playlist details by ID from Firestore
    */
   public static async getPlaylist(shareId: string): Promise<PlaylistPayload | null> {
-    // Check in-memory cache first
-    if (inMemoryPlaylists[shareId]) {
-      return inMemoryPlaylists[shareId];
-    }
-
     const documentPath = `playlists/${shareId}`;
     try {
       const docSnap = await adminDb.collection("playlists").doc(shareId).get();
 
       if (docSnap.exists) {
         const data = docSnap.data() as PlaylistPayload;
-        inMemoryPlaylists[shareId] = data;
         return data;
       }
     } catch (error) {
