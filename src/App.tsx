@@ -64,6 +64,7 @@ import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
 import { usePlaybackState } from './features/playback/usePlaybackState';
 import { createBrowserCountdownController, type CountdownController } from './features/playback/countdownController';
 import { createBrowserAudioPlaybackAdapter } from './features/playback/audioPlaybackAdapter';
+import { createWindowBrowserSpeechAdapter } from './features/playback/browserSpeechAdapter';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
 import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
 import { buildSpeechItems, detectLanguage, parseLineSymbols } from './features/lesson-editor/speechItemFactory';
@@ -292,6 +293,8 @@ export default function App() {
 
   const audioPlaybackAdapterRef = useRef<ReturnType<typeof createBrowserAudioPlaybackAdapter> | null>(null);
   if (!audioPlaybackAdapterRef.current) audioPlaybackAdapterRef.current = createBrowserAudioPlaybackAdapter();
+  const browserSpeechAdapterRef = useRef<ReturnType<typeof createWindowBrowserSpeechAdapter> | null>(null);
+  if (!browserSpeechAdapterRef.current) browserSpeechAdapterRef.current = createWindowBrowserSpeechAdapter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     playingItemId,
@@ -474,7 +477,6 @@ export default function App() {
   };
 
   // Keep references to avoid browser closure or garbage collection issues
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const activePlayingIdRef = useRef<string | null>(null);
   const speechListRef = useRef<SpeechItem[]>([]);
 
@@ -486,8 +488,9 @@ export default function App() {
   // Load browser speech synthesis voices
   useEffect(() => {
     const fetchVoices = () => {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        const availableVoices = window.speechSynthesis.getVoices();
+      const browserSpeechAdapter = browserSpeechAdapterRef.current;
+      if (browserSpeechAdapter) {
+        const availableVoices = browserSpeechAdapter.getVoices();
         setVoices(availableVoices);
 
         // Auto selection strategy for Vietnamese / English defaults
@@ -535,9 +538,7 @@ export default function App() {
     };
 
     fetchVoices();
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.onvoiceschanged = fetchVoices;
-    }
+    return browserSpeechAdapterRef.current?.subscribeToVoiceChanges(fetchVoices);
   }, [
     selectedEnVoiceName,
     selectedViVoiceName,
@@ -548,13 +549,7 @@ export default function App() {
   ]);
 
   // Clean speech when active item finishes or component unmounts
-  useEffect(() => {
-    return () => {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-    };
-  }, []);
+  useEffect(() => () => browserSpeechAdapterRef.current?.stop(), []);
 
   // Shared playlist background loader hook
   const {
@@ -734,9 +729,7 @@ export default function App() {
   // Main Speech logic: supports customized loop/repeat count and automatic chaining to next line
   const handleSpeakItem = async (item: SpeechItem) => {
     // Terminate existing sounds first
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    browserSpeechAdapterRef.current?.stop();
     audioPlaybackAdapterRef.current?.stop();
 
     clearWaitTimers();
@@ -749,7 +742,8 @@ export default function App() {
     activePlayingIdRef.current = item.id;
 
     if (engineMode === 'browser') {
-      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      const browserSpeechAdapter = browserSpeechAdapterRef.current;
+      if (!browserSpeechAdapter) {
         alert('Trình duyệt của bạn không hỗ trợ Web Speech API. Vui lòng thử dùng Google Chrome.');
         return;
       }
@@ -765,73 +759,46 @@ export default function App() {
           return;
         }
 
-        const utterance = new SpeechSynthesisUtterance(item.text);
-        utteranceRef.current = utterance; // Keep active to avoid Garbage Collector drops
-        utterance.rate = item.speed !== undefined ? item.speed : speed;
-        utterance.volume = Math.min(1.0, volume);
-
         const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
-        let targetLang = 'en-US';
-        if (langCode === 'vi') targetLang = 'vi-VN';
-        else if (langCode === 'zh-cn') targetLang = 'zh-CN';
-        else if (langCode === 'zh-tw') targetLang = 'zh-TW';
-        else if (langCode === 'ja') targetLang = 'ja-JP';
-        else if (langCode === 'ko') targetLang = 'ko-KR';
-        utterance.lang = targetLang;
+        const preferredVoiceName = langCode === 'en'
+          ? selectedEnVoiceName
+          : langCode === 'vi'
+            ? selectedViVoiceName
+            : langCode === 'zh-cn'
+              ? selectedZhCnVoiceName
+              : langCode === 'zh-tw'
+                ? selectedZhTwVoiceName
+                : langCode === 'ja'
+                  ? selectedJaVoiceName
+                  : selectedKoVoiceName;
 
-        // Attach voice
-        let preferredVoiceName = '';
-        if (langCode === 'en') {
-          preferredVoiceName = selectedEnVoiceName;
-        } else if (langCode === 'vi') {
-          preferredVoiceName = selectedViVoiceName;
-        } else if (langCode === 'zh-cn') {
-          preferredVoiceName = selectedZhCnVoiceName;
-        } else if (langCode === 'zh-tw') {
-          preferredVoiceName = selectedZhTwVoiceName;
-        } else if (langCode === 'ja') {
-          preferredVoiceName = selectedJaVoiceName;
-        } else if (langCode === 'ko') {
-          preferredVoiceName = selectedKoVoiceName;
-        }
+        browserSpeechAdapter.speak({
+          text: item.text,
+          language: langCode,
+          speed: item.speed ?? speed,
+          volume,
+          preferredVoiceName,
+          onStart: () => {
+            setPlayingItemId(item.id);
+            setCurrentRepeatIndex(currentIteration);
+            setPlayingState('playing');
+          },
+          onEnd: () => {
+            if (activePlayingIdRef.current !== item.id) {
+              setPlayingItemId(null);
+              setCurrentRepeatIndex(0);
+              setPlayingState('idle');
+              clearWaitTimers();
+              return;
+            }
 
-        if (preferredVoiceName) {
-          const preferredVoice = voices.find(v => v.name === preferredVoiceName);
-          if (preferredVoice) utterance.voice = preferredVoice;
-        } else {
-          const targetLangPrefix = langCode === 'vi' ? 'vi' : (langCode.startsWith('zh') ? 'zh' : (langCode === 'ja' ? 'ja' : (langCode === 'ko' ? 'ko' : 'en')));
-          const bestVoice = voices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith(targetLangPrefix));
-          if (bestVoice) utterance.voice = bestVoice;
-        }
-
-        utterance.onstart = () => {
-          setPlayingItemId(item.id);
-          setCurrentRepeatIndex(currentIteration);
-          setPlayingState('playing');
-        };
-
-        utterance.onend = () => {
-          // Enforce check
-          if (activePlayingIdRef.current !== item.id) {
-            setPlayingItemId(null);
-            setCurrentRepeatIndex(0);
-            setPlayingState('idle');
-            clearWaitTimers();
-            return;
-          }
-
-          const currentDelay = item.delaySec !== undefined ? item.delaySec : 2.0;
-
-          if (currentIteration < maxIterations) {
-            currentIteration++;
-            setPlayingState('paused'); // Show that we are waiting for timer
-            startCountdown(currentDelay, 'repeat', () => {
-              speakIteration();
-            }, item.id);
-          } else {
-            // Completed repetitions for this particular row
-            if (autoAdvance) {
-              setPlayingState('paused'); // Waiting to advance
+            const currentDelay = item.delaySec ?? 2;
+            if (currentIteration < maxIterations) {
+              currentIteration++;
+              setPlayingState('paused');
+              startCountdown(currentDelay, 'repeat', speakIteration, item.id);
+            } else if (autoAdvance) {
+              setPlayingState('paused');
               startCountdown(currentDelay, 'advance', () => {
                 setPlayingItemId(null);
                 setCurrentRepeatIndex(0);
@@ -843,18 +810,15 @@ export default function App() {
               setCurrentRepeatIndex(0);
               setPlayingState('idle');
             }
-          }
-        };
-
-        utterance.onerror = (e) => {
-          console.warn('Speech Engine warning:', e);
-          setPlayingItemId(null);
-          setCurrentRepeatIndex(0);
-          setPlayingState('idle');
-          clearWaitTimers();
-        };
-
-        window.speechSynthesis.speak(utterance);
+          },
+          onError: (event) => {
+            console.warn('Speech Engine warning:', event);
+            setPlayingItemId(null);
+            setCurrentRepeatIndex(0);
+            setPlayingState('idle');
+            clearWaitTimers();
+          },
+        });
       };
 
       speakIteration();
@@ -1026,9 +990,7 @@ export default function App() {
 
   // Immediate cancel
   const handleStopAll = () => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    browserSpeechAdapterRef.current?.stop();
     audioPlaybackAdapterRef.current?.stop();
 
     clearWaitTimers();
@@ -1046,10 +1008,8 @@ export default function App() {
     // Case 1: Active speech is playing
     if (playingState === 'playing') {
       if (engineMode === 'browser') {
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-          window.speechSynthesis.pause();
-          isSpeechSynthesisPausedRef.current = true;
-        }
+        browserSpeechAdapterRef.current?.pause();
+        isSpeechSynthesisPausedRef.current = true;
       } else {
         audioPlaybackAdapterRef.current?.pause();
         isPremiumAudioPausedRef.current = true;
@@ -1070,11 +1030,9 @@ export default function App() {
 
     // Case 1: Voice was playing before pause
     if (isSpeechSynthesisPausedRef.current) {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.resume();
-        isSpeechSynthesisPausedRef.current = false;
-        setPlayingState('playing');
-      }
+      browserSpeechAdapterRef.current?.resume();
+      isSpeechSynthesisPausedRef.current = false;
+      setPlayingState('playing');
     } else if (isPremiumAudioPausedRef.current) {
       void audioPlaybackAdapterRef.current?.resume().then(() => {
         isPremiumAudioPausedRef.current = false;
