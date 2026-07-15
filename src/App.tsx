@@ -65,6 +65,7 @@ import { usePlaybackState } from './features/playback/usePlaybackState';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
 import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
 import { buildSpeechItems, detectLanguage, parseLineSymbols } from './features/lesson-editor/speechItemFactory';
+import { duplicateSet, joinWithNext, ungroupSet, updateSpeechItem } from './features/lesson-editor/speechItemCommands';
 
 const ImageSearchModal = React.lazy(() => import('./components/ImageSearchModal'));
 const TheaterPlayer = React.lazy(() => import('./components/TheaterPlayer'));
@@ -1235,61 +1236,21 @@ export default function App() {
     handleCreateList(content);
   };
 
-  // Modify individual repeats configuration
   const handleRowRepeatsChange = (id: string, count: number) => {
-    setSpeechList(prev => prev.map(item => {
-      if (item.id === id) {
-        return {
-          ...item,
-          repeats: Math.max(1, Math.min(10, count))
-        };
-      }
-      return item;
-    }));
+    setSpeechList((items) => updateSpeechItem(items, id, { repeats: count }));
   };
 
-  // Modify individual delay configuration
   const handleRowDelayChange = (id: string, delay: number) => {
-    setSpeechList(prev => prev.map(item => {
-      if (item.id === id) {
-        return {
-          ...item,
-          delaySec: Math.max(0.5, Math.min(20, Math.round(delay * 10) / 10))
-        };
-      }
-      return item;
-    }));
+    setSpeechList((items) => updateSpeechItem(items, id, { delaySec: delay }));
   };
 
-  // Modify individual speech speed configuration
   const handleRowSpeedChange = (id: string, rate: number) => {
-    setSpeechList(prev => prev.map(item => {
-      if (item.id === id) {
-        return {
-          ...item,
-          speed: Math.max(0.3, Math.min(2.0, Math.round(rate * 10) / 10))
-        };
-      }
-      return item;
-    }));
+    setSpeechList((items) => updateSpeechItem(items, id, { speed: rate }));
   };
 
-  // Modify individual row language manually
-  const handleRowLangChange = (id: string, newLang: LanguageCode | 'auto') => {
-    setSpeechList(prev => prev.map(item => {
-      if (item.id === id) {
-        const detected = item.detectedLang;
-        const resolved = newLang === 'auto' ? detected : newLang;
-        return {
-          ...item,
-          selectedLang: newLang,
-          resolvedLang: resolved
-        };
-      }
-      return item;
-    }));
+  const handleRowLangChange = (id: string, selectedLang: LanguageCode | 'auto') => {
+    setSpeechList((items) => updateSpeechItem(items, id, { selectedLang }));
   };
-
   // Edit item text inline
   const startEditingRow = (item: SpeechItem) => {
     setEditingItemId(item.id);
@@ -1333,60 +1294,21 @@ export default function App() {
   };
 
   const handleJoinWithNext = (index: number) => {
-    if (index >= speechList.length - 1) return;
-    const newSetId = `set-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-    setSpeechList(prev => {
-      const next = [...prev];
-      const item1 = next[index];
-      const item2 = next[index + 1];
-      next[index] = { ...item1, setId: newSetId };
-      next[index + 1] = { ...item2, setId: newSetId };
-      return next;
-    });
+    const setId = `set-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setSpeechList((items) => joinWithNext(items, index, setId));
   };
 
   const handleUngroupSet = (setId: string) => {
-    setSpeechList(prev => prev.map(item => {
-      if (item.setId === setId) {
-        const { setId: _, ...rest } = item;
-        return rest;
-      }
-      return item;
-    }));
+    setSpeechList((items) => ungroupSet(items, setId));
   };
 
   const handleDuplicateSet = (setId: string) => {
-    const itemsInSet = speechList.filter(item => item.setId === setId);
-    if (itemsInSet.length === 0) return;
-
-    // Create a new unique set ID so the duplicated set is fully independent
-    const newSetId = `set-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-
-    const duplicates: SpeechItem[] = itemsInSet.map(item => ({
-      ...item,
-      id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 5)}-dup`,
-      setId: newSetId
+    const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setSpeechList((items) => duplicateSet(items, setId, {
+      createSetId: () => `set-${nonce}`,
+      createRowId: (sourceId) => `row-${nonce}-${sourceId}-dup`,
     }));
-
-    setSpeechList(prev => {
-      let lastIndex = -1;
-      for (let i = prev.length - 1; i >= 0; i--) {
-        if (prev[i].setId === setId) {
-          lastIndex = i;
-          break;
-        }
-      }
-
-      if (lastIndex === -1) {
-        return [...prev, ...duplicates];
-      }
-
-      const result = [...prev];
-      result.splice(lastIndex + 1, 0, ...duplicates);
-      return result;
-    });
   };
-
   // Generate speech starting from row index zero
   const triggerPlaylistDrill = () => {
     if (speechList.length > 0) {
