@@ -7,6 +7,7 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '../../lib/firebase/firebaseClient';
 import { createOrUpdateUserProfile } from '../cloud-lessons/cloudLessonApi';
+import { errorCode, errorMessage } from '../../lib/errorMessage';
 
 interface AuthContextType {
   user: User | null;
@@ -57,14 +58,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Google Sign-In Error:', err);
-      if (err.code === 'auth/popup-blocked') {
+      if (errorCode(err) === 'auth/popup-blocked') {
         setError('Trình duyệt đã chặn cửa sổ đăng nhập Google. Vui lòng cho phép bật popup và thử lại.');
-      } else if (err.code === 'auth/popup-closed-by-user') {
+      } else if (errorCode(err) === 'auth/popup-closed-by-user') {
         setError('Bạn đã đóng cửa sổ đăng nhập Google trước khi hoàn tất.');
       } else {
-        setError(err.message || 'Không thể đăng nhập bằng Google. Vui lòng thử lại.');
+        setError(errorMessage(err, 'Không thể đăng nhập bằng Google. Vui lòng thử lại.'));
       }
     } finally {
       setIsAuthLoading(false);
@@ -76,9 +77,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       await firebaseSignOut(auth);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Google Sign-Out Error:', err);
-      setError(err.message || 'Có lỗi xảy ra khi đăng xuất.');
+      setError(errorMessage(err, 'Có lỗi xảy ra khi đăng xuất.'));
     } finally {
       setIsAuthLoading(false);
     }

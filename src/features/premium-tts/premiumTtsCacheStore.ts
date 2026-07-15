@@ -2,6 +2,7 @@ import { makePremiumTtsCacheKey } from './premiumTtsCacheKey';
 import { generatePremiumTts, GenerateTtsParams } from './premiumTtsClient';
 
 const MAX_CACHE_SIZE = 200;
+const isDevelopment = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
 export interface CacheStats {
   cachedCount: number;
@@ -61,14 +62,14 @@ class PremiumTtsCacheStore {
     if (cached) {
       this.hits++;
       this.notify();
-      if ((import.meta as any).env?.DEV) {
+      if (isDevelopment) {
         console.debug(`[PremiumTTS Cache] HIT for text: "${params.text.substring(0, 30)}${params.text.length > 30 ? '...' : ''}" [lang: ${params.lang}, voice: ${params.voice}]`);
       }
       return await cached;
     }
 
     this.misses++;
-    if ((import.meta as any).env?.DEV) {
+    if (isDevelopment) {
       console.debug(`[PremiumTTS Cache] MISS for text: "${params.text.substring(0, 30)}${params.text.length > 30 ? '...' : ''}" [lang: ${params.lang}, voice: ${params.voice}]`);
     }
     

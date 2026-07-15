@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { premiumTtsCacheStore } from './premiumTtsCacheStore';
+import { errorMessage } from '../../lib/errorMessage';
 
 export function usePremiumTts() {
   const [loading, setLoading] = useState(false);
@@ -17,8 +18,8 @@ export function usePremiumTts() {
     try {
       const audioUrl = await premiumTtsCacheStore.getOrCreateAudioUrl({ text, voice, lang, apiKey });
       return audioUrl;
-    } catch (err: any) {
-      const finalMsg = err.message || 'Đã xảy ra lỗi không xác định khi tạo giọng đọc Premium.';
+    } catch (err: unknown) {
+      const finalMsg = errorMessage(err, 'Đã xảy ra lỗi không xác định khi tạo giọng đọc Premium.');
       setError(finalMsg);
       throw new Error(finalMsg);
     } finally {

@@ -1,7 +1,16 @@
 // @ts-ignore
 import lamejsRaw from 'lamejs/lame.min.js?raw';
 
-let lamejsInstance: any = null;
+interface Mp3EncoderInstance {
+  encodeBuffer(samples: Int16Array): Uint8Array;
+  flush(): Uint8Array;
+}
+
+interface LameJsApi {
+  Mp3Encoder: new (channels: number, sampleRate: number, kbps: number) => Mp3EncoderInstance;
+}
+
+let lamejsInstance: LameJsApi | null = null;
 
 function getLameJS() {
   if (!lamejsInstance) {

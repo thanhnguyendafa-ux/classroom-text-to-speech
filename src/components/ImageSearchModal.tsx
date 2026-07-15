@@ -47,7 +47,7 @@ export default function ImageSearchModal({ isOpen, onClose, item, onAssignImage 
       }
       const data = await response.json();
       setResults(data.results || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError('Đã xảy ra lỗi khi tìm kiếm hình ảnh. Vui lòng thử lại!');
     } finally {

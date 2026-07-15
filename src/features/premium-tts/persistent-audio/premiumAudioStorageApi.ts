@@ -1,5 +1,6 @@
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { storage } from '../../../lib/firebase/firebaseClient';
+import { errorCode } from '../../../lib/errorMessage';
 
 export async function uploadAudioFile(
   userId: string,
@@ -33,8 +34,8 @@ export async function cleanupLessonAudioStorage(userId: string, lessonId: string
   try {
     const listResult = await listAll(dirRef);
     await Promise.all(listResult.items.map(item => deleteObject(item)));
-  } catch (err: any) {
-    if (err?.code === 'storage/object-not-found') return;
+  } catch (err: unknown) {
+    if (errorCode(err) === 'storage/object-not-found') return;
     throw err;
   }
 }

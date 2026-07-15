@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { errorMessage } from '../../../lib/errorMessage';
 import { SpeechItem } from '../../../types';
 import { 
   PremiumAudioAsset, 
@@ -255,16 +256,17 @@ export function usePremiumAudioPreparation({
           return [...filtered, readyAsset];
         });
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[usePremiumAudioPreparation] Generation failed for:', item.text, err);
         
-        const isQuotaError = err.message?.toLowerCase().includes('quota') || err.message?.toLowerCase().includes('resource_exhausted');
+        const failureMessage = errorMessage(err, '').toLowerCase();
+        const isQuotaError = failureMessage.includes('quota') || failureMessage.includes('resource_exhausted');
 
         const failedAsset: PremiumAudioAsset = {
           ...pendingAsset,
           status: 'failed',
           errorCode: isQuotaError ? 'quota_exhausted' : 'generation_failed',
-          errorMessage: err.message || 'Lỗi tạo audio',
+          errorMessage: errorMessage(err, 'Lỗi tạo audio'),
           updatedAt: Date.now()
         };
 
