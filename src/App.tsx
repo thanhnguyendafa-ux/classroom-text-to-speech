@@ -62,6 +62,7 @@ import LessonsView from './features/lessons/LessonsView';
 import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
 import { usePlaybackState } from './features/playback/usePlaybackState';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
+import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
 
 const ImageSearchModal = React.lazy(() => import('./components/ImageSearchModal'));
 const TheaterPlayer = React.lazy(() => import('./components/TheaterPlayer'));
@@ -83,6 +84,22 @@ export default function App() {
 
   const [speechList, setSpeechList] = useState<SpeechItem[]>([]);
   const [speed, setSpeed] = useState<number>(1.0);
+  const {
+    volume,
+    setVolume,
+    autoGroupSet,
+    handleAutoGroupSetChange,
+    setMultiplier,
+    handleSetMultiplierChange,
+    useUniversalImage,
+    handleUseUniversalImageChange,
+    universalImageUrl,
+    handleUniversalImageUrlChange,
+    playlistLoopMode,
+    handlePlaylistLoopModeChange,
+    rowLayoutMode,
+    setRowLayoutMode,
+  } = useLessonPreferences();
 
   // Image & Theater Mode States
   const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
@@ -90,13 +107,6 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isAudioExportModalOpen, setIsAudioExportModalOpen] = useState<boolean>(false);
   const [selectedItemForImageSearch, setSelectedItemForImageSearch] = useState<SpeechItem | null>(null);
-  const [volume, setVolume] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('speechVolume');
-      return saved !== null ? parseFloat(saved) : 1.0;
-    }
-    return 1.0;
-  });
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   // Custom preferred voices
@@ -381,34 +391,6 @@ export default function App() {
 
   // Auto progression configuration
   const [autoAdvance, setAutoAdvance] = useState<boolean>(true);
-  const [autoGroupSet, setAutoGroupSet] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('autoGroupSet') === 'true';
-    }
-    return false;
-  });
-
-  const handleAutoGroupSetChange = (checked: boolean) => {
-    setAutoGroupSet(checked);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('autoGroupSet', String(checked));
-    }
-  };
-
-  const [setMultiplier, setSetMultiplier] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const val = localStorage.getItem('setMultiplier');
-      return val ? parseInt(val, 10) : 1;
-    }
-    return 1;
-  });
-
-  const handleSetMultiplierChange = (val: number) => {
-    setSetMultiplier(val);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('setMultiplier', String(val));
-    }
-  };
 
   const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
   const [promptTopic, setPromptTopic] = useState<string>('Giao thông công cộng');
@@ -654,51 +636,9 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
     }
   };
 
-  const [useUniversalImage, setUseUniversalImage] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('useUniversalImage') === 'true';
-    }
-    return false;
-  });
-
-  const [universalImageUrl, setUniversalImageUrl] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('universalImageUrl') || '';
-    }
-    return '';
-  });
-
   const [isSearchingUniversalImage, setIsSearchingUniversalImage] = useState<boolean>(false);
 
-  const handleUseUniversalImageChange = (checked: boolean) => {
-    setUseUniversalImage(checked);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('useUniversalImage', String(checked));
-    }
-  };
-
-  const handleUniversalImageUrlChange = (url: string) => {
-    setUniversalImageUrl(url);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('universalImageUrl', url);
-    }
-  };
-
   const [timeBetweenLines, setTimeBetweenLines] = useState<number>(2.0); // Default pause time in seconds
-  const [playlistLoopMode, setPlaylistLoopMode] = useState<'once' | 'infinite'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('playlistLoopMode');
-      return (saved === 'infinite' || saved === 'once') ? saved : 'once';
-    }
-    return 'once';
-  });
-
-  const handlePlaylistLoopModeChange = (mode: 'once' | 'infinite') => {
-    setPlaylistLoopMode(mode);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('playlistLoopMode', mode);
-    }
-  };
 
   // Inline editing row state
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
@@ -711,17 +651,8 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
   const [newRowDelay, setNewRowDelay] = useState<number>(2.0);
 
   // Layout mode for the speech item rows
-  const [rowLayoutMode, setRowLayoutMode] = useState<'below' | 'side'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('rowLayoutMode');
-      return (saved === 'side' || saved === 'below') ? saved : 'below';
-    }
-    return 'below';
-  });
-
   const toggleRowLayoutMode = (mode: 'below' | 'side') => {
     setRowLayoutMode(mode);
-    localStorage.setItem('rowLayoutMode', mode);
   };
 
   // User-supplied Gemini API Key and Premium engine hook
@@ -808,9 +739,6 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
 
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('speechVolume', String(newVolume));
-    }
   };
 
   // Keep references to avoid browser closure or garbage collection issues
