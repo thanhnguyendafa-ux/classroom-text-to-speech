@@ -311,11 +311,14 @@ export default function App() {
     currentRepeatIndex,
     waitingState,
     isManualPaused,
+    startPlayback,
+    stopPlayback,
+    pausePlayback,
+    resumePlayback,
     setPlayingItemId,
     setPlayingState,
     setCurrentRepeatIndex,
     setWaitingState,
-    setIsManualPaused,
   } = usePlaybackState();
   const waitTimerRef = useRef<any>(null);
   const waitIntervalRef = useRef<any>(null);
@@ -789,7 +792,6 @@ export default function App() {
     clearWebAudioNodes();
     clearWaitTimers();
 
-    setIsManualPaused(false);
     isSpeechSynthesisPausedRef.current = false;
     isPremiumAudioPausedRef.current = false;
     pausedCountdownSecRef.current = 0;
@@ -805,6 +807,7 @@ export default function App() {
         alert('Trình duyệt của bạn không hỗ trợ Web Speech API. Vui lòng thử dùng Google Chrome.');
         return;
       }
+      startPlayback(item.id);
 
       const speakIteration = () => {
         // Security guard to check if audio was general-stopped or switched to another item
@@ -918,6 +921,7 @@ export default function App() {
         setPlayingState('idle');
         return;
       }
+      startPlayback(item.id);
 
       setPlayingItemId(item.id);
       setPlayingState('playing');
@@ -1117,10 +1121,7 @@ export default function App() {
     clearWebAudioNodes();
     clearWaitTimers();
     activePlayingIdRef.current = null;
-    setPlayingItemId(null);
-    setCurrentRepeatIndex(0);
-    setPlayingState('idle');
-    setIsManualPaused(false);
+    stopPlayback();
     isSpeechSynthesisPausedRef.current = false;
     isPremiumAudioPausedRef.current = false;
     pausedCountdownSecRef.current = 0;
@@ -1132,7 +1133,7 @@ export default function App() {
   const handleGlobalPause = () => {
     if (playingState === 'idle' || isManualPaused) return;
 
-    setIsManualPaused(true);
+    pausePlayback();
 
     // Case 1: Active speech is playing
     if (playingState === 'playing') {
@@ -1170,7 +1171,7 @@ export default function App() {
   const handleGlobalResume = () => {
     if (!isManualPaused) return;
 
-    setIsManualPaused(false);
+    resumePlayback();
 
     // Case 1: Voice was playing before pause
     if (isSpeechSynthesisPausedRef.current) {

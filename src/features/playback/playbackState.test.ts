@@ -18,3 +18,24 @@ test('reset clears all transient playback state atomically', () => {
   const active = playbackReducer(initialPlaybackState, { type: 'stateChanged', state: 'playing' });
   assert.deepEqual(playbackReducer(active, { type: 'reset' }), initialPlaybackState);
 });
+
+test('start transition owns the active item and clears stale wait state', () => {
+  const state = playbackReducer({ ...initialPlaybackState, isManualPaused: true, waitingState: { isWaiting: true, remainingSec: 2, itemId: 'old', type: 'advance' } }, { type: 'started', itemId: 'line-1' });
+  assert.deepEqual(state, { ...initialPlaybackState, playingItemId: 'line-1', playingState: 'playing' });
+});
+
+test('stop transition atomically returns playback to idle', () => {
+  const state = playbackReducer({ ...initialPlaybackState, playingItemId: 'line-1', playingState: 'paused', currentRepeatIndex: 2 }, { type: 'stopped' });
+  assert.deepEqual(state, initialPlaybackState);
+});
+
+test('pause and resume transitions preserve the active item', () => {
+  const active = playbackReducer(initialPlaybackState, { type: 'started', itemId: 'line-1' });
+  const paused = playbackReducer(active, { type: 'paused' });
+  const resumed = playbackReducer(paused, { type: 'resumed' });
+  assert.equal(paused.playingState, 'paused');
+  assert.equal(paused.isManualPaused, true);
+  assert.equal(resumed.playingState, 'playing');
+  assert.equal(resumed.isManualPaused, false);
+  assert.equal(resumed.playingItemId, 'line-1');
+});

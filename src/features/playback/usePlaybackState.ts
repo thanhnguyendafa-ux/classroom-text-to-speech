@@ -3,6 +3,10 @@ import { initialPlaybackState, playbackReducer, type PlaybackMode, type WaitingS
 
 export function usePlaybackState() {
   const [playback, dispatch] = useReducer(playbackReducer, initialPlaybackState);
+  const startPlayback = useCallback((itemId: string) => dispatch({ type: 'started', itemId }), []);
+  const stopPlayback = useCallback(() => dispatch({ type: 'stopped' }), []);
+  const pausePlayback = useCallback(() => dispatch({ type: 'paused' }), []);
+  const resumePlayback = useCallback(() => dispatch({ type: 'resumed' }), []);
   const setPlayingItemId = useCallback((itemId: string | null) => dispatch({ type: 'itemChanged', itemId }), []);
   const setPlayingState = useCallback((state: PlaybackMode) => dispatch({ type: 'stateChanged', state }), []);
   const setCurrentRepeatIndex = useCallback((repeatIndex: number) => dispatch({ type: 'repeatChanged', repeatIndex }), []);
@@ -12,5 +16,5 @@ export function usePlaybackState() {
   }, []);
   const setIsManualPaused = useCallback((value: boolean) => dispatch({ type: 'manualPauseChanged', value }), []);
   const resetPlayback = useCallback(() => dispatch({ type: 'reset' }), []);
-  return { ...playback, setPlayingItemId, setPlayingState, setCurrentRepeatIndex, setWaitingState, setIsManualPaused, resetPlayback };
+  return { ...playback, startPlayback, stopPlayback, pausePlayback, resumePlayback, setPlayingItemId, setPlayingState, setCurrentRepeatIndex, setWaitingState, setIsManualPaused, resetPlayback };
 }

@@ -4,6 +4,10 @@ export interface WaitingState { isWaiting: boolean; remainingSec: number; itemId
 export interface PlaybackState { playingItemId: string | null; playingState: PlaybackMode; currentRepeatIndex: number; waitingState: WaitingState; isManualPaused: boolean; }
 export const initialPlaybackState: PlaybackState = { playingItemId: null, playingState: 'idle', currentRepeatIndex: 0, waitingState: { isWaiting: false, remainingSec: 0, itemId: null, type: null }, isManualPaused: false };
 export type PlaybackAction =
+  | { type: 'started'; itemId: string }
+  | { type: 'stopped' }
+  | { type: 'paused' }
+  | { type: 'resumed' }
   | { type: 'itemChanged'; itemId: string | null }
   | { type: 'stateChanged'; state: PlaybackMode }
   | { type: 'repeatChanged'; repeatIndex: number }
@@ -13,6 +17,10 @@ export type PlaybackAction =
   | { type: 'reset' };
 export function playbackReducer(state: PlaybackState, action: PlaybackAction): PlaybackState {
   switch (action.type) {
+    case 'started': return { ...initialPlaybackState, playingItemId: action.itemId, playingState: 'playing' };
+    case 'stopped': return initialPlaybackState;
+    case 'paused': return { ...state, playingState: 'paused', isManualPaused: true };
+    case 'resumed': return { ...state, playingState: state.playingItemId ? 'playing' : 'idle', isManualPaused: false };
     case 'itemChanged': return { ...state, playingItemId: action.itemId };
     case 'stateChanged': return { ...state, playingState: action.state };
     case 'repeatChanged': return { ...state, currentRepeatIndex: action.repeatIndex };
