@@ -1,9 +1,10 @@
 import React from 'react';
 import { Folder, FileText, ArrowLeft, ChevronRight, FolderOpen, Edit2, Trash2, Check, X, Play } from 'lucide-react';
+import type { LibraryDeleteTarget, LibraryDisplayFolder, LibraryDisplayLesson } from '../libraryDisplayModel';
 
 interface LibraryListProps {
-  folders: any[];
-  uncategorizedLessons: any[];
+  folders: LibraryDisplayFolder[];
+  uncategorizedLessons: LibraryDisplayLesson[];
   selectedFolderId: string | null;
   setSelectedFolderId: (id: string | null) => void;
   activeTab: 'local' | 'cloud';
@@ -25,8 +26,8 @@ interface LibraryListProps {
   handleSaveRenameCloudLesson: () => void;
   setEditingLessonId: (id: string | null) => void;
 
-  setDeleteConfirmTarget: (target: any) => void;
-  onLoadLesson: (lesson: any) => void;
+  setDeleteConfirmTarget: (target: LibraryDeleteTarget) => void;
+  onLoadLesson: (lesson: LibraryDisplayLesson) => void;
 }
 
 export const LibraryList: React.FC<LibraryListProps> = ({
@@ -106,7 +107,7 @@ export const LibraryList: React.FC<LibraryListProps> = ({
                   </td>
                 </tr>
               ) : (
-                currentFolder.lessons.map((lesson: any) => {
+                currentFolder.lessons.map((lesson) => {
                   const isLessonEditing = editingLessonId === lesson.id;
                   const lineCount = lesson.rawText.split('\n').filter((l: string) => l.trim().length > 0).length;
 

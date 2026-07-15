@@ -47,6 +47,7 @@ import { LibraryList } from '../features/lessons/components/LibraryList';
 import { createBrowserLocalLibraryRepository, type SavedFolder, type SavedLesson } from '../features/lessons/localLibraryRepository';
 import { mergeLibraryBackup, parseLibraryBackup, serializeLibraryBackup } from '../features/lessons/libraryBackup';
 import { migrateLocalLibraryToCloud } from '../features/lessons/libraryCloudMigration';
+import type { LibraryDisplayFolder, LibraryDisplayLesson } from '../features/lessons/libraryDisplayModel';
 export type { SavedFolder, SavedLesson } from '../features/lessons/localLibraryRepository';
 
 
@@ -607,7 +608,7 @@ export default function LessonLibrary({
   };
 
   // Calculate display and filtered items
-  const displayFolders = activeTab === 'cloud' 
+  const displayFolders: LibraryDisplayFolder[] = activeTab === 'cloud' 
     ? cloudFolders.map(cf => ({
         id: cf.id,
         name: cf.name,

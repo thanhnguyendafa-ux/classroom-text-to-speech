@@ -1,9 +1,10 @@
 import React from 'react';
+import type { User } from 'firebase/auth';
 import { ArrowUpFromLine, Laptop, Cloud, Loader2 } from 'lucide-react';
 
 interface MigrationNoticeProps {
   activeTab: 'local' | 'cloud';
-  user: any;
+  user: User | null;
   localFoldersCount: number;
   localLessonsCount: number;
   isCloudLoading: boolean;

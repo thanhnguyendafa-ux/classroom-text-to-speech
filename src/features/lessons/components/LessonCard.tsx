@@ -1,6 +1,6 @@
 import React from 'react';
 import { FileText, Edit2, Trash2, Check, X, Play, Image, Cpu } from 'lucide-react';
-import { SpeechItem } from '../../../types';
+import { LessonSettings, SpeechItem } from '../../../types';
 
 interface LessonCardProps {
   id: string;
@@ -8,7 +8,7 @@ interface LessonCardProps {
   rawText: string;
   createdAt: number;
   speechList?: SpeechItem[];
-  settings?: any;
+  settings: LessonSettings;
   folderId?: string | null;
   isEditing: boolean;
   editingTitleValue: string;
@@ -26,7 +26,7 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   rawText,
   createdAt,
   speechList = [],
-  settings = {} as any,
+  settings,
   folderId,
   isEditing,
   editingTitleValue,

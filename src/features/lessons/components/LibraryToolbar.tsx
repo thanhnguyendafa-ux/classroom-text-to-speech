@@ -1,4 +1,5 @@
 import React from 'react';
+import type { User } from 'firebase/auth';
 import { 
   Cloud, 
   Laptop, 
@@ -25,7 +26,7 @@ interface LibraryToolbarProps {
   setShowSaveLessonForm: (show: boolean) => void;
   showNewFolderInput: boolean;
   setShowNewFolderInput: (show: boolean) => void;
-  user: any;
+  user: User | null;
   isCloudLoading: boolean;
   fetchCloudData: () => Promise<void>;
   handleImportButtonClick: () => void;

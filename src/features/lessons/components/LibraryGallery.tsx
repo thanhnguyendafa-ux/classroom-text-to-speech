@@ -2,10 +2,11 @@ import React from 'react';
 import { ArrowLeft, ChevronRight, FolderOpen, FileDown } from 'lucide-react';
 import { FolderCard } from './FolderCard';
 import { LessonCard } from './LessonCard';
+import type { LibraryDeleteTarget, LibraryDisplayFolder, LibraryDisplayLesson } from '../libraryDisplayModel';
 
 interface LibraryGalleryProps {
-  folders: any[];
-  uncategorizedLessons: any[];
+  folders: LibraryDisplayFolder[];
+  uncategorizedLessons: LibraryDisplayLesson[];
   selectedFolderId: string | null;
   setSelectedFolderId: (id: string | null) => void;
   activeTab: 'local' | 'cloud';
@@ -27,8 +28,8 @@ interface LibraryGalleryProps {
   handleSaveRenameCloudLesson: () => void;
   setEditingLessonId: (id: string | null) => void;
 
-  setDeleteConfirmTarget: (target: any) => void;
-  onLoadLesson: (lesson: any) => void;
+  setDeleteConfirmTarget: (target: LibraryDeleteTarget) => void;
+  onLoadLesson: (lesson: LibraryDisplayLesson) => void;
 }
 
 export const LibraryGallery: React.FC<LibraryGalleryProps> = ({
@@ -96,7 +97,7 @@ export const LibraryGallery: React.FC<LibraryGalleryProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {currentFolder.lessons.map((lesson: any) => (
+              {currentFolder.lessons.map((lesson) => (
                 <LessonCard
                   key={lesson.id}
                   id={lesson.id}
