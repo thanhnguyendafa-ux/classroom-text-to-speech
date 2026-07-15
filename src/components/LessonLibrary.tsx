@@ -45,6 +45,7 @@ import { MigrationNotice } from '../features/lessons/components/MigrationNotice'
 import { LibraryGallery } from '../features/lessons/components/LibraryGallery';
 import { LibraryList } from '../features/lessons/components/LibraryList';
 import { createBrowserLocalLibraryRepository, type SavedFolder, type SavedLesson } from '../features/lessons/localLibraryRepository';
+import { mergeLibraryBackup, parseLibraryBackup, serializeLibraryBackup } from '../features/lessons/libraryBackup';
 export type { SavedFolder, SavedLesson } from '../features/lessons/localLibraryRepository';
 
 
@@ -572,15 +573,7 @@ export default function LessonLibrary({
 
   // JSON Import & Export Backup management
   const handleExportBackup = () => {
-    const dataObj = {
-      appId: 'classroom-speech-pro-backup',
-      version: 1,
-      exportedAt: Date.now(),
-      folders,
-      uncategorized: uncategorizedLessons
-    };
-    
-    const stringified = JSON.stringify(dataObj, null, 2);
+    const stringified = serializeLibraryBackup({ folders, uncategorized: uncategorizedLessons });
     const blob = new Blob([stringified], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     
@@ -607,71 +600,20 @@ export default function LessonLibrary({
     reader.onload = (event) => {
       try {
         const content = event.target?.result as string;
-        const parsed = JSON.parse(content);
-        
-        // Basic schema checks
-        if (parsed && (Array.isArray(parsed.folders) || Array.isArray(parsed.uncategorized))) {
-          const importedFolders = parsed.folders || [];
-          const importedUncategorized = parsed.uncategorized || [];
-          
-          // Merge folders logic
-          let mergedFolders = [...folders];
-          importedFolders.forEach((impFold: SavedFolder) => {
-            // Check if folder name already exists - if so, append lessons, else add folder
-            const existingFolder = mergedFolders.find(f => f.name.toLowerCase() === impFold.name.toLowerCase());
-            if (existingFolder) {
-              // Add non-duplicate lessons
-              impFold.lessons.forEach(impL => {
-                if (!existingFolder.lessons.some(l => l.title.toLowerCase() === impL.title.toLowerCase())) {
-                  const hydrated = hydrateLessonDocument(
-                    `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-                    impL
-                  );
+        const imported = parseLibraryBackup(
+          content,
+          () => `lesson-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          Date.now(),
+        );
+        const merged = mergeLibraryBackup(
+          { folders, uncategorized: uncategorizedLessons },
+          imported,
+        );
 
-                  existingFolder.lessons.push({
-                    ...hydrated,
-                    folderId: existingFolder.id,
-                  });
-                }
-              });
-            } else {
-              mergedFolders.push({
-                id: `folder-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-                name: typeof impFold.name === 'string' ? impFold.name : 'Thư mục đã nhập',
-                createdAt: typeof impFold.createdAt === 'number' ? impFold.createdAt : Date.now(),
-                lessons: Array.isArray(impFold.lessons)
-                  ? impFold.lessons.map((lesson) => hydrateLessonDocument(
-                      `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-                      lesson
-                    ))
-                  : [],
-              });
-            }
-          });
-
-          // Merge uncategorized
-          let mergedUncategorized = [...uncategorizedLessons];
-          importedUncategorized.forEach((impL: SavedLesson) => {
-            if (!mergedUncategorized.some(l => l.title.toLowerCase() === impL.title.toLowerCase())) {
-              const hydrated = hydrateLessonDocument(
-                `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-                impL
-              );
-
-              mergedUncategorized.push({
-                ...hydrated,
-                folderId: null,
-              });
-            }
-          });
-
-          setFolders(mergedFolders);
-          setUncategorizedLessons(mergedUncategorized);
-          saveToStorage(mergedFolders, mergedUncategorized);
-          flashMessage(`Đã nạp file thành công! Đồng bộ thêm ${importedFolders.length} thư mục & ${importedUncategorized.length} bài học.`, 'success');
-        } else {
-          flashMessage('Định dạng file sao lưu không hợp lệ. Vui lòng kiểm tra lại!', 'error');
-        }
+        setFolders(merged.folders);
+        setUncategorizedLessons(merged.uncategorized);
+        saveToStorage(merged.folders, merged.uncategorized);
+        flashMessage(`Đã nạp file thành công! Đồng bộ thêm ${imported.folders.length} thư mục & ${imported.uncategorized.length} bài học.`, 'success');
       } catch (err) {
         console.error('Error parsing imported file', err);
         flashMessage('Có lỗi xảy ra khi đọc file JSON!', 'error');
@@ -710,7 +652,7 @@ export default function LessonLibrary({
     : uncategorizedLessons;
 
   const filteredFolders = displayFolders.map(f => {
-    const matchedLessons = f.lessons.filter((l: any) => 
+    const matchedLessons = f.lessons.filter((l) =>
       l.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
     return {
@@ -722,7 +664,7 @@ export default function LessonLibrary({
     return folderNameMatch || f.lessons.length > 0;
   });
 
-  const filteredUncategorized = displayUncategorized.filter((l: any) => 
+  const filteredUncategorized = displayUncategorized.filter((l) =>
     l.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
