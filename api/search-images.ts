@@ -1,5 +1,5 @@
 import { searchImages } from "../src/server/handlers";
-import { getClientIp, imageSearchLimiter } from "../src/server/rateLimiter";
+import { applyRateLimitHeaders, getClientIp, imageSearchLimiter } from "../src/server/rateLimiter";
 import { applySecurityHeaders } from "../src/server/httpSecurity";
 
 export default async function handler(req: any, res: any) {
@@ -17,7 +17,8 @@ export default async function handler(req: any, res: any) {
 
   // Rate Limiting on Serverless context
   const ip = getClientIp(req);
-  const limitState = imageSearchLimiter.consume(ip);
+  const limitState = await imageSearchLimiter.consume(ip);
+  applyRateLimitHeaders(res, limitState);
   if (!limitState.success) {
     res.status(429).json({
       error: "Bạn đang tìm kiếm ảnh quá nhanh. Vui lòng thử lại sau 1 phút."

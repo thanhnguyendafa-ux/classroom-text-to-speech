@@ -1,5 +1,5 @@
 import { generateTextToSpeech } from "../src/server/handlers";
-import { getClientIp, ttsLimiter } from "../src/server/rateLimiter";
+import { applyRateLimitHeaders, getClientIp, ttsLimiter } from "../src/server/rateLimiter";
 import { applySecurityHeaders } from "../src/server/httpSecurity";
 
 export default async function handler(req: any, res: any) {
@@ -17,7 +17,8 @@ export default async function handler(req: any, res: any) {
 
   // Rate Limiting on Serverless context
   const ip = getClientIp(req);
-  const limitState = ttsLimiter.consume(ip);
+  const limitState = await ttsLimiter.consume(ip);
+  applyRateLimitHeaders(res, limitState);
   if (!limitState.success) {
     res.status(429).json({
       error: "Bạn đang dịch giọng nói quá nhanh. Vui lòng chậm lại một lát."

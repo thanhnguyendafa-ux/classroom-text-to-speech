@@ -1,44 +1,73 @@
-/**
- * Sliding/fixed window in-memory rate limiter
- * Safe for micro-frontends & serverless workers. Prevents abuse, DDOS, and scraper attacks.
- */
+import { createHash } from 'node:crypto';
+import { adminDb } from './firebaseAdmin';
 
-interface LimitEntry {
+export interface RateLimitEntry {
   points: number;
   resetTime: number;
 }
 
-const stores: Record<string, Record<string, LimitEntry>> = {};
-
-/**
- * Retrieves the client's real IP, taking reverse proxies, CDN layers (Cloud Run, Vercel),
- * and VPN cascades into careful consideration.
- */
-export function getClientIp(req: any): string {
-  const xForwardedFor = req.headers ? req.headers["x-forwarded-for"] : null;
-  if (xForwardedFor) {
-    if (typeof xForwardedFor === "string") {
-      return xForwardedFor.split(",")[0].trim();
-    }
-    if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
-      return xForwardedFor[0].trim();
-    }
-  }
-  
-  const connection = req.connection;
-  const socket = req.socket;
-  
-  return (
-    socket?.remoteAddress || 
-    connection?.remoteAddress || 
-    req.ip || 
-    "127.0.0.1"
-  );
+export interface RateLimitResult extends RateLimitEntry {
+  success: boolean;
+  limit: number;
+  remaining: number;
 }
 
-/**
- * Configures and tracks consumption bounds on a key-prefixed store
- */
+export function nextRateLimitState(
+  entry: RateLimitEntry | undefined,
+  now: number,
+  windowMs: number,
+  maxRequests: number,
+): RateLimitResult {
+  if (!entry || entry.resetTime <= now) {
+    return {
+      success: true,
+      points: 1,
+      limit: maxRequests,
+      remaining: maxRequests - 1,
+      resetTime: now + windowMs,
+    };
+  }
+
+  if (entry.points >= maxRequests) {
+    return {
+      success: false,
+      points: entry.points,
+      limit: maxRequests,
+      remaining: 0,
+      resetTime: entry.resetTime,
+    };
+  }
+
+  const points = entry.points + 1;
+  return {
+    success: true,
+    points,
+    limit: maxRequests,
+    remaining: maxRequests - points,
+    resetTime: entry.resetTime,
+  };
+}
+
+export function getClientIp(req: any): string {
+  const xForwardedFor = req.headers?.['x-forwarded-for'];
+  if (typeof xForwardedFor === 'string') {
+    return xForwardedFor.split(',')[0].trim();
+  }
+  if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
+    return xForwardedFor[0].trim();
+  }
+  return req.socket?.remoteAddress || req.connection?.remoteAddress || req.ip || '127.0.0.1';
+}
+
+export function applyRateLimitHeaders(
+  response: { setHeader(name: string, value: number): void },
+  result: Pick<RateLimitResult, 'limit' | 'remaining' | 'resetTime'>,
+) {
+  response.setHeader('X-RateLimit-Limit', result.limit);
+  response.setHeader('X-RateLimit-Remaining', result.remaining);
+  response.setHeader('X-RateLimit-Reset', Math.ceil(result.resetTime / 1000));
+}
+
 export function createRateLimiter(options: {
   keyPrefix: string;
   maxRequests: number;
@@ -46,71 +75,44 @@ export function createRateLimiter(options: {
 }) {
   const { keyPrefix, maxRequests, windowMs } = options;
 
-  if (!stores[keyPrefix]) {
-    stores[keyPrefix] = {};
-  }
-  
-  const store = stores[keyPrefix];
-
   return {
-    consume: (ip: string) => {
-      const now = Date.now();
+    async consume(key: string): Promise<RateLimitResult> {
+      const keyHash = createHash('sha256').update(key).digest('hex');
+      const document = adminDb.collection('rateLimits').doc(`${keyPrefix}_${keyHash}`);
 
-      // Prune expired entries to maintain a constant O(1) memory profile
-      for (const key of Object.keys(store)) {
-        if (store[key].resetTime < now) {
-          delete store[key];
+      return adminDb.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(document);
+        const current = snapshot.exists ? snapshot.data() as RateLimitEntry : undefined;
+        const result = nextRateLimitState(current, Date.now(), windowMs, maxRequests);
+
+        if (result.success) {
+          transaction.set(document, {
+            points: result.points,
+            resetTime: result.resetTime,
+            expiresAt: new Date(result.resetTime),
+          });
         }
-      }
 
-      const record = store[ip];
-
-      if (!record || record.resetTime < now) {
-        const resetTime = now + windowMs;
-        store[ip] = { points: 1, resetTime };
-        return {
-          success: true,
-          limit: maxRequests,
-          remaining: maxRequests - 1,
-          resetTime,
-        };
-      }
-
-      if (record.points >= maxRequests) {
-        return {
-          success: false,
-          limit: maxRequests,
-          remaining: 0,
-          resetTime: record.resetTime,
-        };
-      }
-
-      record.points += 1;
-      return {
-        success: true,
-        limit: maxRequests,
-        remaining: maxRequests - record.points,
-        resetTime: record.resetTime,
-      };
-    }
+        return result;
+      });
+    },
   };
 }
 
-// Configured rate limiters for our core API endpoints
 export const ttsLimiter = createRateLimiter({
-  keyPrefix: "api_tts",
-  maxRequests: 30, // Max 30 requests per minute per IP
+  keyPrefix: 'api_tts',
+  maxRequests: 30,
   windowMs: 60 * 1000,
 });
 
 export const imageSearchLimiter = createRateLimiter({
-  keyPrefix: "api_image_search",
-  maxRequests: 20, // Max 20 requests per minute per IP
+  keyPrefix: 'api_image_search',
+  maxRequests: 20,
   windowMs: 60 * 1000,
 });
 
 export const sharePlaylistLimiter = createRateLimiter({
-  keyPrefix: "api_share_playlist",
-  maxRequests: 15, // Max 15 requests per minute per IP
+  keyPrefix: 'api_share_playlist',
+  maxRequests: 15,
   windowMs: 60 * 1000,
 });

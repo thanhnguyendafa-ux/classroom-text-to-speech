@@ -10,6 +10,7 @@ import {
 } from "./src/server/handlers";
 import {
   getClientIp,
+  applyRateLimitHeaders,
   ttsLimiter,
   imageSearchLimiter,
   sharePlaylistLimiter,
@@ -46,7 +47,8 @@ app.get("/api/health", async (req, res) => {
 // 1. Unsplash Image Search with Rate Limiting
 app.get("/api/search-images", async (req, res) => {
   const ip = getClientIp(req);
-  const rateLimit = imageSearchLimiter.consume(ip);
+  const rateLimit = await imageSearchLimiter.consume(ip);
+  applyRateLimitHeaders(res, rateLimit);
   if (!rateLimit.success) {
     res.status(429).json({
       error: "Bạn đang tìm kiếm ảnh quá nhanh. Vui lòng thử lại sau 1 phút."
@@ -68,7 +70,8 @@ app.get("/api/search-images", async (req, res) => {
 // 2. High-performance Gemini TTS with Rate Limiting
 app.post("/api/tts", async (req, res) => {
   const ip = getClientIp(req);
-  const rateLimit = ttsLimiter.consume(ip);
+  const rateLimit = await ttsLimiter.consume(ip);
+  applyRateLimitHeaders(res, rateLimit);
   if (!rateLimit.success) {
     res.status(429).json({
       error: "Bạn đang dịch giọng nói quá nhanh. Vui lòng chậm lại một lát."
@@ -89,7 +92,8 @@ app.post("/api/tts", async (req, res) => {
 // 3. Share custom playlist with Rate Limiting
 app.post("/api/share-playlist", async (req, res) => {
   const ip = getClientIp(req);
-  const rateLimit = sharePlaylistLimiter.consume(ip);
+  const rateLimit = await sharePlaylistLimiter.consume(ip);
+  applyRateLimitHeaders(res, rateLimit);
   if (!rateLimit.success) {
     res.status(429).json({
       error: "Bạn đang tạo liên kết chia sẻ quá nhanh. Vui lòng đợi một lát."
