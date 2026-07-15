@@ -21,6 +21,7 @@ import { encodeMonoMp3 } from '../audio/mp3Encoder';
 import { getPremiumVoiceForLang } from '../features/premium-tts/premiumVoices';
 import { premiumTtsCacheStore } from '../features/premium-tts/premiumTtsCacheStore';
 import { resolvePremiumAudio } from '../features/premium-tts/persistent-audio/premiumAudioResolver';
+import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, errorMessage, stopMediaStream } from '../features/media-capture/mediaCaptureAdapter';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -359,10 +360,10 @@ export default function AudioExportModal({
       setStatus('success');
       addLog("Chúc mừng! File âm thanh đã được liên kết thành công kỹ thuật số 100%.");
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Lỗi xuất Premium AI:", err);
       setStatus('error');
-      addLog(`Lỗi: ${err.message || "Không thể tải giọng đọc AI."}`);
+      addLog(`Lỗi: ${errorMessage(err) || "Không thể tải giọng đọc AI."}`);
     }
   };
 
@@ -411,40 +412,24 @@ export default function AudioExportModal({
           }
           micStreamRef.current = micStream;
           addLog("Đã khởi tạo Microphone thành công!");
-        } catch (micErr: any) {
+        } catch (micErr: unknown) {
           console.error("Microphone access is denied:", micErr);
           throw new Error("Không thể truy cập Microphone. Vui lòng cấp quyền Microphone để sử dụng chế độ dự phòng!");
         }
       } else {
         // 1. Capture display stream with optimized entire screen / system audio cues
-        const displayConstraints: any = {
-          video: {
-            displaySurface: "monitor",
-            width: 320,
-            height: 180,
-            frameRate: 10
-          },
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            systemAudio: "include"
-          },
-          selfBrowserSurface: "exclude",
-          monitorTypeSurfaces: "include"
-        };
-
-        if (onlyCurrentTab) {
-          displayConstraints.preferCurrentTab = true;
-          displayConstraints.selfBrowserSurface = "include";
-          delete displayConstraints.video.displaySurface;
-          delete displayConstraints.monitorTypeSurfaces;
-        }
+        const displayConstraints = buildDisplayCaptureConstraints({
+          width: 320,
+          height: 180,
+          frameRate: 10,
+          onlyCurrentTab,
+          captureSystemAudio: true,
+        });
 
         try {
-          stream = await (navigator.mediaDevices as any).getDisplayMedia(displayConstraints);
+          stream = await captureDisplay(displayConstraints);
           mediaStreamRef.current = stream;
-        } catch (displayErr: any) {
+        } catch (displayErr: unknown) {
           console.error("Display media capturing failed:", displayErr);
           throw new Error("Bạn đã hủy chia sẻ màn hình / âm thanh hệ thống. Vui lòng bấm thử lại.");
         }
@@ -457,15 +442,14 @@ export default function AudioExportModal({
       const hasMicAudio = micAudioTracks.length > 0;
 
       if (!hasDisplayAudio && !hasMicAudio) {
-        if (stream) stream.getTracks().forEach(t => t.stop());
-        if (micStream) micStream.getTracks().forEach(t => t.stop());
+        stopMediaStream(stream);
+        stopMediaStream(micStream);
         throw new Error("Không bắt được nguồn âm thanh nào hợp lệ. Vui lòng thử lại.");
       }
       
       addLog("Khởi tạo bộ thu âm...");
       
-      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
-      const audioCtx = new AudioCtxClass();
+      const audioCtx = createAudioContext();
       audioContextRef.current = audioCtx;
 
       if (audioCtx.state === 'suspended') {
@@ -710,7 +694,7 @@ export default function AudioExportModal({
           const arrayBuffer = await webmBlob.arrayBuffer();
           
           // Decode raw audio webm/opus into float32 samples
-          const decodeCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const decodeCtx = createAudioContext();
           let decodedBuffer: AudioBuffer;
           try {
             decodedBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
@@ -784,9 +768,9 @@ export default function AudioExportModal({
           setStatus('success');
           addLog("Chúc mừng! Đã xuất file MP3 thật (audio/mpeg) thành công.");
           
-        } catch (mp3Err: any) {
+        } catch (mp3Err: unknown) {
           console.error("MP3 encoder failed:", mp3Err);
-          addLog(`Lỗi mã hóa MP3: ${mp3Err.message || mp3Err}`);
+          addLog(`Lỗi mã hóa MP3: ${errorMessage(mp3Err)}`);
           capturePhaseRef.current = 'error';
           setStatus('error');
         }
@@ -906,10 +890,10 @@ export default function AudioExportModal({
       // Start loop
       playNextItem();
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setStatus('error');
-      addLog(`Lỗi chuẩn bị ghi âm: ${err.message || err}`);
+      addLog(`Lỗi chuẩn bị ghi âm: ${errorMessage(err)}`);
     }
   };
 

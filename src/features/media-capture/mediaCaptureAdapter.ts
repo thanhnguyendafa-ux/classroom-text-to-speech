@@ -1,4 +1,6 @@
-export interface DisplayCaptureConstraints extends DisplayMediaStreamOptions {
+export interface DisplayCaptureConstraints {
+  video: boolean | (MediaTrackConstraints & { displaySurface?: 'monitor' });
+  audio: boolean | (MediaTrackConstraints & { systemAudio?: 'include' });
   preferCurrentTab?: boolean;
   selfBrowserSurface?: 'include' | 'exclude';
   monitorTypeSurfaces?: 'include' | 'exclude';
@@ -10,6 +12,7 @@ interface DisplayCaptureOptions {
   height: number;
   onlyCurrentTab: boolean;
   frameRate?: number;
+  captureSystemAudio?: boolean;
 }
 
 export function buildDisplayCaptureConstraints(options: DisplayCaptureOptions): DisplayCaptureConstraints {
@@ -25,15 +28,25 @@ export function buildDisplayCaptureConstraints(options: DisplayCaptureOptions): 
       autoGainControl: false,
     },
   };
+  if (options.captureSystemAudio) {
+    const video = constraints.video as MediaTrackConstraints & { displaySurface?: 'monitor' };
+    const audio = constraints.audio as MediaTrackConstraints & { systemAudio?: 'include' };
+    video.displaySurface = 'monitor';
+    audio.systemAudio = 'include';
+    constraints.selfBrowserSurface = 'exclude';
+    constraints.monitorTypeSurfaces = 'include';
+  }
   if (options.onlyCurrentTab) {
     constraints.preferCurrentTab = true;
     constraints.selfBrowserSurface = 'include';
+    if (typeof constraints.video === 'object') delete constraints.video.displaySurface;
+    delete constraints.monitorTypeSurfaces;
   }
   return constraints;
 }
 
 export async function captureDisplay(constraints: DisplayCaptureConstraints): Promise<MediaStream> {
-  return navigator.mediaDevices.getDisplayMedia(constraints);
+  return navigator.mediaDevices.getDisplayMedia(constraints as DisplayMediaStreamOptions);
 }
 
 export function createAudioContext(): AudioContext {
