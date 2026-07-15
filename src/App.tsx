@@ -62,6 +62,7 @@ import AppShell from './features/app-shell/AppShell';
 import LessonsView from './features/lessons/LessonsView';
 import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
 import { usePlaybackState } from './features/playback/usePlaybackState';
+import { createBrowserCountdownController, type CountdownController } from './features/playback/countdownController';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
 import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
 import { buildSpeechItems, detectLanguage, parseLineSymbols } from './features/lesson-editor/speechItemFactory';
@@ -320,70 +321,34 @@ export default function App() {
     setCurrentRepeatIndex,
     setWaitingState,
   } = usePlaybackState();
-  const waitTimerRef = useRef<any>(null);
-  const waitIntervalRef = useRef<any>(null);
+  const countdownControllerRef = useRef<CountdownController | null>(null);
+  if (!countdownControllerRef.current) countdownControllerRef.current = createBrowserCountdownController();
 
   const isSpeechSynthesisPausedRef = useRef<boolean>(false);
   const isPremiumAudioPausedRef = useRef<boolean>(false);
-  const pausedCountdownSecRef = useRef<number>(0);
-  const pausedCountdownTypeRef = useRef<'repeat' | 'advance' | null>(null);
-  const pausedCountdownItemIdRef = useRef<string | null>(null);
-  const resumeCallbackRef = useRef<(() => void) | null>(null);
 
   const clearWaitTimers = () => {
-    if (waitTimerRef.current) {
-      clearTimeout(waitTimerRef.current);
-      waitTimerRef.current = null;
-    }
-    if (waitIntervalRef.current) {
-      clearInterval(waitIntervalRef.current);
-      waitIntervalRef.current = null;
-    }
+    countdownControllerRef.current?.cancel();
     setWaitingState({ isWaiting: false, remainingSec: 0, itemId: null, type: null });
   };
 
-  const startCountdown = (sec: number, type: 'repeat' | 'advance', onComplete: () => void, itemId: string) => {
-    clearWaitTimers();
-    if (sec <= 0) {
-      onComplete();
-      return;
-    }
-
-    // Capture completion callback for pausing
-    resumeCallbackRef.current = onComplete;
-
-    setWaitingState({ isWaiting: true, remainingSec: sec, itemId, type });
-
-    const intervalTime = 100; // Update ticker every 100ms
-    const totalTicks = Math.round(sec * 10);
-    let ticksElapsed = 0;
-
-    waitIntervalRef.current = setInterval(() => {
-      ticksElapsed++;
-      const left = Math.max(0, sec - (ticksElapsed / 10));
-      setWaitingState(prev => {
-        if (prev.itemId === itemId) {
-          return { ...prev, remainingSec: parseFloat(left.toFixed(1)) };
-        }
-        return prev;
-      });
-
-      if (ticksElapsed >= totalTicks) {
-        clearInterval(waitIntervalRef.current);
-        waitIntervalRef.current = null;
-      }
-    }, intervalTime);
-
-    waitTimerRef.current = setTimeout(() => {
-      clearWaitTimers();
-      if (resumeCallbackRef.current) {
-        const cb = resumeCallbackRef.current;
-        resumeCallbackRef.current = null;
-        cb();
-      }
-    }, sec * 1000);
+  const startCountdown = (durationSec: number, type: 'repeat' | 'advance', onComplete: () => void, itemId: string) => {
+    countdownControllerRef.current?.start({
+      durationSec,
+      type,
+      itemId,
+      onTick: (snapshot) => setWaitingState({
+        isWaiting: !snapshot.paused,
+        remainingSec: snapshot.remainingSec,
+        itemId: snapshot.itemId,
+        type: snapshot.type,
+      }),
+      onComplete: () => {
+        setWaitingState({ isWaiting: false, remainingSec: 0, itemId: null, type: null });
+        onComplete();
+      },
+    });
   };
-
   // HTML5 Drag and Drop states
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -794,9 +759,6 @@ export default function App() {
 
     isSpeechSynthesisPausedRef.current = false;
     isPremiumAudioPausedRef.current = false;
-    pausedCountdownSecRef.current = 0;
-    pausedCountdownTypeRef.current = null;
-    pausedCountdownItemIdRef.current = null;
 
     let currentIteration = 1;
     const maxIterations = item.repeats || 1;
@@ -1124,10 +1086,6 @@ export default function App() {
     stopPlayback();
     isSpeechSynthesisPausedRef.current = false;
     isPremiumAudioPausedRef.current = false;
-    pausedCountdownSecRef.current = 0;
-    pausedCountdownTypeRef.current = null;
-    pausedCountdownItemIdRef.current = null;
-    resumeCallbackRef.current = null;
   };
 
   const handleGlobalPause = () => {
@@ -1151,22 +1109,11 @@ export default function App() {
     }
     // Case 2: In a countdown timer delay (repeat countdown or auto advance countdown)
     else if (playingState === 'paused' && waitingState.isWaiting) {
-      pausedCountdownSecRef.current = waitingState.remainingSec;
-      pausedCountdownTypeRef.current = waitingState.type;
-      pausedCountdownItemIdRef.current = waitingState.itemId;
-
-      // Stop the timers but preserve resumeCallbackRef
-      if (waitTimerRef.current) {
-        clearTimeout(waitTimerRef.current);
-        waitTimerRef.current = null;
+      const paused = countdownControllerRef.current?.pause();
+      if (paused) {
+        setWaitingState({ isWaiting: false, remainingSec: paused.remainingSec, itemId: paused.itemId, type: paused.type });
       }
-      if (waitIntervalRef.current) {
-        clearInterval(waitIntervalRef.current);
-        waitIntervalRef.current = null;
-      }
-      setWaitingState(prev => ({ ...prev, isWaiting: false }));
-    }
-  };
+    }  };
 
   const handleGlobalResume = () => {
     if (!isManualPaused) return;
@@ -1189,26 +1136,14 @@ export default function App() {
         setPlayingState('playing');
       }
     }
-    // Case 2: In a countdown delay when paused
-    else if (pausedCountdownSecRef.current > 0 && resumeCallbackRef.current) {
-      const remaining = pausedCountdownSecRef.current;
-      const type = pausedCountdownTypeRef.current!;
-      const itemId = pausedCountdownItemIdRef.current!;
-
-      pausedCountdownSecRef.current = 0;
-      pausedCountdownTypeRef.current = null;
-      pausedCountdownItemIdRef.current = null;
-
-      setPlayingState('paused');
-      startCountdown(remaining, type, () => {
-        if (resumeCallbackRef.current) {
-          const cb = resumeCallbackRef.current;
-          resumeCallbackRef.current = null;
-          cb();
-        }
-      }, itemId);
-    }
-  };
+    // Case 2: Resume the controller-owned countdown.
+    else {
+      const countdown = countdownControllerRef.current?.getSnapshot();
+      if (countdown?.paused) {
+        setPlayingState('paused');
+        countdownControllerRef.current?.resume();
+      }
+    }  };
 
   const handleGlobalPlay = () => {
     if (playingState !== 'idle') {
