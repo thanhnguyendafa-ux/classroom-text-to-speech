@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Volume2, 
-  VolumeX, 
-  Trash2, 
-  Plus, 
-  X, 
-  Check, 
-  Sliders, 
-  Sparkles, 
-  BookOpen, 
-  Play, 
+import {
+  Volume2,
+  VolumeX,
+  Trash2,
+  Plus,
+  X,
+  Check,
+  Sliders,
+  Sparkles,
+  BookOpen,
+  Play,
   RotateCcw,
   Edit2,
   Trash,
@@ -65,6 +65,7 @@ import AppShell from './features/app-shell/AppShell';
 import LessonsView from './features/lessons/LessonsView';
 import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
 import { usePlaybackState } from './features/playback/usePlaybackState';
+import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
 
 
 // Helper regex to detect language characters
@@ -78,7 +79,7 @@ export default function App() {
   const [rawText, setRawText] = useState<string>(
     'popcorn\nbắp rang\ndelicious popcorn\nbắp rang ngon lành\nI love eating delicious popcorn. /1.5\nMình rất thích ăn bắp rang ngon lành.\nsharing popcorn\nchia sẻ bắp rang\nWe are sharing popcorn while watching a movie. ;2\nChúng mình đang chung nhau ăn bắp rang khi xem phim.'
   );
-  
+
   const [speechList, setSpeechList] = useState<SpeechItem[]>([]);
   const [speed, setSpeed] = useState<number>(1.0);
 
@@ -96,7 +97,7 @@ export default function App() {
     return 1.0;
   });
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  
+
   // Custom preferred voices
   const [selectedEnVoiceName, setSelectedEnVoiceName] = useState<string>('');
   const [selectedViVoiceName, setSelectedViVoiceName] = useState<string>('');
@@ -113,6 +114,7 @@ export default function App() {
   const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
   const [currentLessonTitle, setCurrentLessonTitle] = useState<string>('Bài học mẫu: Bắp rang bơ');
   const [isSavingCloudLesson, setIsSavingCloudLesson] = useState<boolean>(false);
+  const [savedLessonFingerprint, setSavedLessonFingerprint] = useState<string | null>(null);
   const [cloudRefreshVersion, setCloudRefreshVersion] = useState<number>(0);
   const [toast, setToast] = useState<{
     type: 'success' | 'error' | 'info';
@@ -152,22 +154,18 @@ export default function App() {
       showToast('error', 'Thiếu tiêu đề', 'Vui lòng nhập tiêu đề cho bài giảng.');
       return;
     }
-    
+
     if (!rawText.trim()) {
       showToast('error', 'Nội dung trống', 'Nội dung bài học trống, không thể lưu!');
       return;
     }
-    
+
+    const lessonDraft = buildLessonDraft({ title: trimmedTitle, rawText, speechList, settings: getCurrentLessonSettings() });
     setIsSavingCloudLesson(true);
     try {
       if (currentLessonId) {
         // Update existing lesson
-        await updateLesson(user.uid, currentLessonId, buildLessonDraft({
-          title: trimmedTitle,
-          rawText,
-          speechList,
-          settings: getCurrentLessonSettings(),
-        }));
+        await updateLesson(user.uid, currentLessonId, lessonDraft);
         setCloudRefreshVersion(prev => prev + 1);
         showToast(
           'success',
@@ -181,13 +179,7 @@ export default function App() {
       } else {
         // Create new lesson
         const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-        await createLesson(user.uid, newId, buildLessonDraft({
-          title: trimmedTitle,
-          rawText,
-          speechList,
-          settings: getCurrentLessonSettings(),
-          folderId: null,
-        }));
+        await createLesson(user.uid, newId, { ...lessonDraft, folderId: null });
         setCurrentLessonId(newId);
         setCloudRefreshVersion(prev => prev + 1);
         showToast(
@@ -200,6 +192,7 @@ export default function App() {
           }
         );
       }
+      setSavedLessonFingerprint(createLessonFingerprint(lessonDraft));
     } catch (err) {
       console.error('Error saving lesson:', err);
       showToast('error', 'Lỗi lưu trữ', 'Không thể lưu bài giảng lên đám mây.');
@@ -215,19 +208,15 @@ export default function App() {
       showToast('error', 'Nội dung trống', 'Nội dung bài học trống, không thể lưu!');
       return;
     }
-    
+
     setIsSavingCloudLesson(true);
     try {
       const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      await createLesson(user.uid, newId, buildLessonDraft({
-        title: trimmedTitle,
-        rawText,
-        speechList,
-        settings: getCurrentLessonSettings(),
-        folderId: null,
-      }));
+      const copiedDraft = buildLessonDraft({ title: trimmedTitle, rawText, speechList, settings: getCurrentLessonSettings(), folderId: null });
+      await createLesson(user.uid, newId, copiedDraft);
       setCurrentLessonId(newId);
       setCurrentLessonTitle(trimmedTitle);
+      setSavedLessonFingerprint(createLessonFingerprint(copiedDraft));
       setCloudRefreshVersion(prev => prev + 1);
       showToast(
         'success',
@@ -247,13 +236,15 @@ export default function App() {
   };
 
   const handleCreateNewLesson = () => {
+    if (isDirty && !window.confirm('Bài học hiện tại có thay đổi chưa lưu. Bạn có muốn bỏ các thay đổi này?')) return;
     setRawText('');
     setSpeechList([]);
     setCurrentLessonId(null);
     setCurrentLessonTitle('Bài học mới');
+    setSavedLessonFingerprint(null);
     setActiveSection('builder');
   };
-  
+
   const {
     selectedPremiumVoiceEn,
     setSelectedPremiumVoiceEn,
@@ -304,7 +295,7 @@ export default function App() {
       lastNodesRef.current = null;
     }
   };
-  
+
   const {
     playingItemId,
     playingState,
@@ -767,6 +758,26 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
     universalImageUrl,
   });
 
+  const currentLessonDraft = buildLessonDraft({ title: currentLessonTitle, rawText, speechList, settings: getCurrentLessonSettings() });
+  const currentLessonFingerprint = createLessonFingerprint(currentLessonDraft);
+  const isDirty = savedLessonFingerprint !== null && savedLessonFingerprint !== currentLessonFingerprint;
+
+  useEffect(() => {
+    if (savedLessonFingerprint === null) setSavedLessonFingerprint(currentLessonFingerprint);
+  }, [savedLessonFingerprint, currentLessonFingerprint]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [isDirty]);
+
+  const handleSectionChange = (section: 'lessons' | 'builder') => {
+    if (section === 'lessons' && activeSection === 'builder' && isDirty && !window.confirm('Bài học có thay đổi chưa lưu. Bạn có muốn rời khỏi trình soạn thảo?')) return;
+    setActiveSection(section);
+  };
+
   const {
     manifests,
     progress: preparationProgress,
@@ -803,7 +814,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const activePlayingIdRef = useRef<string | null>(null);
   const speechListRef = useRef<SpeechItem[]>([]);
-  
+
   // Track mutable list to avoid closure locking in async timers
   useEffect(() => {
     speechListRef.current = speechList;
@@ -819,14 +830,14 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
         // Auto selection strategy for Vietnamese / English defaults
         if (availableVoices.length > 0) {
           // Check for Chrome or native US voice
-          const enVoice = availableVoices.find(v => v.lang.includes('en-US')) || 
+          const enVoice = availableVoices.find(v => v.lang.includes('en-US')) ||
                           availableVoices.find(v => v.lang.startsWith('en'));
           if (enVoice && !selectedEnVoiceName) {
             setSelectedEnVoiceName(enVoice.name);
           }
 
           // Check for native Vietnamese voice
-          const viVoice = availableVoices.find(v => v.lang.includes('vi-VN')) || 
+          const viVoice = availableVoices.find(v => v.lang.includes('vi-VN')) ||
                           availableVoices.find(v => v.lang.startsWith('vi'));
           if (viVoice && !selectedViVoiceName) {
             setSelectedViVoiceName(viVoice.name);
@@ -865,11 +876,11 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
       window.speechSynthesis.onvoiceschanged = fetchVoices;
     }
   }, [
-    selectedEnVoiceName, 
-    selectedViVoiceName, 
-    selectedZhCnVoiceName, 
-    selectedZhTwVoiceName, 
-    selectedJaVoiceName, 
+    selectedEnVoiceName,
+    selectedViVoiceName,
+    selectedZhCnVoiceName,
+    selectedZhTwVoiceName,
+    selectedJaVoiceName,
     selectedKoVoiceName
   ]);
 
@@ -944,16 +955,16 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
         exportedAt: new Date().toISOString(),
         items: speechList
       }, null, 2);
-      
+
       const blob = new Blob([dataStr], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      
+
       // Create a nice file name based on local date
       const dateStr = new Date().toLocaleDateString('vi-VN').replace(/\//g, '-');
       link.download = `giao-an-luyen-phat-am-${dateStr}.json`;
-      
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -995,7 +1006,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
         const sanitizedItems = normalizeSpeechList(itemsToImport);
 
         setSpeechList(sanitizedItems);
-        
+
         // Also update the raw text area with the imported texts for display synchronization
         const rawImportText = sanitizedItems.map(it => it.text).join('\n');
         setRawText(rawImportText);
@@ -1062,7 +1073,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
   function handleCreateList(textOverride?: string) {
     const sourceText = typeof textOverride === 'string' ? textOverride : rawText;
     const lines = sourceText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    
+
     // First map all raw lines to structured helper item objects
     const parsedLines = lines.map((lineText) => {
       const { cleanText, repeats, delaySec } = parseLineSymbols(lineText, 1, timeBetweenLines);
@@ -1339,18 +1350,18 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
               if (ctx.state === 'suspended') {
                 ctx.resume();
               }
-              
+
               clearWebAudioNodes();
 
               const source = ctx.createMediaElementSource(audio);
               const gainNode = ctx.createGain();
-              
+
               audio.volume = 1.0; // Max normal volume on element
               gainNode.gain.setValueAtTime(volume, ctx.currentTime);
-              
+
               source.connect(gainNode);
               gainNode.connect(ctx.destination);
-              
+
               lastNodesRef.current = { source, gain: gainNode };
             } catch (err) {
               console.error("Web Audio API volume boost error:", err);
@@ -1531,7 +1542,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
       pausedCountdownSecRef.current = waitingState.remainingSec;
       pausedCountdownTypeRef.current = waitingState.type;
       pausedCountdownItemIdRef.current = waitingState.itemId;
-      
+
       // Stop the timers but preserve resumeCallbackRef
       if (waitTimerRef.current) {
         clearTimeout(waitTimerRef.current);
@@ -1777,15 +1788,15 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
   // Filter categories for all supported languages
   const englishVoices = voices.filter(v => v.lang.toLowerCase().startsWith('en'));
   const vietnameseVoices = voices.filter(v => v.lang.toLowerCase().startsWith('vi'));
-  const zhCnVoices = voices.filter(v => 
-    v.lang.toLowerCase().replace('_', '-').startsWith('zh-cn') || 
-    v.lang.toLowerCase().replace('_', '-').startsWith('zh-chs') || 
+  const zhCnVoices = voices.filter(v =>
+    v.lang.toLowerCase().replace('_', '-').startsWith('zh-cn') ||
+    v.lang.toLowerCase().replace('_', '-').startsWith('zh-chs') ||
     (v.lang.toLowerCase().startsWith('zh') && !v.lang.toLowerCase().includes('tw') && !v.lang.toLowerCase().includes('hk'))
   );
-  const zhTwVoices = voices.filter(v => 
-    v.lang.toLowerCase().replace('_', '-').startsWith('zh-tw') || 
-    v.lang.toLowerCase().replace('_', '-').startsWith('zh-hk') || 
-    v.lang.toLowerCase().replace('_', '-').startsWith('zh-cht') || 
+  const zhTwVoices = voices.filter(v =>
+    v.lang.toLowerCase().replace('_', '-').startsWith('zh-tw') ||
+    v.lang.toLowerCase().replace('_', '-').startsWith('zh-hk') ||
+    v.lang.toLowerCase().replace('_', '-').startsWith('zh-cht') ||
     (v.lang.toLowerCase().startsWith('zh') && (v.lang.toLowerCase().includes('tw') || v.lang.toLowerCase().includes('hk')))
   );
   const japaneseVoices = voices.filter(v => v.lang.toLowerCase().startsWith('ja'));
@@ -1793,10 +1804,10 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
 
   return (
     <div id="classroom-tts-root" className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900">
-      
+
       <AppShell
         activeSection={activeSection}
-        onSectionChange={setActiveSection}
+        onSectionChange={handleSectionChange}
         onCreateNewLesson={handleCreateNewLesson}
         engineMode={engineMode}
         hasPremiumKey={!!userGeminiApiKey}
@@ -1811,10 +1822,11 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
             onLoadLesson={(lesson) => {
               const normalizedLesson = hydrateLessonDocument(lesson.id, lesson);
               const s = normalizedLesson.settings;
+              setSavedLessonFingerprint(createLessonFingerprint(buildLessonDraft({ title: normalizedLesson.title, rawText: normalizedLesson.rawText, speechList: normalizedLesson.speechList, settings: normalizedLesson.settings, folderId: normalizedLesson.folderId })));
 
               // 1. Restore raw text editor
               setRawText(normalizedLesson.rawText);
-              
+
               // 2. Restore all configurations
               setSpeed(s.speed);
               setTimeBetweenLines(s.timeBetweenLines);
@@ -1850,7 +1862,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
               // Set active lesson identification
               setCurrentLessonId(normalizedLesson.id);
               setCurrentLessonTitle(normalizedLesson.title);
-              
+
               // Transition to builder workspace
               setActiveSection('builder');
             }}
@@ -1899,8 +1911,8 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
                     type="button"
                     onClick={handleCopyGPTPrompt}
                     className={`text-[10px] sm:text-xs font-bold px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 justify-center cursor-pointer select-none shrink-0 self-start sm:self-center ${
-                      copiedPrompt 
-                        ? 'bg-emerald-500 text-white border-emerald-500 shadow-xs scale-102' 
+                      copiedPrompt
+                        ? 'bg-emerald-500 text-white border-emerald-500 shadow-xs scale-102'
                         : 'bg-indigo-650 hover:bg-indigo-700 text-white border-transparent'
                     }`}
                   >
@@ -2052,7 +2064,7 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
                 setIsShareModalOpen={setIsShareModalOpen}
                 setIsAudioExportModalOpen={setIsAudioExportModalOpen}
                 handleApplyTemplate={handleApplyTemplate}
-                
+
                 playingItemId={playingItemId}
                 currentRepeatIndex={currentRepeatIndex}
                 waitingState={waitingState}
@@ -2062,14 +2074,14 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
                 startEditingRow={startEditingRow}
                 saveEditedRow={saveEditedRow}
                 setEditingItemId={setEditingItemId}
-                
+
                 draggedIndex={draggedIndex}
                 dragOverIndex={dragOverIndex}
                 handleDragStart={handleDragStart}
                 handleDragEnd={handleDragEnd}
                 handleDragOver={handleDragOver}
                 handleDropRow={handleDropRow}
-                
+
                 speed={speed}
                 handleSpeakItem={handleSpeakItem}
                 handleClearImage={handleClearImage}
@@ -2394,9 +2406,9 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
                 </p>
               )}
             </div>
-            
+
             <div className="flex flex-col items-end gap-2 shrink-0">
-              <button 
+              <button
                 type="button"
                 onClick={() => setToast(null)}
                 className="text-slate-400 hover:text-white p-0.5 rounded-lg hover:bg-slate-800 transition cursor-pointer"

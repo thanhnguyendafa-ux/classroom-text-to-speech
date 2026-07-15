@@ -18,6 +18,7 @@ interface LessonBuilderViewProps {
   onSaveLesson: () => void;
   onSaveAsCopy?: () => void;
   isSaving: boolean;
+  isDirty: boolean;
   onOpenExport: () => void;
   onOpenShare: () => void;
   
@@ -35,6 +36,7 @@ export const LessonBuilderView: React.FC<LessonBuilderViewProps> = ({
   onSaveLesson,
   onSaveAsCopy,
   isSaving,
+  isDirty,
   onOpenExport,
   onOpenShare,
   leftColumn,
@@ -55,6 +57,11 @@ export const LessonBuilderView: React.FC<LessonBuilderViewProps> = ({
               <Sparkles className="w-3 h-3 text-indigo-500 animate-pulse" />
               Không gian thiết kế bài học
             </span>
+            {isDirty && (
+              <span className="text-[10px] uppercase font-black tracking-wider text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full">
+                Có thay đổi chưa lưu
+              </span>
+            )}
             {currentLessonId ? (
               <span className="text-[10px] uppercase font-black tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                 <Cloud className="w-3 h-3" />
@@ -87,8 +94,8 @@ export const LessonBuilderView: React.FC<LessonBuilderViewProps> = ({
           <button
             type="button"
             onClick={onSaveLesson}
-            disabled={isSaving}
-            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition active:scale-98 cursor-pointer select-none"
+            disabled={isSaving || (!!currentLessonId && !isDirty)}
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition active:scale-98 cursor-pointer select-none"
             title={currentLessonId ? "Lưu đè thay đổi lên đám mây" : "Lưu bài học mới lên đám mây"}
           >
             <Save className="w-3.5 h-3.5" />
