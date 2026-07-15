@@ -48,7 +48,10 @@ import { createBrowserLocalLibraryRepository, type SavedFolder, type SavedLesson
 import { mergeLibraryBackup, parseLibraryBackup, serializeLibraryBackup } from '../features/lessons/libraryBackup';
 import { migrateLocalLibraryToCloud } from '../features/lessons/libraryCloudMigration';
 import type { LibraryDisplayFolder, LibraryDisplayLesson } from '../features/lessons/libraryDisplayModel';
+import { createCloudLibraryService } from '../features/lessons/cloudLibraryService';
 export type { SavedFolder, SavedLesson } from '../features/lessons/localLibraryRepository';
+
+const cloudLibraryService = createCloudLibraryService({ listFolders, listLessons, createFolder, updateFolder, deleteFolder, createLesson, updateLesson, deleteLesson });
 
 
 interface LessonLibraryProps {
@@ -213,7 +216,7 @@ export default function LessonLibrary({
     setIsCloudLoading(true);
     try {
       const newId = `folder-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      await createFolder(user.uid, newId, trimmed);
+      await cloudLibraryService.createFolder(user.uid, newId, trimmed);
       setNewFolderName('');
       setShowNewFolderInput(false);
       flashMessage(`Đã tạo thư mục đám mây "${trimmed}"`, 'success');
@@ -233,7 +236,7 @@ export default function LessonLibrary({
 
     setIsCloudLoading(true);
     try {
-      await updateFolder(user.uid, editingFolderId, trimmed);
+      await cloudLibraryService.renameFolder(user.uid, editingFolderId, trimmed);
       setEditingFolderId(null);
       flashMessage('Đã đổi tên thư mục đám mây thành công', 'success');
       await fetchCloudData();
@@ -249,18 +252,8 @@ export default function LessonLibrary({
     if (!user) return;
     setIsCloudLoading(true);
     try {
-      if (keepLessons) {
-        const lessonsInFolder = cloudLessons.filter(l => l.folderId === folderId);
-        for (const lesson of lessonsInFolder) {
-          await updateLesson(user.uid, lesson.id, { folderId: null });
-        }
-      } else {
-        const lessonsInFolder = cloudLessons.filter(l => l.folderId === folderId);
-        for (const lesson of lessonsInFolder) {
-          await deleteLesson(user.uid, lesson.id);
-        }
-      }
-      await deleteFolder(user.uid, folderId);
+      await cloudLibraryService.deleteFolder(user.uid, folderId, keepLessons, cloudLessons);
+
       flashMessage(keepLessons ? 'Đã xóa thư mục và giữ lại các bài học đám mây.' : 'Đã xóa thư mục cùng toàn bộ bài học trên đám mây.', 'info');
       await fetchCloudData();
     } catch (err) {
@@ -287,7 +280,7 @@ export default function LessonLibrary({
     setIsCloudLoading(true);
     try {
       const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      await createLesson(user.uid, newId, {
+      await cloudLibraryService.createLesson(user.uid, newId, {
         title: trimmedTitle,
         rawText: currentRawText,
         speechList: currentSpeechList,
@@ -312,7 +305,7 @@ export default function LessonLibrary({
     if (!user) return;
     setIsCloudLoading(true);
     try {
-      await deleteLesson(user.uid, lessonId);
+      await cloudLibraryService.deleteLesson(user.uid, lessonId);
       flashMessage('Đã xóa bài học đám mây', 'info');
       await fetchCloudData();
     } catch (err) {
@@ -330,7 +323,7 @@ export default function LessonLibrary({
 
     setIsCloudLoading(true);
     try {
-      await updateLesson(user.uid, editingLessonId, { title: trimmed });
+      await cloudLibraryService.renameLesson(user.uid, editingLessonId, trimmed);
       setEditingLessonId(null);
       flashMessage('Đã đổi tên bài học đám mây', 'success');
       await fetchCloudData();
