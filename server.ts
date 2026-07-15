@@ -15,6 +15,7 @@ import {
   sharePlaylistLimiter,
 } from "./src/server/rateLimiter";
 import { checkFirestoreConnection } from "./src/server/storage";
+import { applySecurityHeaders } from "./src/server/httpSecurity";
 
 dotenv.config();
 
@@ -23,6 +24,10 @@ const PORT = 3000;
 
 // Set payload body size limit to prevent oversized request attacks
 app.use(express.json({ limit: "500kb" }));
+app.use((req, res, next) => {
+  applySecurityHeaders(req, res, "GET,POST,OPTIONS");
+  next();
+});
 
 // 0. API Health and Connection Status Check
 app.get("/api/health", async (req, res) => {
