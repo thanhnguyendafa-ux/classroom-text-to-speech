@@ -1,5 +1,6 @@
 import { getSharedPlaylist } from "../../src/server/handlers";
 import { applySecurityHeaders } from "../../src/server/httpSecurity";
+import { sendApiError } from '../../src/server/apiError';
 
 export default async function handler(req: any, res: any) {
   applySecurityHeaders(req, res, "GET,OPTIONS");
@@ -20,8 +21,7 @@ export default async function handler(req: any, res: any) {
     
     const result = await getSharedPlaylist(shareId);
     res.status(200).json(result);
-  } catch (err: any) {
-    console.error("Vercel Serverless Get Share Error:", err);
-    res.status(404).json({ error: err.message || "Không tìm thấy chuỗi luyện tập này." });
+  } catch (error) {
+    sendApiError(res, error, 'share-playlist-read');
   }
 }

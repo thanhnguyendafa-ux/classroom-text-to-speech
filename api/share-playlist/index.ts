@@ -1,6 +1,7 @@
 import { createSharedPlaylist } from "../../src/server/handlers";
 import { applyRateLimitHeaders, getClientIp, sharePlaylistLimiter } from "../../src/server/rateLimiter";
 import { applySecurityHeaders } from "../../src/server/httpSecurity";
+import { sendApiError } from '../../src/server/apiError';
 
 export default async function handler(req: any, res: any) {
   applySecurityHeaders(req, res, "POST,OPTIONS");
@@ -29,8 +30,7 @@ export default async function handler(req: any, res: any) {
   try {
     const result = await createSharedPlaylist(req.body);
     res.status(200).json(result);
-  } catch (err: any) {
-    console.error("Vercel Serverless Create Share Error:", err);
-    res.status(500).json({ error: err.message || "Không thể tạo liên kết chia sẻ." });
+  } catch (error) {
+    sendApiError(res, error, 'share-playlist-create');
   }
 }

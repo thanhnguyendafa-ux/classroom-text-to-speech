@@ -1,6 +1,7 @@
 import { generateTextToSpeech } from "../src/server/handlers";
 import { applyRateLimitHeaders, getClientIp, ttsLimiter } from "../src/server/rateLimiter";
 import { applySecurityHeaders } from "../src/server/httpSecurity";
+import { sendApiError } from '../src/server/apiError';
 
 export default async function handler(req: any, res: any) {
   applySecurityHeaders(req, res, "POST,OPTIONS");
@@ -30,8 +31,7 @@ export default async function handler(req: any, res: any) {
     const { text, voice, lang, userApiKey } = req.body || {};
     const result = await generateTextToSpeech({ text, voice, lang, userApiKey });
     res.status(200).json(result);
-  } catch (err: any) {
-    console.error("Vercel Serverless TTS Error:", err);
-    res.status(500).json({ error: err.message || "Lỗi xử lý giọng nói AI" });
+  } catch (error) {
+    sendApiError(res, error, 'tts');
   }
 }

@@ -17,6 +17,7 @@ import {
 } from "./src/server/rateLimiter";
 import { checkFirestoreConnection } from "./src/server/storage";
 import { applySecurityHeaders } from "./src/server/httpSecurity";
+import { sendApiError } from './src/server/apiError';
 
 dotenv.config();
 
@@ -39,8 +40,8 @@ app.get("/api/health", async (req, res) => {
       service: "classroom-text-to-speech-api",
       firestore: isOk ? "connected" : "disconnected"
     });
-  } catch (err: any) {
-    res.status(500).json({ status: "error", message: err.message });
+  } catch (error) {
+    sendApiError(res, error, 'health');
   }
 });
 
@@ -61,9 +62,8 @@ app.get("/api/search-images", async (req, res) => {
     const query = typeof q === "string" ? q : "";
     const result = await searchImages(query);
     res.json(result);
-  } catch (err: any) {
-    console.error("Image search error:", err);
-    res.status(500).json({ error: err.message || "Failed to search images" });
+  } catch (error) {
+    sendApiError(res, error, 'image-search');
   }
 });
 
@@ -83,9 +83,8 @@ app.post("/api/tts", async (req, res) => {
     const { text, voice, lang, userApiKey } = req.body;
     const result = await generateTextToSpeech({ text, voice, lang, userApiKey });
     res.json(result);
-  } catch (err: any) {
-    console.error("TTS Premium API Error:", err);
-    res.status(500).json({ error: err.message || "Lỗi xử lý giọng nói AI" });
+  } catch (error) {
+    sendApiError(res, error, 'tts');
   }
 });
 
@@ -104,9 +103,8 @@ app.post("/api/share-playlist", async (req, res) => {
   try {
     const result = await createSharedPlaylist(req.body);
     res.json(result);
-  } catch (err: any) {
-    console.error("Error publishing shared playlist:", err);
-    res.status(500).json({ error: err.message || "Không thể tạo liên kết chia sẻ." });
+  } catch (error) {
+    sendApiError(res, error, 'share-playlist-create');
   }
 });
 
@@ -116,9 +114,8 @@ app.get("/api/share-playlist/:id", async (req, res) => {
     const shareId = req.params.id;
     const result = await getSharedPlaylist(shareId);
     res.json(result);
-  } catch (err: any) {
-    console.error("Error loading shared playlist:", err);
-    res.status(404).json({ error: err.message || "Không tìm thấy chuỗi luyện tập này hoặc liên kết đã hết hạn." });
+  } catch (error) {
+    sendApiError(res, error, 'share-playlist-read');
   }
 });
 

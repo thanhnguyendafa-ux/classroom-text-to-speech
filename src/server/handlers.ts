@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import { PlaylistStorageManager, PlaylistPayload } from "./storage";
 import { validatePlaylistPayload } from "./validation";
+import { ApiError } from './apiError';
 
 // Helper function to attach 44-byte standard WAV container headers to 16-bit PCM 24kHz stream
 function encodeWAV(pcmBuffer: Buffer, sampleRate = 24000): Buffer {
@@ -106,7 +107,7 @@ export async function generateTextToSpeech(payload: {
   const { text, voice, lang, userApiKey } = payload;
 
   if (!text || typeof text !== "string" || !text.trim()) {
-    throw new Error("Nội dung văn bản thoại (text) là bắt buộc.");
+    throw new ApiError(400, 'TTS_TEXT_REQUIRED', 'Nội dung văn bản thoại là bắt buộc.');
   }
 
   // Enforce a strict text length threshold per request on raw generation
@@ -118,7 +119,7 @@ export async function generateTextToSpeech(payload: {
     : null;
 
   if (!keyToUse) {
-    throw new Error("Vui lòng nhập Gemini API Key của riêng bạn trong cột Cấu hình bên trái để sử dụng giọng đọc Premium AI.");
+    throw new ApiError(400, 'GEMINI_KEY_REQUIRED', 'Vui lòng nhập Gemini API Key để sử dụng giọng đọc Premium AI.');
   }
 
   // Initialize GoogleGenAI instance using the client's provided key
@@ -166,7 +167,7 @@ export async function generateTextToSpeech(payload: {
   const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
   if (!base64Audio) {
-    throw new Error("Thất bại khi lấy dữ liệu âm thanh từ động cơ AI. Hãy thử lại hoặc kiểm tra lại Key Gemini của bạn.");
+    throw new ApiError(502, 'TTS_UPSTREAM_INVALID', 'Dịch vụ giọng nói chưa trả về âm thanh hợp lệ. Vui lòng thử lại.');
   }
 
   const pcmBuffer = Buffer.from(base64Audio, "base64");
@@ -200,13 +201,13 @@ export async function createSharedPlaylist(playlistBody: any): Promise<{ id: str
  */
 export async function getSharedPlaylist(shareId: string | undefined): Promise<PlaylistPayload> {
   if (!shareId || typeof shareId !== "string" || !shareId.trim()) {
-    throw new Error("Mã chia sẻ không hợp lệ.");
+    throw new ApiError(400, 'INVALID_SHARE_ID', 'Mã chia sẻ không hợp lệ.');
   }
 
   const playlist = await PlaylistStorageManager.getPlaylist(shareId.trim());
 
   if (!playlist) {
-    throw new Error("Không tìm thấy chuỗi luyện tập này hoặc liên kết đã hết hạn.");
+    throw new ApiError(404, 'PLAYLIST_NOT_FOUND', 'Không tìm thấy chuỗi luyện tập này hoặc liên kết đã hết hạn.');
   }
 
   return playlist;

@@ -1,5 +1,6 @@
 import { SharePlaylistPayload } from "../types";
 import { normalizeSharePlaylistPayload } from "../domain/lessonModel";
+import { ApiError } from './apiError';
 
 export type ValidatedPlaylistPayload = SharePlaylistPayload;
 
@@ -8,17 +9,17 @@ export type ValidatedPlaylistPayload = SharePlaylistPayload;
  */
 export function validatePlaylistPayload(body: any): ValidatedPlaylistPayload {
   if (!body || typeof body !== "object") {
-    throw new Error("Payload không hợp lệ.");
+    throw new ApiError(400, 'INVALID_PLAYLIST', 'Payload không hợp lệ.');
   }
 
   const payload = normalizeSharePlaylistPayload(body);
 
   if (payload.speechList.length === 0) {
-    throw new Error("Danh sách câu luyện nói không được rỗng.");
+    throw new ApiError(400, 'EMPTY_PLAYLIST', 'Danh sách câu luyện nói không được rỗng.');
   }
 
   if (payload.speechList.length > 100) {
-    throw new Error("Mỗi chuỗi chia sẻ chỉ được chứa tối đa 100 câu luyện tập.");
+    throw new ApiError(400, 'PLAYLIST_TOO_LARGE', 'Mỗi chuỗi chia sẻ chỉ được chứa tối đa 100 câu luyện tập.');
   }
 
   return payload;

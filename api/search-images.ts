@@ -1,6 +1,7 @@
 import { searchImages } from "../src/server/handlers";
 import { applyRateLimitHeaders, getClientIp, imageSearchLimiter } from "../src/server/rateLimiter";
 import { applySecurityHeaders } from "../src/server/httpSecurity";
+import { sendApiError } from '../src/server/apiError';
 
 export default async function handler(req: any, res: any) {
   applySecurityHeaders(req, res, "GET,OPTIONS");
@@ -31,8 +32,7 @@ export default async function handler(req: any, res: any) {
     const query = typeof q === "string" ? q : "";
     const result = await searchImages(query);
     res.status(200).json(result);
-  } catch (err: any) {
-    console.error("Vercel Serverless Image Search Error:", err);
-    res.status(500).json({ error: err.message || "Failed to search images" });
+  } catch (error) {
+    sendApiError(res, error, 'image-search');
   }
 }
