@@ -402,34 +402,35 @@ export default function LessonLibrary({
     if (!user) return;
     setIsCloudLoading(true);
     try {
-      // 1. Migrate folders
-      for (const folder of folders) {
-        await createFolder(user.uid, folder.id, folder.name);
-        for (const lesson of folder.lessons) {
-          await createLesson(user.uid, lesson.id, {
+      await Promise.all([
+        ...folders.map(async folder => {
+          await createFolder(user.uid, folder.id, folder.name);
+          await Promise.all(folder.lessons.map(lesson => createLesson(user.uid, lesson.id, {
             title: lesson.title,
             rawText: lesson.rawText,
             speechList: lesson.speechList || [],
             settings: lesson.settings || {},
             folderId: folder.id
-          });
-        }
-      }
-
-      // 2. Migrate uncategorized lessons
-      for (const lesson of uncategorizedLessons) {
-        await createLesson(user.uid, lesson.id, {
+          })));
+        }),
+        ...uncategorizedLessons.map(lesson => createLesson(user.uid, lesson.id, {
           title: lesson.title,
           rawText: lesson.rawText,
           speechList: lesson.speechList || [],
           settings: lesson.settings || {},
           folderId: null
-        });
-      }
+        }))
+      ]);
 
-      flashMessage('Đã chuyển toàn bộ thư mục & bài giảng từ máy này lên tài khoản đám mây!', 'success');
       await fetchCloudData();
+      localStorage.removeItem(`library_folders_${user.uid}`);
+      localStorage.removeItem(`library_uncategorized_${user.uid}`);
+      localStorage.setItem(`library_migrated_${user.uid}`, 'true');
+      setFolders([]);
+      setUncategorizedLessons([]);
+      setActiveTab('cloud');
       setShowMigrationBanner(false);
+      flashMessage('Đã chuyển toàn bộ thư mục & bài giảng lên đám mây. Thư viện đám mây hiện là dữ liệu chính.', 'success');
     } catch (err) {
       console.error('Migration error:', err);
       flashMessage('Đã xảy ra lỗi khi đồng bộ dữ liệu lên đám mây.', 'error');
