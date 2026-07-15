@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useReducer } from 'react';
 import { 
   Volume2, 
   VolumeX, 
@@ -64,6 +64,7 @@ import { createLesson, updateLesson } from './features/cloud-lessons/cloudLesson
 import AppShell from './features/app-shell/AppShell';
 import LessonsView from './features/lessons/LessonsView';
 import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
+import { initialPlaybackState, playbackReducer } from './features/playback/playbackState';
 
 
 // Helper regex to detect language characters
@@ -304,23 +305,22 @@ export default function App() {
     }
   };
   
-  // Active playing item tracker
-  const [playingItemId, setPlayingItemId] = useState<string | null>(null);
-  const [playingState, setPlayingState] = useState<'idle' | 'playing' | 'paused'>('idle');
-  const [currentRepeatIndex, setCurrentRepeatIndex] = useState<number>(0);
-  
-  // Visual Countdown timer state for pauses between repetitions & lines (ideal for dictation)
-  const [waitingState, setWaitingState] = useState<{ isWaiting: boolean; remainingSec: number; itemId: string | null; type: 'repeat' | 'advance' | null }>({
-    isWaiting: false,
-    remainingSec: 0,
-    itemId: null,
-    type: null
-  });
+  // Playback is coordinated by one reducer; compatibility setters keep call-sites stable during migration.
+  const [playback, dispatchPlayback] = useReducer(playbackReducer, initialPlaybackState);
+  const { playingItemId, playingState, currentRepeatIndex, waitingState, isManualPaused } = playback;
+  const setPlayingItemId = (itemId: string | null) => itemId === null
+    ? dispatchPlayback({ type: 'reset' })
+    : dispatchPlayback({ type: 'itemStarted', itemId, repeatIndex: playback.currentRepeatIndex });
+  const setPlayingState = (state: 'idle' | 'playing' | 'paused') => dispatchPlayback({ type: 'stateChanged', state });
+  const setCurrentRepeatIndex = (repeatIndex: number) => dispatchPlayback({ type: 'repeatChanged', repeatIndex });
+  const setWaitingState = (next: typeof waitingState | ((previous: typeof waitingState) => typeof waitingState)) => {
+    const value = typeof next === 'function' ? next(playback.waitingState) : next;
+    dispatchPlayback({ type: 'waitingChanged', waitingState: value });
+  };
+  const setIsManualPaused = (value: boolean) => dispatchPlayback({ type: 'manualPauseChanged', value });
   const waitTimerRef = useRef<any>(null);
   const waitIntervalRef = useRef<any>(null);
 
-  // Manual pause, resume and stop states
-  const [isManualPaused, setIsManualPaused] = useState<boolean>(false);
   const isSpeechSynthesisPausedRef = useRef<boolean>(false);
   const isPremiumAudioPausedRef = useRef<boolean>(false);
   const pausedCountdownSecRef = useRef<number>(0);
