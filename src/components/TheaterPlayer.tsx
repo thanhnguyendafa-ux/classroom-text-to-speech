@@ -26,6 +26,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { SpeechItem, LanguageCode } from '../types';
+import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, errorMessage, errorName, stopMediaStream } from '../features/media-capture/mediaCaptureAdapter';
 
 interface TheaterPlayerProps {
   isOpen: boolean;
@@ -122,7 +123,7 @@ export default function TheaterPlayer({
   const streamRef = React.useRef<MediaStream | null>(null);
   const micStreamRef = React.useRef<MediaStream | null>(null);
   const chunksRef = React.useRef<Blob[]>([]);
-  const timerIntervalRef = React.useRef<any>(null);
+  const timerIntervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Formatter for recorded seconds
   const formatTime = (totalSec: number) => {
@@ -138,10 +139,10 @@ export default function TheaterPlayer({
         clearInterval(timerIntervalRef.current);
       }
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        stopMediaStream(streamRef.current);
       }
       if (micStreamRef.current) {
-        micStreamRef.current.getTracks().forEach(track => track.stop());
+        stopMediaStream(micStreamRef.current);
       }
     };
   }, []);
@@ -174,9 +175,9 @@ export default function TheaterPlayer({
         URL.revokeObjectURL(url);
       }, 500);
 
-    } catch (downloadErr: any) {
+    } catch (downloadErr: unknown) {
       console.error("Lỗi khi kết xuất file tải xuống:", downloadErr);
-      setErrorMessage(`Lỗi lưu video file: ${downloadErr.message}`);
+      setErrorMessage(`Lỗi lưu video file: ${errorMessage(downloadErr)}`);
     }
   };
 
@@ -192,12 +193,12 @@ export default function TheaterPlayer({
     }
 
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      stopMediaStream(streamRef.current);
       streamRef.current = null;
     }
 
     if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(track => track.stop());
+      stopMediaStream(micStreamRef.current);
       micStreamRef.current = null;
     }
 
@@ -233,32 +234,16 @@ export default function TheaterPlayer({
             micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
           }
           micStreamRef.current = micStream;
-        } catch (micErr: any) {
+        } catch (micErr: unknown) {
           console.warn("Microphone access is denied, falling back:", micErr);
           setErrorMessage("Không chọn được Microphone ngoài (có thể chưa cắm hoặc chưa đồng ý cấp quyền). Hệ thống vẫn tiến hành quay video nhưng chỉ ghi âm thanh của máy tính.");
         }
       }
 
       // Display capture stream with optional preferCurrentTab parameter to bypass chrome blank list bug
-      const displayConstraints: any = {
-        video: {
-          width: { ideal: width },
-          height: { ideal: height },
-          frameRate: { ideal: 30 }
-        },
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false
-        }
-      };
+      const displayConstraints = buildDisplayCaptureConstraints({ width, height, onlyCurrentTab });
 
-      if (onlyCurrentTab) {
-        displayConstraints.preferCurrentTab = true;
-        displayConstraints.selfBrowserSurface = "include";
-      }
-
-      const displayStream = await (navigator.mediaDevices as any).getDisplayMedia(displayConstraints);
+      const displayStream = await captureDisplay(displayConstraints);
       streamRef.current = displayStream;
 
       // Make sure we stop everything if the system stops screen-record
@@ -273,16 +258,15 @@ export default function TheaterPlayer({
       combinedStream.addTrack(videoTrack);
 
       try {
-        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
         const displayAudioTracks = displayStream.getAudioTracks();
         const micAudioTracks = includeMic && micStream ? micStream.getAudioTracks() : [];
         
         const hasDisplayAudio = displayAudioTracks.length > 0;
         const hasMicAudio = micAudioTracks.length > 0;
 
-        if (AudioCtxClass && hasDisplayAudio && hasMicAudio) {
+        if (hasDisplayAudio && hasMicAudio) {
           // If we have BOTH systemic tab audio AND microphone, we must mix them using AudioContext
-          const audioCtx = new AudioCtxClass();
+          const audioCtx = createAudioContext();
           if (audioCtx.state === 'suspended') {
             await audioCtx.resume();
           }
@@ -354,15 +338,15 @@ export default function TheaterPlayer({
         setRecordingTimeSec(prev => prev + 1);
       }, 1000);
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Recording start error:", err);
       const isIframe = window.self !== window.top;
-      if (isIframe && (err.name === 'SecurityError' || err.message?.toLowerCase().includes('iframe') || err.message?.toLowerCase().includes('sandboxed') || err.message?.toLowerCase().includes('permission'))) {
+      if (isIframe && (errorName(err) === 'SecurityError' || errorMessage(err).toLowerCase().includes('iframe') || errorMessage(err)?.toLowerCase().includes('sandboxed') || errorMessage(err)?.toLowerCase().includes('permission'))) {
         setErrorMessage("LỖI BẢO MẬT IFRAME: Trình duyệt chặn chức năng quay màn hình từ bên trong khung xem thử của AI Studio. Vui lòng nhấn vào biểu tượng 'Mở tab mới' (Open in new tab) nằm ở góc phải phía trên trình duyệt của bạn để chạy ứng dụng độc lập bên ngoài, sau đó tính năng ghi hình sẽ hoạt động hoàn hảo!");
-      } else if (err.name === 'NotAllowedError') {
+      } else if (errorName(err) === 'NotAllowedError') {
         setErrorMessage("Bạn đã từ chối cấp quyền chia sẻ/ghi hình màn hình của trình duyệt.");
       } else {
-        setErrorMessage(`Không thể chuẩn bị công cụ ghi: ${err.message || err.name}`);
+        setErrorMessage(`Không thể chuẩn bị công cụ ghi: ${errorMessage(err)}`);
       }
     }
   };
@@ -386,11 +370,11 @@ export default function TheaterPlayer({
           }
         }
         if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
+          stopMediaStream(streamRef.current);
           streamRef.current = null;
         }
         if (micStreamRef.current) {
-          micStreamRef.current.getTracks().forEach(track => track.stop());
+          stopMediaStream(micStreamRef.current);
           micStreamRef.current = null;
         }
         setIsRecording(false);
