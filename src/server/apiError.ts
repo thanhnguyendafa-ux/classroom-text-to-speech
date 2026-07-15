@@ -1,3 +1,5 @@
+import { logger } from './structuredLogger';
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -38,6 +40,6 @@ export function sendApiError(
   context: string,
 ) {
   const normalized = normalizeApiError(error);
-  console.error(`[${context}] ${normalized.logCode}`);
+  logger.error('api_request_failed', { context, code: normalized.logCode, status: normalized.status });
   response.status(normalized.status).json(normalized.body);
 }

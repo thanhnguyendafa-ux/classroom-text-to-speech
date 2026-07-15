@@ -1,5 +1,6 @@
 import { SharePlaylistPayload } from "../types";
 import { adminDb } from './firebaseAdmin';
+import { logger } from './structuredLogger';
 
 // Error handling types and helpers as required by firebase-integration skill
 export enum OperationType {
@@ -42,7 +43,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
-  console.error("Firestore Error: ", JSON.stringify(errInfo));
+  logger.error('firestore_operation_failed', { operationType, path, error: errInfo.error });
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -71,7 +72,7 @@ export class PlaylistStorageManager {
         createdAt: data.createdAt || new Date().toISOString(),
       });
 
-      console.log(`[Firestore] Successfully saved playlist:${shareId} to Firestore.`);
+      logger.info('shared_playlist_saved', { shareId });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, documentPath);
     }
@@ -102,13 +103,13 @@ export async function checkFirestoreConnection() {
   const testPath = "test/connection";
   try {
     await adminDb.collection("test").doc("connection").get();
-    console.log("[Firestore] Firestore connection is ready.");
+    logger.info('firestore_connection_ready');
     return true;
   } catch (error) {
     if (error instanceof Error && error.message.includes("the client is offline")) {
-      console.error("[Firestore] Please check your Firebase configuration. Client is offline.");
+      logger.error('firestore_connection_offline');
     } else {
-      console.log("[Firestore] Tested connection (non-existent doc expected or offline check).", error);
+      logger.warn('firestore_connection_check_inconclusive', { error });
     }
     return false;
   }
