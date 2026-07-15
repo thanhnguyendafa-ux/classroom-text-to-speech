@@ -14,7 +14,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      - name: Firestore integration and rules
+        run: npx firebase emulators:exec --project demo-classroom-tts --only firestore "tsx --test --test-concurrency=1 test/firestore.rules.test.ts test/firebase-admin.smoke.ts test/playlist-storage.smoke.ts test/rate-limiter.smoke.ts"
+      - name: Storage rules
+        run: npx firebase emulators:exec --project demo-classroom-tts --only storage "tsx --test test/storage.rules.test.ts"
       - run: npm run build
