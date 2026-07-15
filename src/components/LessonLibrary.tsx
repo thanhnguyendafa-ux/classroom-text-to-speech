@@ -44,18 +44,9 @@ import { LibraryToolbar } from '../features/lessons/components/LibraryToolbar';
 import { MigrationNotice } from '../features/lessons/components/MigrationNotice';
 import { LibraryGallery } from '../features/lessons/components/LibraryGallery';
 import { LibraryList } from '../features/lessons/components/LibraryList';
+import { createBrowserLocalLibraryRepository, type SavedFolder, type SavedLesson } from '../features/lessons/localLibraryRepository';
+export type { SavedFolder, SavedLesson } from '../features/lessons/localLibraryRepository';
 
-export type SavedLesson = Omit<LessonDocument, 'folderId' | 'updatedAt'> & {
-  folderId?: string | null;
-  updatedAt?: number;
-};
-
-export interface SavedFolder {
-  id: string;
-  name: string;
-  lessons: SavedLesson[];
-  createdAt: number;
-}
 
 interface LessonLibraryProps {
   currentRawText: string;
@@ -73,6 +64,7 @@ export default function LessonLibrary({
   cloudRefreshVersion
 }: LessonLibraryProps) {
   const { user, signInWithGoogle } = useAuth();
+  const localLibraryRepository = createBrowserLocalLibraryRepository(user ? user.uid : 'global');
   const [activeTab, setActiveTab] = useState<'local' | 'cloud'>('cloud');
   const [cloudFolders, setCloudFolders] = useState<CloudFolder[]>([]);
   const [cloudLessons, setCloudLessons] = useState<CloudLesson[]>([]);
@@ -84,19 +76,14 @@ export default function LessonLibrary({
 
   // Gallery/List and Drilldown States
   const [viewMode, setViewMode] = useState<'gallery' | 'list'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('lessonLibraryViewMode') as 'gallery' | 'list') || 'gallery';
-    }
-    return 'gallery';
+    return localLibraryRepository.readViewMode();
   });
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Persist viewMode
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('lessonLibraryViewMode', viewMode);
-    }
+    localLibraryRepository.writeViewMode(viewMode);
   }, [viewMode]);
 
   // Reset drilldown when activeTab switches
@@ -157,45 +144,10 @@ export default function LessonLibrary({
   // Load library from local storage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const uid = user ? user.uid : 'global';
-      const foldersKey = `library_folders_${uid}`;
-      const uncategorizedKey = `library_uncategorized_${uid}`;
-      const seedKey = `library_seed_version_v3_${uid}`;
-
-      let savedFoldersJson = localStorage.getItem(foldersKey);
-      let savedUncategorizedJson = localStorage.getItem(uncategorizedKey);
-      let seedVersion = localStorage.getItem(seedKey);
-
-      // Migrating legacy data if exists for this user
-      if (!savedFoldersJson && !savedUncategorizedJson && user) {
-        const legacyFolders = localStorage.getItem('library_folders');
-        const legacyUncategorized = localStorage.getItem('library_uncategorized');
-        if (legacyFolders || legacyUncategorized) {
-          savedFoldersJson = legacyFolders;
-          savedUncategorizedJson = legacyUncategorized;
-          seedVersion = localStorage.getItem('library_seed_version_v3');
-          
-          if (savedFoldersJson) localStorage.setItem(foldersKey, savedFoldersJson);
-          if (savedUncategorizedJson) localStorage.setItem(uncategorizedKey, savedUncategorizedJson);
-          if (seedVersion) localStorage.setItem(seedKey, seedVersion || 'true');
-        }
-      }
-      
-      if (seedVersion === 'true' && (savedFoldersJson || savedUncategorizedJson)) {
-        if (savedFoldersJson) {
-          try {
-            setFolders(JSON.parse(savedFoldersJson));
-          } catch (e) {
-            console.error('Error parsing library folders', e);
-          }
-        }
-        if (savedUncategorizedJson) {
-          try {
-            setUncategorizedLessons(JSON.parse(savedUncategorizedJson));
-          } catch (e) {
-            console.error('Error parsing uncategorized lessons', e);
-          }
-        }
+      const { snapshot, migrated } = localLibraryRepository.loadWithLegacyMigration();
+      if (localLibraryRepository.isSeeded() || migrated) {
+        setFolders(snapshot.folders);
+        setUncategorizedLessons(snapshot.uncategorized);
       } else {
         // Default seed datasets matching exactly: 1 folder, 2 files inside, 1 file outside (including English-Vietnamese & Chinese-Vietnamese)
         const defaultOuterText = 'sunflower\nhoa hướng dương\nbright sunflower\nhoa hướng dương rực rỡ\nI saw a bright sunflower. /1.5\nTôi đã thấy một bông hoa hướng dương rực rỡ.\nplanting sunflower seeds\ngieo hạt hoa hướng dương\nWe are planting sunflower seeds in the garden. ;2\nChúng tôi đang gieo hạt hoa hướng dương trong vườn.';
@@ -234,9 +186,7 @@ export default function LessonLibrary({
         
         setFolders(initialFolders);
         setUncategorizedLessons(initialUncategorized);
-        localStorage.setItem(foldersKey, JSON.stringify(initialFolders));
-        localStorage.setItem(uncategorizedKey, JSON.stringify(initialUncategorized));
-        localStorage.setItem(seedKey, 'true');
+        localLibraryRepository.save({ folders: initialFolders, uncategorized: initialUncategorized });
         
         // Expand the seed folder by default
         setExpandedFolders({ 'folder-seed-v3': true });
@@ -423,9 +373,8 @@ export default function LessonLibrary({
       ]);
 
       await fetchCloudData();
-      localStorage.removeItem(`library_folders_${user.uid}`);
-      localStorage.removeItem(`library_uncategorized_${user.uid}`);
-      localStorage.setItem(`library_migrated_${user.uid}`, 'true');
+      localLibraryRepository.clear();
+      localLibraryRepository.markCloudMigrated();
       setFolders([]);
       setUncategorizedLessons([]);
       setActiveTab('cloud');
@@ -439,11 +388,9 @@ export default function LessonLibrary({
     }
   };
 
-  // Helper to persist to localStorage
+  // Persist through the scoped local-library repository.
   const saveToStorage = (updatedFolders: SavedFolder[], updatedUncategorized: SavedLesson[]) => {
-    const uid = user ? user.uid : 'global';
-    localStorage.setItem(`library_folders_${uid}`, JSON.stringify(updatedFolders));
-    localStorage.setItem(`library_uncategorized_${uid}`, JSON.stringify(updatedUncategorized));
+    localLibraryRepository.save({ folders: updatedFolders, uncategorized: updatedUncategorized });
   };
 
   // Folders management
