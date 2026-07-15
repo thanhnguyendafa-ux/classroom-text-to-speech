@@ -21,8 +21,8 @@ export const PremiumKeyPanel: React.FC<PremiumKeyPanelProps> = ({
 
   useEffect(() => {
     try {
-      localStorage.setItem('__test_premium_storage__', 'test');
-      localStorage.removeItem('__test_premium_storage__');
+      sessionStorage.setItem('__test_premium_storage__', 'test');
+      sessionStorage.removeItem('__test_premium_storage__');
     } catch {
       setIsStorageBlocked(true);
     }
@@ -72,9 +72,9 @@ export const PremiumKeyPanel: React.FC<PremiumKeyPanelProps> = ({
       </div>
 
       {isStorageBlocked && (
-        <div id="local-storage-blocked-alert" className="flex items-center gap-1.5 bg-rose-50 border border-rose-200/60 rounded-lg p-2 mb-2 text-rose-850 text-[10.5px] font-medium leading-tight">
+        <div id="session-storage-blocked-alert" className="flex items-center gap-1.5 bg-rose-50 border border-rose-200/60 rounded-lg p-2 mb-2 text-rose-850 text-[10.5px] font-medium leading-tight">
           <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-          <span>Lưu ý: Bộ nhớ trình duyệt (LocalStorage) bị chặn. API Key sẽ không tự lưu khi bạn tải lại trang.</span>
+          <span>Lưu ý: Bộ nhớ phiên bị chặn. API Key chỉ dùng được cho đến khi trang được đóng hoặc tải lại.</span>
         </div>
       )}
 
