@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Folder, 
-  FolderPlus, 
-  FileText, 
-  Plus, 
-  Trash2, 
-  Edit2, 
-  Download, 
-  Upload, 
-  Check, 
-  X, 
-  ChevronDown, 
-  ChevronRight, 
-  Save, 
+import {
+  Folder,
+  FolderPlus,
+  FileText,
+  Plus,
+  Trash2,
+  Edit2,
+  Download,
+  Upload,
+  Check,
+  X,
+  ChevronDown,
+  ChevronRight,
+  Save,
   FolderOpen,
   Sparkles,
   RefreshCw,
@@ -27,17 +27,17 @@ import {
 import { LessonDocument, LessonDraft, LessonSettings, SpeechItem } from '../types';
 import { buildLessonDraft, hydrateLessonDocument } from '../domain/lessonModel';
 import { useAuth } from '../features/auth/useAuth';
-import { 
-  CloudFolder, 
-  CloudLesson, 
-  listFolders, 
-  createFolder, 
-  updateFolder, 
-  deleteFolder, 
-  listLessons, 
-  createLesson, 
-  updateLesson, 
-  deleteLesson 
+import {
+  CloudFolder,
+  CloudLesson,
+  listFolders,
+  createFolder,
+  updateFolder,
+  deleteFolder,
+  listLessons,
+  createLesson,
+  updateLesson,
+  deleteLesson
 } from '../features/cloud-lessons/cloudLessonApi';
 
 import { LibraryToolbar } from '../features/lessons/components/LibraryToolbar';
@@ -59,10 +59,10 @@ interface LessonLibraryProps {
   cloudRefreshVersion?: number;
 }
 
-export default function LessonLibrary({ 
-  currentRawText, 
-  currentSpeechList, 
-  currentSettings, 
+export default function LessonLibrary({
+  currentRawText,
+  currentSpeechList,
+  currentSettings,
   onLoadLesson,
   cloudRefreshVersion
 }: LessonLibraryProps) {
@@ -117,7 +117,7 @@ export default function LessonLibrary({
       fetchCloudData();
     }
   }, [user, activeTab, cloudRefreshVersion]);
-  
+
   // UI toggles & input states
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
@@ -128,7 +128,7 @@ export default function LessonLibrary({
   // Creation states
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  
+
   const [showSaveLessonForm, setShowSaveLessonForm] = useState(false);
   const [newLessonTitle, setNewLessonTitle] = useState('');
   const [targetFolderId, setTargetFolderId] = useState<string>('unassigned'); // 'unassigned' or folder ID
@@ -154,9 +154,9 @@ export default function LessonLibrary({
       } else {
         // Default seed datasets matching exactly: 1 folder, 2 files inside, 1 file outside (including English-Vietnamese & Chinese-Vietnamese)
         const defaultOuterText = 'sunflower\nhoa hướng dương\nbright sunflower\nhoa hướng dương rực rỡ\nI saw a bright sunflower. /1.5\nTôi đã thấy một bông hoa hướng dương rực rỡ.\nplanting sunflower seeds\ngieo hạt hoa hướng dương\nWe are planting sunflower seeds in the garden. ;2\nChúng tôi đang gieo hạt hoa hướng dương trong vườn.';
-        
+
         const defaultNestedEnglishText = 'popcorn\nbắp rang\ndelicious popcorn\nbắp rang ngon lành\nI love eating delicious popcorn. /1.5\nMình rất thích ăn bắp rang ngon lành.\nsharing popcorn\nchia sẻ bắp rang\nWe are sharing popcorn while watching a movie. ;2\nChúng mình đang chung nhau ăn bắp rang khi xem phim.';
-        
+
         const defaultNestedChineseText = '苹果\nquả táo\n红苹果\nquả táo màu đỏ\n我喜欢吃红苹果。 /1.5\nTài thích ăn quả táo màu đỏ.\n买新鲜苹果\nmua táo tươi ngon\n妈妈去超市买新鲜苹果。 ;2\nMẹ đi siêu thị mua táo tươi ngon.';
 
         const initialUncategorized: SavedLesson[] = [
@@ -166,7 +166,7 @@ export default function LessonLibrary({
             createdAt: Date.now() - 100000,
           })
         ];
-        
+
         const initialFolders: SavedFolder[] = [
           {
             id: 'folder-seed-v3',
@@ -186,11 +186,11 @@ export default function LessonLibrary({
             createdAt: Date.now()
           }
         ];
-        
+
         setFolders(initialFolders);
         setUncategorizedLessons(initialUncategorized);
         localLibraryRepository.save({ folders: initialFolders, uncategorized: initialUncategorized });
-        
+
         // Expand the seed folder by default
         setExpandedFolders({ 'folder-seed-v3': true });
       }
@@ -209,7 +209,7 @@ export default function LessonLibrary({
     if (!user) return;
     const trimmed = newFolderName.trim();
     if (!trimmed) return;
-    
+
     setIsCloudLoading(true);
     try {
       const newId = `folder-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -230,7 +230,7 @@ export default function LessonLibrary({
     if (!user || !editingFolderId) return;
     const trimmed = editingFolderName.trim();
     if (!trimmed) return;
-    
+
     setIsCloudLoading(true);
     try {
       await updateFolder(user.uid, editingFolderId, trimmed);
@@ -278,12 +278,12 @@ export default function LessonLibrary({
       flashMessage('Vui lòng nhập tiêu đề cho bài giảng', 'error');
       return;
     }
-    
+
     if (!currentRawText.trim()) {
       flashMessage('Nội dung bài học trống, không thể lưu!', 'error');
       return;
     }
-    
+
     setIsCloudLoading(true);
     try {
       const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -294,7 +294,7 @@ export default function LessonLibrary({
         settings: currentSettings,
         folderId: targetFolderId === 'unassigned' ? null : targetFolderId
       });
-      
+
       setNewLessonTitle('');
       setShowSaveLessonForm(false);
       flashMessage(`Đã lưu bài học đám mây "${trimmedTitle}" thành công!`, 'success');
@@ -327,7 +327,7 @@ export default function LessonLibrary({
     if (!user || !editingLessonId) return;
     const trimmed = editingLessonTitle.trim();
     if (!trimmed) return;
-    
+
     setIsCloudLoading(true);
     try {
       await updateLesson(user.uid, editingLessonId, { title: trimmed });
@@ -381,14 +381,14 @@ export default function LessonLibrary({
   const handleCreateFolder = () => {
     const trimmed = newFolderName.trim();
     if (!trimmed) return;
-    
+
     const newFolder: SavedFolder = {
       id: `folder-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       name: trimmed,
       lessons: [],
       createdAt: Date.now()
     };
-    
+
     const updated = [...folders, newFolder];
     setFolders(updated);
     saveToStorage(updated, uncategorizedLessons);
@@ -400,14 +400,14 @@ export default function LessonLibrary({
   const handleDeleteFolder = (folderId: string, keepLessons: boolean) => {
     const targetFolder = folders.find(f => f.id === folderId);
     if (!targetFolder) return;
-    
+
     let updatedUncategorized = [...uncategorizedLessons];
     if (keepLessons && targetFolder.lessons.length > 0) {
       updatedUncategorized = [...updatedUncategorized, ...targetFolder.lessons];
     }
-    
+
     const updatedFolders = folders.filter(f => f.id !== folderId);
-    
+
     setFolders(updatedFolders);
     setUncategorizedLessons(updatedUncategorized);
     saveToStorage(updatedFolders, updatedUncategorized);
@@ -422,7 +422,7 @@ export default function LessonLibrary({
   const handleSaveRenameFolder = () => {
     const trimmed = editingFolderName.trim();
     if (!trimmed || !editingFolderId) return;
-    
+
     const updated = folders.map(f => f.id === editingFolderId ? { ...f, name: trimmed } : f);
     setFolders(updated);
     saveToStorage(updated, uncategorizedLessons);
@@ -445,12 +445,12 @@ export default function LessonLibrary({
       flashMessage('Vui lòng nhập tiêu đề cho bài giảng', 'error');
       return;
     }
-    
+
     if (!currentRawText.trim()) {
       flashMessage('Nội dung bài học trống, không thể lưu!', 'error');
       return;
     }
-    
+
     const now = Date.now();
     const draft = buildLessonDraft({
       title: trimmedTitle,
@@ -468,7 +468,7 @@ export default function LessonLibrary({
       createdAt: now,
       updatedAt: now,
     };
-    
+
     if (targetFolderId === 'unassigned') {
       const updatedUncategorized = [newLesson, ...uncategorizedLessons];
       setUncategorizedLessons(updatedUncategorized);
@@ -485,7 +485,7 @@ export default function LessonLibrary({
       // Ensure folder is expanded to show newly added item
       setExpandedFolders(prev => ({ ...prev, [targetFolderId]: true }));
     }
-    
+
     setNewLessonTitle('');
     setShowSaveLessonForm(false);
     flashMessage(`Đã lưu "${trimmedTitle}" kèm mọi cài đặt & hình ảnh thành công!`, 'success');
@@ -495,7 +495,7 @@ export default function LessonLibrary({
   const handleLoadLesson = (lesson: SavedLesson) => {
     onLoadLesson(lesson);
     flashMessage(`Đã khôi phục bài học "${lesson.title}" cùng toàn bộ cài đặt & hình ảnh!`, 'success');
-    
+
     // Auto-scroll to top to view layout or player is good UX
     const mainEl = document.getElementById('words-maker-box');
     if (mainEl) {
@@ -529,7 +529,7 @@ export default function LessonLibrary({
   const handleSaveRenameLesson = (folderId?: string) => {
     const trimmed = editingLessonTitle.trim();
     if (!trimmed || !editingLessonId) return;
-    
+
     if (folderId) {
       const updated = folders.map(f => {
         if (f.id === folderId) {
@@ -543,13 +543,13 @@ export default function LessonLibrary({
       setFolders(updated);
       saveToStorage(updated, uncategorizedLessons);
     } else {
-      const updatedUncategorized = uncategorizedLessons.map(l => 
+      const updatedUncategorized = uncategorizedLessons.map(l =>
         l.id === editingLessonId ? { ...l, title: trimmed } : l
       );
       setUncategorizedLessons(updatedUncategorized);
       saveToStorage(folders, updatedUncategorized);
     }
-    
+
     setEditingLessonId(null);
     flashMessage('Đã đổi tên bài học', 'success');
   };
@@ -559,7 +559,7 @@ export default function LessonLibrary({
     const stringified = serializeLibraryBackup({ folders, uncategorized: uncategorizedLessons });
     const blob = new Blob([stringified], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    
+
     const link = document.createElement('a');
     link.href = url;
     link.download = `backup-baimau-giaoan-${new Date().toISOString().substring(0, 10)}.json`;
@@ -567,7 +567,7 @@ export default function LessonLibrary({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    
+
     flashMessage('Đã xuất file lưu trữ (.json) thành công!', 'success');
   };
 
@@ -578,7 +578,7 @@ export default function LessonLibrary({
   const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
@@ -608,7 +608,7 @@ export default function LessonLibrary({
   };
 
   // Calculate display and filtered items
-  const displayFolders: LibraryDisplayFolder[] = activeTab === 'cloud' 
+  const displayFolders: LibraryDisplayFolder[] = activeTab === 'cloud'
     ? cloudFolders.map(cf => ({
         id: cf.id,
         name: cf.name,
@@ -653,7 +653,7 @@ export default function LessonLibrary({
 
   return (
     <div id="lesson-library-container" className="text-left font-sans">
-      
+
       {/* 1. Global Toolbar Component */}
       <LibraryToolbar
         activeTab={activeTab}
@@ -726,12 +726,12 @@ export default function LessonLibrary({
             <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
             <span>Lưu văn bản đang soạn thành bài giảng mới:</span>
           </h4>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] uppercase tracking-wider font-extrabold text-slate-450 mb-1">Tên bài học</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 id="save-lesson-title-input"
                 placeholder="Ví dụ: Bài đọc quả táo, Tiếng Anh Du Lịch..."
                 value={newLessonTitle}
@@ -792,8 +792,8 @@ export default function LessonLibrary({
         <div id="create-folder-form" className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-xl mb-4 space-y-2.5 animate-fadeIn">
           <h4 className="text-xs font-bold text-slate-700">Tạo thư mục mới trong thư viện:</h4>
           <div className="flex gap-2">
-            <input 
-              type="text" 
+            <input
+              type="text"
               id="new-folder-name-input"
               placeholder="Ví dụ: Du lịch, Giao tiếp song ngữ..."
               value={newFolderName}
