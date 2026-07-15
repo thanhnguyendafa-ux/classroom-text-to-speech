@@ -106,7 +106,10 @@ service cloud.firestore {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow create: if request.auth != null && request.auth.uid == userId && isValidId(lessonId) && isValidLesson(incoming()) && incoming().revision == 1;
         allow update: if request.auth != null && request.auth.uid == userId && isValidId(lessonId) && isValidLesson(incoming()) && incoming().revision == resource.data.revision + 1;
-        allow delete: if request.auth != null && request.auth.uid == userId && isValidId(lessonId);
+        allow delete: if request.auth != null
+            && request.auth.uid == userId
+            && isValidId(lessonId)
+            && resource.data.deletionStatus == 'deleting';
 
         // Nested Audio Assets Manifests
         match /audioAssets/{assetId} {
