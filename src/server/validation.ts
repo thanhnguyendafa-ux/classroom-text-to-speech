@@ -7,7 +7,7 @@ export type ValidatedPlaylistPayload = SharePlaylistPayload;
 /**
  * Validates the full payload of a shared playlist using standard canonical validation
  */
-export function validatePlaylistPayload(body: any): ValidatedPlaylistPayload {
+export function validatePlaylistPayload(body: unknown): ValidatedPlaylistPayload {
   if (!body || typeof body !== "object") {
     throw new ApiError(400, 'INVALID_PLAYLIST', 'Payload không hợp lệ.');
   }

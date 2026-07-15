@@ -5,7 +5,15 @@ export function resolveAllowedOrigin(requestOrigin: unknown, configuredOrigin = 
   return allowed.includes(requestOrigin) ? requestOrigin : null;
 }
 
-export function applySecurityHeaders(req: any, res: any, methods: string): void {
+interface SecurityHeaderRequest {
+  headers?: { origin?: string | string[] };
+}
+
+interface SecurityHeaderResponse {
+  setHeader(name: string, value: string): void;
+}
+
+export function applySecurityHeaders(req: SecurityHeaderRequest, res: SecurityHeaderResponse, methods: string): void {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');

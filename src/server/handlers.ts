@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { PlaylistStorageManager, PlaylistPayload } from "./storage";
 import { validatePlaylistPayload } from "./validation";
 import { ApiError } from './apiError';
+import { normalizeUnsplashResults, type UnsplashResult } from './unsplashResult';
 
 // Helper function to attach 44-byte standard WAV container headers to 16-bit PCM 24kHz stream
 function encodeWAV(pcmBuffer: Buffer, sampleRate = 24000): Buffer {
@@ -62,7 +63,7 @@ function generateShortId(): string {
 /**
  * Image Search Business Logic
  */
-export async function searchImages(query: string | undefined): Promise<{ results: any[] }> {
+export async function searchImages(query: string | undefined): Promise<{ results: UnsplashResult[] }> {
   if (!query || typeof query !== "string" || !query.trim()) {
     return { results: [] };
   }
@@ -81,18 +82,8 @@ export async function searchImages(query: string | undefined): Promise<{ results
     throw new Error(`Unsplash API returned standard status: ${response.status}`);
   }
 
-  const data = await response.json();
-  const photos = data.results || [];
-
-  const results = photos.map((photo: any) => ({
-    id: photo.id,
-    url: photo.urls?.regular || photo.urls?.small,
-    thumb: photo.urls?.thumb || photo.urls?.small,
-    author: photo.user?.name || "Unsplash Photo",
-    authorUrl: photo.user?.links?.html || "https://unsplash.com"
-  }));
-
-  return { results };
+  const data: unknown = await response.json();
+  return { results: normalizeUnsplashResults(data) };
 }
 
 /**
@@ -182,7 +173,7 @@ export async function generateTextToSpeech(payload: {
 /**
  * Share Playlist Business Logic - Save Custom Lesson Playlist
  */
-export async function createSharedPlaylist(playlistBody: any): Promise<{ id: string }> {
+export async function createSharedPlaylist(playlistBody: unknown): Promise<{ id: string }> {
   // Validate request schema and enforce maximum items & length bounds
   const validated = validatePlaylistPayload(playlistBody);
 

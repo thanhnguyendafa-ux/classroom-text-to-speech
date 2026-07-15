@@ -48,7 +48,14 @@ export function nextRateLimitState(
   };
 }
 
-export function getClientIp(req: any): string {
+interface ClientIpRequest {
+  headers?: Record<string, string | string[] | undefined>;
+  socket?: { remoteAddress?: string };
+  connection?: { remoteAddress?: string };
+  ip?: string;
+}
+
+export function getClientIp(req: ClientIpRequest): string {
   const xForwardedFor = req.headers?.['x-forwarded-for'];
   if (typeof xForwardedFor === 'string') {
     return xForwardedFor.split(',')[0].trim();
