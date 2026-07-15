@@ -1,4 +1,5 @@
 import { logger } from './structuredLogger';
+import { errorMonitor } from './errorMonitor';
 
 export class ApiError extends Error {
   constructor(
@@ -40,6 +41,8 @@ export function sendApiError(
   context: string,
 ) {
   const normalized = normalizeApiError(error);
-  logger.error('api_request_failed', { context, code: normalized.logCode, status: normalized.status });
+  const monitorContext = { context, code: normalized.logCode, status: normalized.status };
+  logger.error('api_request_failed', monitorContext);
+  void errorMonitor.report('api_request_failed', monitorContext);
   response.status(normalized.status).json(normalized.body);
 }
