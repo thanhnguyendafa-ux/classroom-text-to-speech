@@ -1,20 +1,5 @@
-import { initializeApp } from "firebase/app";
-import { getFirestore, doc, setDoc, getDoc, getDocFromServer } from "firebase/firestore";
-import fs from "fs";
-import path from "path";
 import { SharePlaylistPayload } from "../types";
-
-// Initialize Firebase using firebase-applet-config.json
-const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-let firebaseConfig: any = {};
-try {
-  firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-} catch (err) {
-  console.error("Failed to read firebase-applet-config.json:", err);
-}
-
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+import { adminDb } from './firebaseAdmin';
 
 // Error handling types and helpers as required by firebase-integration skill
 export enum OperationType {
@@ -77,8 +62,8 @@ export class PlaylistStorageManager {
   public static async savePlaylist(shareId: string, data: PlaylistPayload): Promise<void> {
     const documentPath = `playlists/${shareId}`;
     try {
-      const docRef = doc(db, "playlists", shareId);
-      await setDoc(docRef, {
+      const docRef = adminDb.collection("playlists").doc(shareId);
+      await docRef.set({
         speechList: data.speechList,
         speed: data.speed,
         volume: data.volume,
@@ -107,10 +92,9 @@ export class PlaylistStorageManager {
 
     const documentPath = `playlists/${shareId}`;
     try {
-      const docRef = doc(db, "playlists", shareId);
-      const docSnap = await getDoc(docRef);
+      const docSnap = await adminDb.collection("playlists").doc(shareId).get();
 
-      if (docSnap.exists()) {
+      if (docSnap.exists) {
         const data = docSnap.data() as PlaylistPayload;
         inMemoryPlaylists[shareId] = data;
         return data;
@@ -127,8 +111,7 @@ export class PlaylistStorageManager {
 export async function checkFirestoreConnection() {
   const testPath = "test/connection";
   try {
-    const docRef = doc(db, "test", "connection");
-    await getDocFromServer(docRef);
+    await adminDb.collection("test").doc("connection").get();
     console.log("[Firestore] Firestore connection is ready.");
     return true;
   } catch (error) {
