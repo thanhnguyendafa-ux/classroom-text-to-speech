@@ -47,11 +47,7 @@ import { premiumTtsCacheStore } from './features/premium-tts/premiumTtsCacheStor
 import { usePremiumAudioPreparation } from './features/premium-tts/persistent-audio/usePremiumAudioPreparation';
 import PremiumAudioPreparationPanel from './features/premium-tts/persistent-audio/PremiumAudioPreparationPanel';
 import { resolvePremiumAudio } from './features/premium-tts/persistent-audio/premiumAudioResolver';
-import ImageSearchModal from './components/ImageSearchModal';
-import TheaterPlayer from './components/TheaterPlayer';
-import ShareModal from './components/ShareModal';
 import LessonLibrary from './components/LessonLibrary';
-import AudioExportModal from './components/AudioExportModal';
 import { SpeechSettingsPanel } from './components/SpeechSettingsPanel';
 import { LessonInputPanel, TEMPLATES } from './components/LessonInputPanel';
 import { PlaybackController } from './components/PlaybackController';
@@ -66,6 +62,11 @@ import LessonsView from './features/lessons/LessonsView';
 import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
 import { usePlaybackState } from './features/playback/usePlaybackState';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
+
+const ImageSearchModal = React.lazy(() => import('./components/ImageSearchModal'));
+const TheaterPlayer = React.lazy(() => import('./components/TheaterPlayer'));
+const ShareModal = React.lazy(() => import('./components/ShareModal'));
+const AudioExportModal = React.lazy(() => import('./components/AudioExportModal'));
 
 
 // Helper regex to detect language characters
@@ -2295,15 +2296,19 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
       </AppShell>
 
       {/* Modern Search & Assign Image Modal */}
-      <ImageSearchModal
-        isOpen={isImageSearchModalOpen}
-        onClose={() => {
-          setIsImageSearchModalOpen(false);
-          setSelectedItemForImageSearch(null);
-        }}
-        item={selectedItemForImageSearch}
-        onAssignImage={handleAssignImage}
-      />
+      {isImageSearchModalOpen && (
+        <React.Suspense fallback={null}>
+          <ImageSearchModal
+            isOpen
+            onClose={() => {
+              setIsImageSearchModalOpen(false);
+              setSelectedItemForImageSearch(null);
+            }}
+            item={selectedItemForImageSearch}
+            onAssignImage={handleAssignImage}
+          />
+        </React.Suspense>
+      )}
 
       {/* Shared Playlist Imported Banner Notification */}
       <SharedPlaylistBanner
@@ -2316,75 +2321,87 @@ Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp
       />
 
       {/* Share Playlist Modal */}
-      <ShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        speechList={speechList}
-        speed={speed}
-        volume={volume}
-        autoAdvance={autoAdvance}
-        timeBetweenLines={timeBetweenLines}
-        playlistLoopMode={playlistLoopMode}
-        engineMode={engineMode}
-      />
+      {isShareModalOpen && (
+        <React.Suspense fallback={null}>
+          <ShareModal
+            isOpen
+            onClose={() => setIsShareModalOpen(false)}
+            speechList={speechList}
+            speed={speed}
+            volume={volume}
+            autoAdvance={autoAdvance}
+            timeBetweenLines={timeBetweenLines}
+            playlistLoopMode={playlistLoopMode}
+            engineMode={engineMode}
+          />
+        </React.Suspense>
+      )}
 
       {/* Cinematic Theater/Movie Practice Board Overlay */}
-      <TheaterPlayer
-        isOpen={isTheaterMode}
-        onClose={() => setIsTheaterMode(false)}
-        speechList={speechList}
-        playingItemId={playingItemId}
-        playingState={playingState}
-        currentRepeatIndex={currentRepeatIndex}
-        waitingState={waitingState}
-        volume={volume}
-        speed={speed}
-        onVolumeChange={handleVolumeChange}
-        onSpeedChange={(val) => {
-          setSpeed(val);
-        }}
-        onPlayItem={handleSpeakItem}
-        onStop={handleStopAll}
-        timeBetweenLines={timeBetweenLines}
-        onTimeBetweenLinesChange={setTimeBetweenLines}
-        autoAdvance={autoAdvance}
-        onAutoAdvanceChange={setAutoAdvance}
-        engineMode={engineMode}
-        playlistLoopMode={playlistLoopMode}
-        onPlaylistLoopModeChange={handlePlaylistLoopModeChange}
-        useUniversalImage={useUniversalImage}
-        universalImageUrl={universalImageUrl}
-        isManualPaused={isManualPaused}
-        onPause={handleGlobalPause}
-        onPlay={handleGlobalPlay}
-      />
+      {isTheaterMode && (
+        <React.Suspense fallback={null}>
+          <TheaterPlayer
+            isOpen
+            onClose={() => setIsTheaterMode(false)}
+            speechList={speechList}
+            playingItemId={playingItemId}
+            playingState={playingState}
+            currentRepeatIndex={currentRepeatIndex}
+            waitingState={waitingState}
+            volume={volume}
+            speed={speed}
+            onVolumeChange={handleVolumeChange}
+            onSpeedChange={(val) => {
+              setSpeed(val);
+            }}
+            onPlayItem={handleSpeakItem}
+            onStop={handleStopAll}
+            timeBetweenLines={timeBetweenLines}
+            onTimeBetweenLinesChange={setTimeBetweenLines}
+            autoAdvance={autoAdvance}
+            onAutoAdvanceChange={setAutoAdvance}
+            engineMode={engineMode}
+            playlistLoopMode={playlistLoopMode}
+            onPlaylistLoopModeChange={handlePlaylistLoopModeChange}
+            useUniversalImage={useUniversalImage}
+            universalImageUrl={universalImageUrl}
+            isManualPaused={isManualPaused}
+            onPause={handleGlobalPause}
+            onPlay={handleGlobalPlay}
+          />
+        </React.Suspense>
+      )}
 
       {/* Independent Speech/Playlist Audio To MP3/WAV Exporter Overlay */}
-      <AudioExportModal
-        isOpen={isAudioExportModalOpen}
-        onClose={() => setIsAudioExportModalOpen(false)}
-        speechList={speechList}
-        speed={speed}
-        volume={volume}
-        timeBetweenLines={timeBetweenLines}
-        engineMode={engineMode}
-        userGeminiApiKey={userGeminiApiKey}
-        voices={voices}
-        selectedEnVoiceName={selectedEnVoiceName}
-        selectedViVoiceName={selectedViVoiceName}
-        selectedZhCnVoiceName={selectedZhCnVoiceName}
-        selectedZhTwVoiceName={selectedZhTwVoiceName}
-        selectedJaVoiceName={selectedJaVoiceName}
-        selectedKoVoiceName={selectedKoVoiceName}
-        selectedPremiumVoiceEn={selectedPremiumVoiceEn}
-        selectedPremiumVoiceVi={selectedPremiumVoiceVi}
-        selectedPremiumVoiceZhCn={selectedPremiumVoiceZhCn}
-        selectedPremiumVoiceZhTw={selectedPremiumVoiceZhTw}
-        selectedPremiumVoiceJa={selectedPremiumVoiceJa}
-        selectedPremiumVoiceKo={selectedPremiumVoiceKo}
-        userId={user?.uid || null}
-        lessonId={currentLessonId}
-      />
+      {isAudioExportModalOpen && (
+        <React.Suspense fallback={null}>
+          <AudioExportModal
+            isOpen
+            onClose={() => setIsAudioExportModalOpen(false)}
+            speechList={speechList}
+            speed={speed}
+            volume={volume}
+            timeBetweenLines={timeBetweenLines}
+            engineMode={engineMode}
+            userGeminiApiKey={userGeminiApiKey}
+            voices={voices}
+            selectedEnVoiceName={selectedEnVoiceName}
+            selectedViVoiceName={selectedViVoiceName}
+            selectedZhCnVoiceName={selectedZhCnVoiceName}
+            selectedZhTwVoiceName={selectedZhTwVoiceName}
+            selectedJaVoiceName={selectedJaVoiceName}
+            selectedKoVoiceName={selectedKoVoiceName}
+            selectedPremiumVoiceEn={selectedPremiumVoiceEn}
+            selectedPremiumVoiceVi={selectedPremiumVoiceVi}
+            selectedPremiumVoiceZhCn={selectedPremiumVoiceZhCn}
+            selectedPremiumVoiceZhTw={selectedPremiumVoiceZhTw}
+            selectedPremiumVoiceJa={selectedPremiumVoiceJa}
+            selectedPremiumVoiceKo={selectedPremiumVoiceKo}
+            userId={user?.uid || null}
+            lessonId={currentLessonId}
+          />
+        </React.Suspense>
+      )}
 
       {/* Sleek Toast Notifications */}
       <AnimatePresence>
