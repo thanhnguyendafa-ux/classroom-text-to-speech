@@ -13,9 +13,9 @@ export function useSharePlaylistMutation() {
     try {
       const data = await createSharedPlaylistApi(payload);
       setShareId(data.id);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || "Không thể tạo liên kết chia sẻ. Vui lòng thử lại.");
+      setError(err instanceof Error ? err.message : "Không thể tạo liên kết chia sẻ. Vui lòng thử lại.");
     } finally {
       setIsLoading(false);
     }

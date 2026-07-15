@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
+import type { SpeechItem } from "../../types";
 import { fetchSharedPlaylist, PlaylistPayload } from "./sharedPlaylistApi";
 
 export interface LoaderSetters {
-  setSpeechList: (list: any[]) => void;
+  setSpeechList: (list: SpeechItem[]) => void;
   setRawText: (text: string) => void;
   setSpeed: (speed: number) => void;
   setVolume: (volume: number) => void;
@@ -40,7 +41,7 @@ export function useSharedPlaylistLoader(setters: LoaderSetters) {
       // Populate app states
       if (Array.isArray(data.speechList)) {
         setters.setSpeechList(data.speechList);
-        setters.setRawText(data.speechList.map((item: any) => item.text).join("\n"));
+        setters.setRawText(data.speechList.map((item: SpeechItem) => item.text).join("\n"));
       }
       if (typeof data.speed === "number") {
         setters.setSpeed(data.speed);
@@ -65,7 +66,7 @@ export function useSharedPlaylistLoader(setters: LoaderSetters) {
       }
 
       // Store metadata details for beautiful success banner
-      const numImages = data.speechList.filter((item: any) => item.imageUrl).length;
+      const numImages = data.speechList.filter((item: SpeechItem) => item.imageUrl).length;
       setLoadedDetails({
         numSentences: data.speechList.length,
         numImages,
@@ -82,9 +83,9 @@ export function useSharedPlaylistLoader(setters: LoaderSetters) {
         const newUrl = window.location.pathname;
         window.history.replaceState({}, "", newUrl);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Shared playlist loading error:", err);
-      setBannerMessage(err.message || "Không thể tải bài học chia sẻ.");
+      setBannerMessage(err instanceof Error ? err.message : "Không thể tải bài học chia sẻ.");
       setBannerType("error");
     } finally {
       setShareLoading(false);

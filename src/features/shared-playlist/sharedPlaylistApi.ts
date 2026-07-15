@@ -1,4 +1,5 @@
 import { SharePlaylistPayload } from "../../types";
+import { normalizeSharePlaylistPayload } from '../../domain/lessonModel';
 import { authenticatedFetch } from '../../lib/firebase/authenticatedFetch';
 
 export type PlaylistPayload = SharePlaylistPayload;
@@ -12,7 +13,8 @@ export async function fetchSharedPlaylist(shareId: string): Promise<PlaylistPayl
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || "Không thể tìm thấy liên kết chia sẻ.");
   }
-  return response.json();
+  const data: unknown = await response.json();
+  return normalizeSharePlaylistPayload(data);
 }
 
 /**
@@ -36,5 +38,5 @@ export async function createSharedPlaylistApi(payload: PlaylistPayload): Promise
   if (!data.id) {
     throw new Error("Định dạng phản hồi không hợp lệ.");
   }
-  return data;
+  return { id: (data as { id: string }).id };
 }
