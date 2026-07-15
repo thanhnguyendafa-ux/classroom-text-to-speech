@@ -130,6 +130,7 @@ export function hydrateLessonDocument(id: string, input: unknown): LessonDocumen
 
   return {
     schemaVersion: 1,
+    revision: Math.max(1, Math.floor(clamp(data.revision, 1, 1, Number.MAX_SAFE_INTEGER))),
     id,
     title: stringValue(data.title, 'Bài học chưa đặt tên').trim(),
     rawText: stringValue(data.rawText),

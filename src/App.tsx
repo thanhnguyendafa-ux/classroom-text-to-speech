@@ -112,6 +112,7 @@ export default function App() {
   const { user } = useAuth();
   const [activeSection, setActiveSection] = useState<'lessons' | 'builder'>('lessons');
   const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
+  const [currentLessonRevision, setCurrentLessonRevision] = useState<number>(1);
   const [currentLessonTitle, setCurrentLessonTitle] = useState<string>('Bài học mẫu: Bắp rang bơ');
   const [isSavingCloudLesson, setIsSavingCloudLesson] = useState<boolean>(false);
   const [savedLessonFingerprint, setSavedLessonFingerprint] = useState<string | null>(null);
@@ -165,7 +166,8 @@ export default function App() {
     try {
       if (currentLessonId) {
         // Update existing lesson
-        await updateLesson(user.uid, currentLessonId, lessonDraft);
+        const revision = await updateLesson(user.uid, currentLessonId, lessonDraft, currentLessonRevision);
+        setCurrentLessonRevision(revision);
         setCloudRefreshVersion(prev => prev + 1);
         showToast(
           'success',

@@ -7,13 +7,15 @@ import {
   updateDoc, 
   deleteDoc, 
   query, 
-  orderBy 
+  orderBy,
+  runTransaction,
 } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase/firebaseClient';
 import { cleanupLessonAudioAssets } from '../premium-tts/persistent-audio/premiumAudioManifestApi';
 import { cleanupLessonAudioStorage } from '../premium-tts/persistent-audio/premiumAudioStorageApi';
 import { LessonDocument, LessonDraft } from '../../types';
 import { hydrateLessonDocument } from '../../domain/lessonModel';
+import { assertExpectedRevision, LessonConflictError, nextRevision } from '../../domain/lessonRevision';
 
 export enum OperationType {
   CREATE = 'create',
@@ -42,6 +44,7 @@ export interface FirestoreErrorInfo {
 }
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  if (error instanceof LessonConflictError) throw error;
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -174,34 +177,42 @@ export async function listLessons(uid: string): Promise<CloudLesson[]> {
   }
 }
 
-export async function createLesson(uid: string, lessonId: string, lesson: LessonDraft): Promise<void> {
+export async function createLesson(uid: string, lessonId: string, lesson: LessonDraft): Promise<number> {
   const path = `users/${uid}/lessons/${lessonId}`;
   try {
     const lessonRef = doc(db, 'users', uid, 'lessons', lessonId);
     const now = Date.now();
     await setDoc(lessonRef, {
       schemaVersion: 1,
+      revision: 1,
       id: lessonId,
       ...lesson,
       createdAt: now,
       updatedAt: now
     });
+    return 1;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
   }
 }
 
 export async function updateLesson(
-  uid: string, 
-  lessonId: string, 
-  updates: Partial<LessonDraft>
-): Promise<void> {
+  uid: string,
+  lessonId: string,
+  updates: Partial<LessonDraft>,
+  expectedRevision?: number,
+): Promise<number> {
   const path = `users/${uid}/lessons/${lessonId}`;
   try {
     const lessonRef = doc(db, 'users', uid, 'lessons', lessonId);
-    await updateDoc(lessonRef, {
-      ...updates,
-      updatedAt: Date.now()
+    return await runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(lessonRef);
+      if (!snapshot.exists()) throw new Error('Bài học không còn tồn tại.');
+      const currentRevision = Math.max(1, Number(snapshot.data().revision) || 1);
+      assertExpectedRevision(currentRevision, expectedRevision);
+      const revision = nextRevision(currentRevision);
+      transaction.update(lessonRef, { ...updates, revision, updatedAt: Date.now() });
+      return revision;
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);

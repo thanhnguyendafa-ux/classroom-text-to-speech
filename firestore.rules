@@ -17,14 +17,16 @@ service cloud.firestore {
     }
 
     function isValidPlaylist(data) {
-      return data.keys().hasAll(['title', 'rawText', 'speechList', 'settings', 'createdAt', 'updatedAt', 'schemaVersion'])
-          && data.title is string && data.title.size() <= 200
-          && data.rawText is string && data.rawText.size() <= 100000
-          && data.speechList is list
-          && data.settings is map
-          && data.createdAt is number
-          && data.updatedAt is number
-          && data.schemaVersion is number;
+      return data.keys().hasAll(['speechList', 'speed', 'volume', 'autoAdvance', 'timeBetweenLines', 'playlistLoopMode', 'engineMode', 'createdAt'])
+          && data.keys().size() == 8
+          && data.speechList is list && data.speechList.size() <= 200
+          && data.speed is number && data.speed >= 0.25 && data.speed <= 3
+          && data.volume is number && data.volume >= 0 && data.volume <= 2
+          && data.autoAdvance is bool
+          && data.timeBetweenLines is number && data.timeBetweenLines >= 0 && data.timeBetweenLines <= 30
+          && (data.playlistLoopMode == 'once' || data.playlistLoopMode == 'infinite')
+          && (data.engineMode == 'browser' || data.engineMode == 'premium')
+          && data.createdAt is string;
     }
 
     function isValidUser(data) {
@@ -47,6 +49,7 @@ service cloud.firestore {
 
     function isValidLesson(data) {
       return data.schemaVersion == 1
+          && data.revision is int && data.revision >= 1
           && data.title is string && data.title.size() <= 200
           && data.rawText is string && data.rawText.size() <= 100000
           && data.createdAt is number
@@ -99,8 +102,8 @@ service cloud.firestore {
       // User's own Lessons
       match /lessons/{lessonId} {
         allow read: if request.auth != null && request.auth.uid == userId;
-        allow create: if request.auth != null && request.auth.uid == userId && isValidId(lessonId) && isValidLesson(incoming());
-        allow update: if request.auth != null && request.auth.uid == userId && isValidId(lessonId) && isValidLesson(incoming());
+        allow create: if request.auth != null && request.auth.uid == userId && isValidId(lessonId) && isValidLesson(incoming()) && incoming().revision == 1;
+        allow update: if request.auth != null && request.auth.uid == userId && isValidId(lessonId) && isValidLesson(incoming()) && incoming().revision == resource.data.revision + 1;
         allow delete: if request.auth != null && request.auth.uid == userId && isValidId(lessonId);
 
         // Nested Audio Assets Manifests

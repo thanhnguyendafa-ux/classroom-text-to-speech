@@ -51,6 +51,7 @@ export interface LessonSettings {
 
 export interface LessonDocument {
   schemaVersion: 1;
+  revision: number;
   id: string;
   title: string;
   rawText: string;

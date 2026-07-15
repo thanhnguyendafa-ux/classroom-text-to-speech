@@ -531,6 +531,7 @@ export default function LessonLibrary({
 
     const newLesson: SavedLesson = {
       schemaVersion: 1,
+      revision: 1,
       id: `lesson-${now}-${Math.random().toString(36).substring(2, 7)}`,
       ...draft,
       createdAt: now,
