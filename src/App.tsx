@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useReducer } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Volume2, 
   VolumeX, 
@@ -64,7 +64,7 @@ import { createLesson, updateLesson } from './features/cloud-lessons/cloudLesson
 import AppShell from './features/app-shell/AppShell';
 import LessonsView from './features/lessons/LessonsView';
 import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
-import { initialPlaybackState, playbackReducer } from './features/playback/playbackState';
+import { usePlaybackState } from './features/playback/usePlaybackState';
 
 
 // Helper regex to detect language characters
@@ -305,19 +305,18 @@ export default function App() {
     }
   };
   
-  // Playback is coordinated by one reducer; compatibility setters keep call-sites stable during migration.
-  const [playback, dispatchPlayback] = useReducer(playbackReducer, initialPlaybackState);
-  const { playingItemId, playingState, currentRepeatIndex, waitingState, isManualPaused } = playback;
-  const setPlayingItemId = (itemId: string | null) => itemId === null
-    ? dispatchPlayback({ type: 'reset' })
-    : dispatchPlayback({ type: 'itemStarted', itemId, repeatIndex: playback.currentRepeatIndex });
-  const setPlayingState = (state: 'idle' | 'playing' | 'paused') => dispatchPlayback({ type: 'stateChanged', state });
-  const setCurrentRepeatIndex = (repeatIndex: number) => dispatchPlayback({ type: 'repeatChanged', repeatIndex });
-  const setWaitingState = (next: typeof waitingState | ((previous: typeof waitingState) => typeof waitingState)) => {
-    const value = typeof next === 'function' ? next(playback.waitingState) : next;
-    dispatchPlayback({ type: 'waitingChanged', waitingState: value });
-  };
-  const setIsManualPaused = (value: boolean) => dispatchPlayback({ type: 'manualPauseChanged', value });
+  const {
+    playingItemId,
+    playingState,
+    currentRepeatIndex,
+    waitingState,
+    isManualPaused,
+    setPlayingItemId,
+    setPlayingState,
+    setCurrentRepeatIndex,
+    setWaitingState,
+    setIsManualPaused,
+  } = usePlaybackState();
   const waitTimerRef = useRef<any>(null);
   const waitIntervalRef = useRef<any>(null);
 
