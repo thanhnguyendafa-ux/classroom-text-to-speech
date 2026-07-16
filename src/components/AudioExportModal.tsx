@@ -8,6 +8,7 @@ import { resolvePremiumAudio } from '../features/premium-tts/persistent-audio/pr
 import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, errorMessage, stopMediaStream } from '../features/media-capture/mediaCaptureAdapter';
 import { createWavBlob } from '../infrastructure/audio/audioExportAssembler';
 import { PremiumAudioExportCancelledError, runPremiumAudioExport } from '../infrastructure/audio/premiumAudioExportStrategy';
+import { runBrowserSpeechSequence } from '../infrastructure/audio/browserSpeechSequence';
 import { AudioExportResult } from '../features/audio-export/AudioExportResult';
 import { AudioExportProgress } from '../features/audio-export/AudioExportProgress';
 import { AudioExportSettings } from '../features/audio-export/AudioExportSettings';
@@ -652,114 +653,32 @@ export default function AudioExportModal({
       capturePhaseRef.current = 'recording';
       
       // 4. Sequential browser SpeechSynthesis loop
-      let currentIndex = 0;
-      
-      const playNextItem = () => {
-        if (isStoppedManuallyRef.current) {
-          recorder.stop();
-          return;
-        }
-        
-        if (currentIndex >= itemsToExport.length) {
-          addLog("ÄĂ£ cháº¡y háº¿t danh sĂ¡ch cĂ¢u. Äang dá»«ng ghi Ă¢m...");
-          capturePhaseRef.current = 'encoding';
-          isExpectingSpeechRef.current = false;
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-            animationFrameRef.current = null;
-          }
-          recorder.stop();
-          if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach(t => t.stop());
-            mediaStreamRef.current = null;
-          }
-          if (micStreamRef.current) {
-            micStreamRef.current.getTracks().forEach(t => t.stop());
-            micStreamRef.current = null;
-          }
-          return;
-        }
-        
-        const item = itemsToExport[currentIndex];
-        const percent = Math.round((currentIndex / itemsToExport.length) * 100);
-        setProgressPercent(percent);
-        setProgressText(`Äang phĂ¡t dĂ²ng ${currentIndex + 1}/${itemsToExport.length}: "${item.text.substring(0, 40)}"`);
-        
-        let currentRepeat = 1;
-        const maxRepeats = item.repeats || 1;
-        const lineDelay = item.delaySec !== undefined ? item.delaySec : timeBetweenLines;
-        
-        const speakIteration = () => {
-          if (isStoppedManuallyRef.current) return;
-          
-          const utterance = new SpeechSynthesisUtterance(item.text);
-          recordingUtteranceRef.current = utterance;
-          
-          // Configure parameters
-          utterance.rate = item.speed !== undefined ? item.speed : speed;
-          utterance.volume = Math.min(1.0, volume);
-          
-          const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
-          let targetLang = 'en-US';
-          if (langCode === 'vi') targetLang = 'vi-VN';
-          else if (langCode === 'zh-cn') targetLang = 'zh-CN';
-          else if (langCode === 'zh-tw') targetLang = 'zh-TW';
-          else if (langCode === 'ja') targetLang = 'ja-JP';
-          else if (langCode === 'ko') targetLang = 'ko-KR';
-          utterance.lang = targetLang;
-          
-          // Attach browser voices matching settings
-          let preferredVoiceName = '';
-          if (langCode === 'en') preferredVoiceName = selectedEnVoiceName;
-          else if (langCode === 'vi') preferredVoiceName = selectedViVoiceName;
-          else if (langCode === 'zh-cn') preferredVoiceName = selectedZhCnVoiceName;
-          else if (langCode === 'zh-tw') preferredVoiceName = selectedZhTwVoiceName;
-          else if (langCode === 'ja') preferredVoiceName = selectedJaVoiceName;
-          else if (langCode === 'ko') preferredVoiceName = selectedKoVoiceName;
-          
-          if (preferredVoiceName) {
-            const preferredVoice = voices.find(v => v.name === preferredVoiceName);
-            if (preferredVoice) utterance.voice = preferredVoice;
-          } else {
-            const targetPrefix = langCode === 'vi' ? 'vi' : (langCode.startsWith('zh') ? 'zh' : (langCode === 'ja' ? 'ja' : (langCode === 'ko' ? 'ko' : 'en')));
-            const bestVoice = voices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith(targetPrefix));
-            if (bestVoice) utterance.voice = bestVoice;
-          }
-          
-          utterance.onstart = () => {
-            isExpectingSpeechRef.current = true;
-          };
-          
-          utterance.onend = () => {
-            isExpectingSpeechRef.current = false;
-            if (isStoppedManuallyRef.current) return;
-            
-            if (currentRepeat < maxRepeats) {
-              currentRepeat++;
-              addLog(`Äá»c láº¡i cĂ¢u ${currentIndex + 1} (láº§n ${currentRepeat}/${maxRepeats})`);
-              setTimeout(speakIteration, lineDelay * 1000);
-            } else {
-              // Finish this sentence. Move to next!
-              currentIndex++;
-              setTimeout(playNextItem, lineDelay * 1050);
-            }
-          };
-          
-          utterance.onerror = (e) => {
-            isExpectingSpeechRef.current = false;
-            addLog(`Há»‡ thá»‘ng TTS cáº£nh bĂ¡o trĂªn dĂ²ng ${currentIndex + 1}: ${e.error}`);
-            currentIndex++;
-            setTimeout(playNextItem, 1000);
-          };
-          
-          window.speechSynthesis.speak(utterance);
-        };
-        
-        speakIteration();
-      };
-      
-      // Start loop
-      playNextItem();
+      await runBrowserSpeechSequence({
+        items: itemsToExport,
+        speed,
+        volume,
+        voices,
+        preferredVoiceNames: { en: selectedEnVoiceName, vi: selectedViVoiceName, 'zh-cn': selectedZhCnVoiceName, 'zh-tw': selectedZhTwVoiceName, ja: selectedJaVoiceName, ko: selectedKoVoiceName },
+        speechSynthesis: window.speechSynthesis,
+        createUtterance: text => new SpeechSynthesisUtterance(text),
+        wait: (callback, delayMs) => window.setTimeout(callback, delayMs),
+        isCancelled: () => isStoppedManuallyRef.current,
+        defaultPauseSeconds: timeBetweenLines,
+        onProgress: (index, item) => { setProgressPercent(Math.round((index / itemsToExport.length) * 100)); setProgressText(`?ang ph?t d?ng ${index + 1}/${itemsToExport.length}: "${item.text.substring(0, 40)}"`); },
+        onRepeat: (index, repeat, total) => addLog(`??c l?i c?u ${index + 1} (l?n ${repeat}/${total})`),
+        onError: (index, error) => addLog(`H? th?ng TTS c?nh b?o tr?n d?ng ${index + 1}: ${error}`),
+        onExpectationChange: expecting => { isExpectingSpeechRef.current = expecting; },
+        onUtterance: utterance => { recordingUtteranceRef.current = utterance; },
+      });
+      if (!isStoppedManuallyRef.current) {
+        addLog("?? ch?y h?t danh s?ch c?u. ?ang d?ng ghi ?m...");
+        capturePhaseRef.current = 'encoding';
+        isExpectingSpeechRef.current = false;
+        if (animationFrameRef.current) { cancelAnimationFrame(animationFrameRef.current); animationFrameRef.current = null; }
+        recorder.stop();
+        stopMediaStream(mediaStreamRef.current); mediaStreamRef.current = null;
+        stopMediaStream(micStreamRef.current); micStreamRef.current = null;
+      }
       
     } catch (err: unknown) {
       console.error(err);
