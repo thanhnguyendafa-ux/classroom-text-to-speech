@@ -1,5 +1,6 @@
 import React from 'react';
 import AppWorkspace from '../../components/AppWorkspace';
+import type { LessonSaveStatus } from '../lesson-editor/lessonSaveStatus';
 import { 
   Save, 
   Copy, 
@@ -19,6 +20,8 @@ interface LessonBuilderViewProps {
   onSaveAsCopy?: () => void;
   isSaving: boolean;
   isDirty: boolean;
+  saveStatus: LessonSaveStatus;
+  saveError: string | null;
   onOpenExport: () => void;
   onOpenShare: () => void;
   
@@ -37,6 +40,8 @@ export const LessonBuilderView: React.FC<LessonBuilderViewProps> = ({
   onSaveAsCopy,
   isSaving,
   isDirty,
+  saveStatus,
+  saveError,
   onOpenExport,
   onOpenShare,
   leftColumn,
@@ -57,11 +62,10 @@ export const LessonBuilderView: React.FC<LessonBuilderViewProps> = ({
               <Sparkles className="w-3 h-3 text-indigo-500 animate-pulse" />
               Không gian thiết kế bài học
             </span>
-            {isDirty && (
-              <span className="text-[10px] uppercase font-black tracking-wider text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full">
-                Có thay đổi chưa lưu
-              </span>
-            )}
+            {saveStatus === 'saving' && <span className="text-[10px] uppercase font-black tracking-wider text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full">Đang lưu...</span>}
+            {saveStatus === 'dirty' && <span className="text-[10px] uppercase font-black tracking-wider text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full">Có thay đổi chưa lưu</span>}
+            {saveStatus === 'saved' && <span className="text-[10px] uppercase font-black tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-full">Đã lưu</span>}
+            {saveStatus === 'error' && <span title={saveError ?? undefined} className="text-[10px] uppercase font-black tracking-wider text-rose-700 bg-rose-50 border border-rose-100 px-2.5 py-0.5 rounded-full">Lưu thất bại · Nội dung vẫn còn</span>}
             {currentLessonId ? (
               <span className="text-[10px] uppercase font-black tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                 <Cloud className="w-3 h-3" />

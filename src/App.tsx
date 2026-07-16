@@ -66,6 +66,7 @@ import { createBrowserCountdownController, type CountdownController } from './fe
 import { createBrowserAudioPlaybackAdapter } from './features/playback/audioPlaybackAdapter';
 import { createWindowBrowserSpeechAdapter } from './features/playback/browserSpeechAdapter';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
+import { resolveLessonSaveStatus } from './features/lesson-editor/lessonSaveStatus';
 import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
 import { buildSpeechItems, detectLanguage, parseLineSymbols } from './features/lesson-editor/speechItemFactory';
 import { parseSpeechListImport } from './features/lesson-editor/speechListImport';
@@ -126,6 +127,7 @@ export default function App() {
   const [currentLessonRevision, setCurrentLessonRevision] = useState<number>(1);
   const [currentLessonTitle, setCurrentLessonTitle] = useState<string>('Bài học mẫu: Bắp rang bơ');
   const [isSavingCloudLesson, setIsSavingCloudLesson] = useState<boolean>(false);
+  const [lessonSaveError, setLessonSaveError] = useState<string | null>(null);
   const [savedLessonFingerprint, setSavedLessonFingerprint] = useState<string | null>(null);
   const [cloudRefreshVersion, setCloudRefreshVersion] = useState<number>(0);
   const [toast, setToast] = useState<{
@@ -173,6 +175,7 @@ export default function App() {
     }
 
     const lessonDraft = buildLessonDraft({ title: trimmedTitle, rawText, speechList, settings: getCurrentLessonSettings() });
+    setLessonSaveError(null);
     setIsSavingCloudLesson(true);
     try {
       if (currentLessonId) {
@@ -208,6 +211,7 @@ export default function App() {
       setSavedLessonFingerprint(createLessonFingerprint(lessonDraft));
     } catch (err) {
       console.error('Error saving lesson:', err);
+      setLessonSaveError('KhĂ´ng thá»ƒ lÆ°u bĂ i giáº£ng lĂªn Ä‘Ă¡m mĂ¢y. Ná»™i dung Ä‘ang soáº¡n váº«n Ä‘Æ°á»£c giá»¯ nguyĂªn.');
       showToast('error', 'Lỗi lưu trữ', 'Không thể lưu bài giảng lên đám mây.');
     } finally {
       setIsSavingCloudLesson(false);
@@ -222,6 +226,7 @@ export default function App() {
       return;
     }
 
+    setLessonSaveError(null);
     setIsSavingCloudLesson(true);
     try {
       const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -242,6 +247,7 @@ export default function App() {
       );
     } catch (err) {
       console.error('Error saving lesson copy:', err);
+      setLessonSaveError('Không thể lưu bản sao. Nội dung đang soạn vẫn được giữ nguyên.');
       showToast('error', 'Lỗi lưu trữ', 'Không thể lưu bản sao bài giảng.');
     } finally {
       setIsSavingCloudLesson(false);
@@ -249,6 +255,7 @@ export default function App() {
   };
 
   const handleCreateNewLesson = () => {
+    setLessonSaveError(null);
     if (isDirty && !window.confirm('Bài học hiện tại có thay đổi chưa lưu. Bạn có muốn bỏ các thay đổi này?')) return;
     setRawText('');
     setSpeechList([]);
@@ -431,6 +438,7 @@ export default function App() {
   const currentLessonDraft = buildLessonDraft({ title: currentLessonTitle, rawText, speechList, settings: getCurrentLessonSettings() });
   const currentLessonFingerprint = createLessonFingerprint(currentLessonDraft);
   const isDirty = savedLessonFingerprint !== null && savedLessonFingerprint !== currentLessonFingerprint;
+  const lessonSaveStatus = resolveLessonSaveStatus({ isSaving: isSavingCloudLesson, hasError: Boolean(lessonSaveError), isDirty, hasSavedLesson: Boolean(currentLessonId) });
 
   useEffect(() => {
     if (savedLessonFingerprint === null) setSavedLessonFingerprint(currentLessonFingerprint);
@@ -1206,6 +1214,7 @@ export default function App() {
               }
 
               // Set active lesson identification
+              setLessonSaveError(null);
               setCurrentLessonId(normalizedLesson.id);
               setCurrentLessonTitle(normalizedLesson.title);
 
@@ -1221,6 +1230,8 @@ export default function App() {
             onSaveLesson={handleSaveLesson}
             onSaveAsCopy={handleSaveLessonAsCopy}
             isSaving={isSavingCloudLesson}
+            saveStatus={lessonSaveStatus}
+            saveError={lessonSaveError}
             onOpenExport={() => setIsAudioExportModalOpen(true)}
             onOpenShare={() => setIsShareModalOpen(true)}
             speechCount={speechList.length}
