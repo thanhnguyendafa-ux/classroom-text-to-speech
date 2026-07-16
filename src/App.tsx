@@ -60,10 +60,6 @@ import { useAuth } from './features/auth/useAuth';
 import AppShell from './features/app-shell/AppShell';
 import LessonsView from './features/lessons/LessonsView';
 import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
-import { usePlaybackState } from './features/playback/usePlaybackState';
-import { createBrowserCountdownController, type CountdownController } from './features/playback/countdownController';
-import { createBrowserAudioPlaybackAdapter } from './features/playback/audioPlaybackAdapter';
-import { createWindowBrowserSpeechAdapter } from './features/playback/browserSpeechAdapter';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
 import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
 import { buildSpeechItems, detectLanguage, parseLineSymbols } from './features/lesson-editor/speechItemFactory';
@@ -72,6 +68,7 @@ import { duplicateSet, joinWithNext, ungroupSet, updateSpeechItem } from './feat
 import { useLessonEditorController } from './application/lesson-editor/useLessonEditorController';
 import { useLessonPersistenceController } from './application/lesson-persistence/useLessonPersistenceController';
 import { useBrowserVoiceCatalog } from './application/playback/useBrowserVoiceCatalog';
+import { usePlaybackController } from './application/playback/usePlaybackController';
 
 const ImageSearchModal = React.lazy(() => import('./components/ImageSearchModal'));
 const TheaterPlayer = React.lazy(() => import('./components/TheaterPlayer'));
@@ -200,59 +197,13 @@ export default function App() {
     selectedPremiumVoiceKo,
   };
 
-  const audioPlaybackAdapterRef = useRef<ReturnType<typeof createBrowserAudioPlaybackAdapter> | null>(null);
-  if (!audioPlaybackAdapterRef.current) audioPlaybackAdapterRef.current = createBrowserAudioPlaybackAdapter();
-  const browserSpeechAdapterRef = useRef<ReturnType<typeof createWindowBrowserSpeechAdapter> | null>(null);
-  if (!browserSpeechAdapterRef.current) browserSpeechAdapterRef.current = createWindowBrowserSpeechAdapter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const browserVoicePreferences = useMemo(() => ({ en: selectedEnVoiceName, vi: selectedViVoiceName, 'zh-cn': selectedZhCnVoiceName, 'zh-tw': selectedZhTwVoiceName, ja: selectedJaVoiceName, ko: selectedKoVoiceName }), [selectedEnVoiceName, selectedViVoiceName, selectedZhCnVoiceName, selectedZhTwVoiceName, selectedJaVoiceName, selectedKoVoiceName]);
   const applyBrowserVoiceDefaults = useCallback((defaults: typeof browserVoicePreferences) => {
     setSelectedEnVoiceName(defaults.en); setSelectedViVoiceName(defaults.vi); setSelectedZhCnVoiceName(defaults['zh-cn']); setSelectedZhTwVoiceName(defaults['zh-tw']); setSelectedJaVoiceName(defaults.ja); setSelectedKoVoiceName(defaults.ko);
   }, []);
-  const voices = useBrowserVoiceCatalog({ adapter: browserSpeechAdapterRef.current, preferences: browserVoicePreferences, onDefaultsChanged: applyBrowserVoiceDefaults });
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const {
-    playingItemId,
-    playingState,
-    currentRepeatIndex,
-    waitingState,
-    isManualPaused,
-    startPlayback,
-    stopPlayback,
-    pausePlayback,
-    resumePlayback,
-    setPlayingItemId,
-    setPlayingState,
-    setCurrentRepeatIndex,
-    setWaitingState,
-  } = usePlaybackState();
-  const countdownControllerRef = useRef<CountdownController | null>(null);
-  if (!countdownControllerRef.current) countdownControllerRef.current = createBrowserCountdownController();
+  const voices = useBrowserVoiceCatalog({ preferences: browserVoicePreferences, onDefaultsChanged: applyBrowserVoiceDefaults });
 
-  const isSpeechSynthesisPausedRef = useRef<boolean>(false);
-  const isPremiumAudioPausedRef = useRef<boolean>(false);
-
-  const clearWaitTimers = () => {
-    countdownControllerRef.current?.cancel();
-    setWaitingState({ isWaiting: false, remainingSec: 0, itemId: null, type: null });
-  };
-
-  const startCountdown = (durationSec: number, type: 'repeat' | 'advance', onComplete: () => void, itemId: string) => {
-    countdownControllerRef.current?.start({
-      durationSec,
-      type,
-      itemId,
-      onTick: (snapshot) => setWaitingState({
-        isWaiting: !snapshot.paused,
-        remainingSec: snapshot.remainingSec,
-        itemId: snapshot.itemId,
-        type: snapshot.type,
-      }),
-      onComplete: () => {
-        setWaitingState({ isWaiting: false, remainingSec: 0, itemId: null, type: null });
-        onComplete();
-      },
-    });
-  };
   // HTML5 Drag and Drop states
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -384,21 +335,13 @@ export default function App() {
     premiumTtsCacheStore.clear();
   }, [userGeminiApiKey]);
 
+  const { playingItemId, playingState, currentRepeatIndex, waitingState, isManualPaused, speak: handleSpeakItem, stop: handleStopAll, pause: handleGlobalPause, resume: handleGlobalResume, play: handleGlobalPlay } = usePlaybackController({
+    speechList, engineMode, speed, volume, autoAdvance, playlistLoopMode, browserVoices: browserVoicePreferences, premiumVoices: premiumVoiceSettings, apiKey: userGeminiApiKey, userId: user?.uid ?? null, lessonId: currentLessonId, manifests, onUserError: (message) => window.alert(message),
+  });
+
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume);
   };
-
-  // Keep references to avoid browser closure or garbage collection issues
-  const activePlayingIdRef = useRef<string | null>(null);
-  const speechListRef = useRef<SpeechItem[]>([]);
-
-  // Track mutable list to avoid closure locking in async timers
-  useEffect(() => {
-    speechListRef.current = speechList;
-  }, [speechList]);
-
-  // Clean speech when active item finishes or component unmounts
-  useEffect(() => () => browserSpeechAdapterRef.current?.stop(), []);
 
   // Shared playlist background loader hook
   const {
@@ -547,230 +490,6 @@ export default function App() {
     setNewRowDelay(2.0);
   };
 
-  // Main Speech logic: supports customized loop/repeat count and automatic chaining to next line
-  const handleSpeakItem = async (item: SpeechItem) => {
-    // Terminate existing sounds first
-    browserSpeechAdapterRef.current?.stop();
-    audioPlaybackAdapterRef.current?.stop();
-
-    clearWaitTimers();
-
-    isSpeechSynthesisPausedRef.current = false;
-    isPremiumAudioPausedRef.current = false;
-
-    let currentIteration = 1;
-    const maxIterations = item.repeats || 1;
-    activePlayingIdRef.current = item.id;
-
-    if (engineMode === 'browser') {
-      const browserSpeechAdapter = browserSpeechAdapterRef.current;
-      if (!browserSpeechAdapter) {
-        alert('Trình duyệt của bạn không hỗ trợ Web Speech API. Vui lòng thử dùng Google Chrome.');
-        return;
-      }
-      startPlayback(item.id);
-
-      const speakIteration = () => {
-        // Security guard to check if audio was general-stopped or switched to another item
-        if (activePlayingIdRef.current !== item.id) {
-          setPlayingItemId(null);
-          setCurrentRepeatIndex(0);
-          setPlayingState('idle');
-          clearWaitTimers();
-          return;
-        }
-
-        const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
-        const preferredVoiceName = langCode === 'en'
-          ? selectedEnVoiceName
-          : langCode === 'vi'
-            ? selectedViVoiceName
-            : langCode === 'zh-cn'
-              ? selectedZhCnVoiceName
-              : langCode === 'zh-tw'
-                ? selectedZhTwVoiceName
-                : langCode === 'ja'
-                  ? selectedJaVoiceName
-                  : selectedKoVoiceName;
-
-        browserSpeechAdapter.speak({
-          text: item.text,
-          language: langCode,
-          speed: item.speed ?? speed,
-          volume,
-          preferredVoiceName,
-          onStart: () => {
-            setPlayingItemId(item.id);
-            setCurrentRepeatIndex(currentIteration);
-            setPlayingState('playing');
-          },
-          onEnd: () => {
-            if (activePlayingIdRef.current !== item.id) {
-              setPlayingItemId(null);
-              setCurrentRepeatIndex(0);
-              setPlayingState('idle');
-              clearWaitTimers();
-              return;
-            }
-
-            const currentDelay = item.delaySec ?? 2;
-            if (currentIteration < maxIterations) {
-              currentIteration++;
-              setPlayingState('paused');
-              startCountdown(currentDelay, 'repeat', speakIteration, item.id);
-            } else if (autoAdvance) {
-              setPlayingState('paused');
-              startCountdown(currentDelay, 'advance', () => {
-                setPlayingItemId(null);
-                setCurrentRepeatIndex(0);
-                setPlayingState('idle');
-                handleAutoAdvanceToNext(item.id);
-              }, item.id);
-            } else {
-              setPlayingItemId(null);
-              setCurrentRepeatIndex(0);
-              setPlayingState('idle');
-            }
-          },
-          onError: (event) => {
-            console.warn('Speech Engine warning:', event);
-            setPlayingItemId(null);
-            setCurrentRepeatIndex(0);
-            setPlayingState('idle');
-            clearWaitTimers();
-          },
-        });
-      };
-
-      speakIteration();
-    } else {
-      // PREMIUM AI TTS (Gemini tts-preview)
-      if (!userGeminiApiKey || !userGeminiApiKey.trim()) {
-        alert("⚠️ Bạn đã chọn chế độ Giọng Premium AI. Vui lòng tự nhập Gemini API Key của riêng bạn ở cột 'Cấu hình giọng đọc' (bên trái) để tiếp tục phát âm.");
-        setPlayingItemId(null);
-        setCurrentRepeatIndex(0);
-        setPlayingState('idle');
-        return;
-      }
-      startPlayback(item.id);
-
-      setPlayingItemId(item.id);
-      setPlayingState('playing');
-      setCurrentRepeatIndex(1);
-
-      const langCode = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
-      const chosenVoice = getPremiumVoiceForLang(langCode, premiumVoiceSettings);
-
-      try {
-        const audioUrl = await resolvePremiumAudio({
-          userId: user?.uid || null,
-          lessonId: currentLessonId,
-          text: item.text,
-          lang: langCode,
-          voice: chosenVoice,
-          apiKey: userGeminiApiKey,
-          mode: 'prefer-saved',
-          manifests
-        });
-
-        const playIteration = () => {
-          if (activePlayingIdRef.current !== item.id) {
-            setPlayingItemId(null);
-            setCurrentRepeatIndex(0);
-            setPlayingState('idle');
-            clearWaitTimers();
-            return;
-          }
-
-          const audio = new Audio(audioUrl);
-          audioPlaybackAdapterRef.current?.attach(audio, volume);
-          audio.playbackRate = item.speed !== undefined ? item.speed : speed;
-
-          audio.onplay = () => {
-            setPlayingItemId(item.id);
-            setCurrentRepeatIndex(currentIteration);
-            setPlayingState('playing');
-          };
-
-          audio.onended = () => {
-            if (activePlayingIdRef.current !== item.id) {
-              setPlayingItemId(null);
-              setCurrentRepeatIndex(0);
-              setPlayingState('idle');
-              clearWaitTimers();
-              return;
-            }
-
-            const currentDelay = item.delaySec !== undefined ? item.delaySec : 2.0;
-
-            if (currentIteration < maxIterations) {
-              currentIteration++;
-              setPlayingState('paused'); // waiting
-              startCountdown(currentDelay, 'repeat', () => {
-                playIteration();
-              }, item.id);
-            } else {
-              if (autoAdvance) {
-                setPlayingState('paused'); // waiting
-                startCountdown(currentDelay, 'advance', () => {
-                  setPlayingItemId(null);
-                  setCurrentRepeatIndex(0);
-                  setPlayingState('idle');
-                  handleAutoAdvanceToNext(item.id);
-                }, item.id);
-              } else {
-                setPlayingItemId(null);
-                setCurrentRepeatIndex(0);
-                setPlayingState('idle');
-              }
-            }
-          };
-
-          audio.onerror = (e) => {
-            console.error("Audio playback error:", e);
-            setPlayingItemId(null);
-            setCurrentRepeatIndex(0);
-            setPlayingState('idle');
-            clearWaitTimers();
-          };
-
-          audio.play().catch(err => {
-            console.error("Play failed:", err);
-            setPlayingItemId(null);
-            setCurrentRepeatIndex(0);
-            setPlayingState('idle');
-            clearWaitTimers();
-          });
-        };
-
-        playIteration();
-
-      } catch (err: unknown) {
-        console.error("Premium audio generation failed:", err);
-        alert(err instanceof Error ? err.message : "Không thể tải giọng đọc AI Premium. Hãy đảm bảo API Key đã được cấp hoặc chuyển về chế độ Trình duyệt của máy.");
-        setPlayingItemId(null);
-        setCurrentRepeatIndex(0);
-        setPlayingState('idle');
-        clearWaitTimers();
-      }
-    }
-  };
-
-  // Helper to transition automatically to the next active line
-  const handleAutoAdvanceToNext = (currentId: string) => {
-    const list = speechListRef.current;
-    const currentIndex = list.findIndex(item => item.id === currentId);
-    if (currentIndex !== -1) {
-      if (currentIndex + 1 < list.length) {
-        const nextItem = list[currentIndex + 1];
-        handleSpeakItem(nextItem);
-      } else if (playlistLoopMode === 'infinite' && list.length > 0) {
-        const nextItem = list[0];
-        handleSpeakItem(nextItem);
-      }
-    }
-  };
-
   // Draggable Drop handlers
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
@@ -807,83 +526,6 @@ export default function App() {
 
     setDraggedIndex(null);
     setDragOverIndex(null);
-  };
-
-  // Immediate cancel
-  const handleStopAll = () => {
-    browserSpeechAdapterRef.current?.stop();
-    audioPlaybackAdapterRef.current?.stop();
-
-    clearWaitTimers();
-    activePlayingIdRef.current = null;
-    stopPlayback();
-    isSpeechSynthesisPausedRef.current = false;
-    isPremiumAudioPausedRef.current = false;
-  };
-
-  const handleGlobalPause = () => {
-    if (playingState === 'idle' || isManualPaused) return;
-
-    pausePlayback();
-
-    // Case 1: Active speech is playing
-    if (playingState === 'playing') {
-      if (engineMode === 'browser') {
-        browserSpeechAdapterRef.current?.pause();
-        isSpeechSynthesisPausedRef.current = true;
-      } else {
-        audioPlaybackAdapterRef.current?.pause();
-        isPremiumAudioPausedRef.current = true;
-      }
-    }
-    // Case 2: In a countdown timer delay (repeat countdown or auto advance countdown)
-    else if (playingState === 'paused' && waitingState.isWaiting) {
-      const paused = countdownControllerRef.current?.pause();
-      if (paused) {
-        setWaitingState({ isWaiting: false, remainingSec: paused.remainingSec, itemId: paused.itemId, type: paused.type });
-      }
-    }  };
-
-  const handleGlobalResume = () => {
-    if (!isManualPaused) return;
-
-    resumePlayback();
-
-    // Case 1: Voice was playing before pause
-    if (isSpeechSynthesisPausedRef.current) {
-      browserSpeechAdapterRef.current?.resume();
-      isSpeechSynthesisPausedRef.current = false;
-      setPlayingState('playing');
-    } else if (isPremiumAudioPausedRef.current) {
-      void audioPlaybackAdapterRef.current?.resume().then(() => {
-        isPremiumAudioPausedRef.current = false;
-        setPlayingState('playing');
-      }).catch(err => {
-        console.error("Failed to resume Premium Audio:", err);
-      });
-    }
-    // Case 2: Resume the controller-owned countdown.
-    else {
-      const countdown = countdownControllerRef.current?.getSnapshot();
-      if (countdown?.paused) {
-        setPlayingState('paused');
-        countdownControllerRef.current?.resume();
-      }
-    }  };
-
-  const handleGlobalPlay = () => {
-    if (playingState !== 'idle') {
-      if (isManualPaused) {
-        handleGlobalResume();
-      }
-      return;
-    }
-
-    // Start playing the currently selected/active item or the first item
-    if (speechList.length > 0) {
-      const activeItem = speechList.find(item => item.id === playingItemId) || speechList[0];
-      handleSpeakItem(activeItem);
-    }
   };
 
   const handleClearAll = () => {
