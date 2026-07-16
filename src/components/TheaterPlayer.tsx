@@ -31,6 +31,7 @@ import { useRecordingController } from '../application/theater/useRecordingContr
 import { createTheaterRecordingSession, type TheaterRecordingSession } from '../application/theater/theaterRecordingSession';
 import { prepareTheaterRecording, selectTheaterRecorderOptions } from '../application/theater/prepareTheaterRecording';
 import { TheaterPlaylist } from '../features/theater/TheaterPlaylist';
+import { RecordingControls } from '../features/theater/RecordingControls';
 
 interface TheaterPlayerProps {
   isOpen: boolean;
@@ -337,205 +338,24 @@ export default function TheaterPlayer({
             </div>
           </div>
 
-          {/* Middle Section: Screen Recording Controls */}
-          <div className="relative flex items-center space-x-2">
-            {isRecording ? (
-              <div className="flex items-center space-x-1.5 sm:space-x-2.5 bg-rose-950/85 border border-rose-800 text-rose-200 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl shadow-lg shadow-rose-950/20 text-xs font-semibold select-none">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                </span>
-                <span className="font-mono font-bold tracking-wider text-[11px] sm:text-xs">REC {formatTime(recordingTimeSec)}</span>
-                <span className="hidden sm:inline-block text-[10px] text-rose-300 border-l border-rose-800/60 pl-2">
-                  Màn ({recordResolution}){includeMic ? " + Mic" : ""}
-                </span>
-                <button
-                  onClick={handleStopRecording}
-                  className="ml-1 sm:ml-2 px-2 py-0.5 sm:py-1 bg-rose-600 hover:bg-rose-700 active:bg-rose-850 text-white text-[10px] font-bold rounded-lg transition cursor-pointer"
-                  title="Dừng ghi hình & tải video xuống máy"
-                >
-                  Dừng & Lưu
-                </button>
-              </div>
-            ) : (
-              <div className="relative">
-                <button
-                  onClick={() => setShowRecordConfig(!showRecordConfig)}
-                  className={`flex items-center space-x-1 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer text-slate-200 hover:text-white ${
-                    showRecordConfig 
-                      ? 'bg-indigo-650 border border-indigo-500 text-white shadow-lg' 
-                      : 'bg-slate-900 border border-slate-800 hover:bg-slate-850'
-                  }`}
-                  title="Tùy chọn ghi hình trình chiếu"
-                >
-                  <Video className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="text-[11px] sm:text-xs">Ghi Màn Hình</span>
-                  <Sliders className="w-3 h-3 opacity-60 ml-px" />
-                </button>
-
-                {/* Popover Settings Dropdown Panel */}
-                {showRecordConfig && (
-                  <div className="absolute top-12 left-1/2 -translate-x-1/2 w-72 max-h-[calc(100vh-80px)] overflow-y-auto bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-2xl z-50 text-left font-sans text-slate-200 text-xs space-y-3.5 pb-5">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                      <span className="font-extrabold text-white text-sm flex items-center gap-1.5">
-                        <Video className="w-4 h-4 text-indigo-400" />
-                        Ghi Hình Chuỗi Học
-                      </span>
-                      <button 
-                        onClick={() => setShowRecordConfig(false)}
-                        className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white cursor-pointer"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    {/* Resolution Choice selection */}
-                    <div className="space-y-1.5">
-                      <label className="font-bold text-slate-300 block">Độ phân giải video:</label>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {(['480p', '720p', '1080p'] as const).map((r) => (
-                          <button
-                            key={r}
-                            onClick={() => setRecordResolution(r)}
-                            className={`py-1 rounded-lg text-center font-mono font-bold border transition text-[11px] cursor-pointer ${
-                              recordResolution === r
-                                ? 'bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/10'
-                                : 'bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-700 hover:text-slate-200'
-                            }`}
-                          >
-                            {r}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Mic Toggle Switch section */}
-                    <div className="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-850">
-                      <div className="space-y-0.5 pr-2">
-                        <span className="font-bold text-slate-200 block flex items-center gap-1">
-                          <Mic className="w-3.5 h-3.5 text-emerald-400" />
-                          Ghi Microphone
-                        </span>
-                        <span className="text-[10px] text-slate-400 leading-tight block">
-                          Ghi cả giọng đọc ngoài của bạn để đối chiếu.
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIncludeMic(!includeMic)}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                          includeMic ? 'bg-emerald-500' : 'bg-slate-800'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition duration-100 ease-in-out ${
-                            includeMic ? 'translate-x-4' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    {/* Disable Echo Cancellation for Speaker Captures */}
-                    {includeMic && (
-                      <div className="flex items-center justify-between bg-slate-950/40 p-2.5 rounded-xl border border-emerald-950/40 transition-all animate-fadeIn">
-                        <div className="space-y-0.5 pr-1">
-                          <span className="font-bold text-emerald-300 block flex items-center gap-1.5 text-[11px]">
-                            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                            Tối ưu thu âm Loa Ngoài
-                          </span>
-                          <span className="text-[9.5px] text-slate-350 leading-tight block">
-                            Tắt Khử Vọng (AEC) giúp Mic thu mọi ngoại ngữ phát trên loa máy ổn định, không bị ngắt/mất xen kẽ.
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setDisableEchoCancellation(!disableEchoCancellation)}
-                          className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                            disableEchoCancellation ? 'bg-emerald-500' : 'bg-slate-800'
-                          }`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white transition duration-100 ease-in-out ${
-                              disableEchoCancellation ? 'translate-x-3.5' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Prefer Current Tab Toggle Switch */}
-                    <div className="flex items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-850">
-                      <div className="space-y-0.5 pr-2">
-                        <span className="font-bold text-slate-200 block flex items-center gap-1">
-                          <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-                          Ưu tiên quay Thẻ này
-                        </span>
-                        <span className="text-[10px] text-slate-400 leading-tight block">
-                          Tự động ghi hình thẻ hiện tại để tránh lỗi màn hình trắng trống danh sách của Edge/Chrome.
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setOnlyCurrentTab(!onlyCurrentTab)}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                          onlyCurrentTab ? 'bg-indigo-650' : 'bg-slate-800'
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white transition duration-100 ease-in-out ${
-                            onlyCurrentTab ? 'translate-x-4' : 'translate-x-0'
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    {/* Quick helper Tip reminder - Collapsible to avoid squishing the recording button */}
-                    <div className="text-[10px] text-slate-350 bg-slate-950/50 rounded-xl border border-slate-850/55 overflow-hidden transition-all duration-200">
-                      <button
-                        type="button"
-                        onClick={() => setShowRecordingHelp(!showRecordingHelp)}
-                        className="w-full flex items-center justify-between p-2.5 font-bold text-indigo-400 text-[11px] hover:bg-slate-950/80 transition cursor-pointer"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <HelpCircle className="w-3.5 h-3.5 shrink-0" />
-                          <span>Mẹo âm thanh & Cách sửa lỗi</span>
-                        </div>
-                        <span className="text-slate-500 font-mono text-[9px] shrink-0">
-                          {showRecordingHelp ? "ẨN ▲" : "XEM ▼"}
-                        </span>
-                      </button>
-                      
-                      {showRecordingHelp && (
-                        <ul className="list-disc pl-5 pr-3 pb-3 space-y-1.5 text-slate-400 text-[10px] border-t border-slate-850/50 pt-2 bg-slate-950/20">
-                          <li>
-                            <strong>Tránh màn hình trắng:</strong> Nên giữ bật <em>"Ưu tiên quay Thẻ này"</em>. Khi hộp thoại Chrome hiện, chỉ cần click nút <strong>Chia sẻ</strong>.
-                          </li>
-                          <li>
-                            <strong>Bật âm thanh:</strong> Hãy tích chọn <u>"Đồng thời chia sẻ âm thanh của thẻ"</u> (Also share tab audio) ở góc dưới hộp thoại trình duyệt.
-                          </li>
-                          <li>
-                            <strong>Lưu ý Browser TTS:</strong> Giọng đọc mặc định trình duyệt phát ra loa ngoài, không qua luồng âm thanh nội bộ của thẻ. Do đó, để thu được tiếng, bạn <strong>bắt buộc phải bật nút "Ghi Microphone" và bật tùy chọn "Tối ưu thu âm Loa ngoài"</strong> phía trên để tránh việc giải thuật khử vọng (AEC) của trình duyệt triệt tiêu mất giọng Tiếng Trung hoặc Tiếng Việt.
-                          </li>
-                          <li>
-                            <strong>Dành cho Premium AI (Gemini):</strong> Hệ thống tự động thu âm thanh trực tiếp cực chuẩn từ hệ thống mà không cần bật mic!
-                          </li>
-                        </ul>
-                      )}
-                    </div>
-
-                    {/* Main action triggers */}
-                    <button
-                      onClick={handleStartRecording}
-                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-650/10 flex items-center justify-center gap-1.5 transition cursor-pointer hover:scale-[1.02] active:scale-95"
-                    >
-                      <Circle className="w-3 h-3 fill-rose-500 text-rose-500 animate-pulse bg-transparent rounded-full" />
-                      Bắt đầu Ghi hình
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <RecordingControls
+            isRecording={isRecording}
+            recordingTime={formatTime(recordingTimeSec)}
+            resolution={recordResolution}
+            includeMicrophone={includeMic}
+            disableEchoCancellation={disableEchoCancellation}
+            onlyCurrentTab={onlyCurrentTab}
+            showConfig={showRecordConfig}
+            showHelp={showRecordingHelp}
+            onStop={handleStopRecording}
+            onStart={handleStartRecording}
+            onShowConfigChange={setShowRecordConfig}
+            onResolutionChange={setRecordResolution}
+            onMicrophoneChange={setIncludeMic}
+            onEchoCancellationChange={setDisableEchoCancellation}
+            onCurrentTabChange={setOnlyCurrentTab}
+            onShowHelpChange={setShowRecordingHelp}
+          />
 
           <button
             onClick={() => setHideControls(true)}
