@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   X, 
   Download, 
@@ -105,10 +105,6 @@ export default function AudioExportModal({
   const [micActiveWarning, setMicActiveWarning] = useState<boolean>(false);
   const [silentTimerCount, setSilentTimerCount] = useState<number>(0);
   
-  // Filter speechList based on range
-  const [itemsToExport, setItemsToExport] = useState<SpeechItem[]>([]);
-  const [availableSets, setAvailableSets] = useState<string[]>([]);
-  
   // Refs
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -122,28 +118,8 @@ export default function AudioExportModal({
   const abortReasonRef = useRef<string | null>(null);
   const isExpectingSpeechRef = useRef<boolean>(false);
   
-  // Process sets list
-  useEffect(() => {
-    if (!speechList || speechList.length === 0) return;
-    
-    const sets = new Set<string>();
-    speechList.forEach(item => {
-      if (item.setId) {
-        sets.add(item.setId);
-      }
-    });
-    setAvailableSets(Array.from(sets));
-  }, [speechList]);
-
-  // Handle calculation of elements to export
-  useEffect(() => {
-    if (!speechList) return;
-    if (selectedRange === 'all') {
-      setItemsToExport(speechList);
-    } else {
-      setItemsToExport(speechList.filter(item => item.setId === selectedRange));
-    }
-  }, [speechList, selectedRange]);
+  const availableSets = useMemo(() => Array.from(new Set(speechList.flatMap(item => item.setId ? [item.setId] : []))), [speechList]);
+  const itemsToExport = useMemo(() => selectedRange === 'all' ? speechList : speechList.filter(item => item.setId === selectedRange), [speechList, selectedRange]);
 
   // Clean-up on close/unmount
   useEffect(() => {
