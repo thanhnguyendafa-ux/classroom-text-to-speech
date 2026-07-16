@@ -1,6 +1,6 @@
 import React from 'react';
 import AppWorkspace from '../../components/AppWorkspace';
-import type { LessonSaveStatus } from '../lesson-editor/lessonSaveStatus';
+import type { LessonSaveStatus } from '../lesson-editor/public';
 import { 
   Save, 
   Copy, 

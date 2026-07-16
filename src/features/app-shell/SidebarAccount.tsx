@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { LogIn, LogOut, Loader2, User as UserIcon } from 'lucide-react';
-import { useAuth } from '../auth/useAuth';
+import { useAuth } from '../auth/public';
 
 interface SidebarAccountProps {
   collapsed: boolean;

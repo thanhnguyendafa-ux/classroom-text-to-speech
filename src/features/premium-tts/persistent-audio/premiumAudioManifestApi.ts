@@ -8,7 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../../lib/firebase/firebaseClient';
 import { PremiumAudioAsset } from './premiumAudioTypes';
-import { OperationType } from '../../cloud-lessons/cloudLessonApi';
+import { OperationType } from '../../../domain/operationType';
 
 export interface FirestoreErrorInfo {
   error: string;

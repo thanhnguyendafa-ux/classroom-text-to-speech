@@ -1,0 +1,7 @@
+import type { ComponentProps } from 'react';
+import { HelpCircle } from 'lucide-react';
+import { SpeechListBoard } from '../../components/SpeechListBoard';
+interface Props { speechListProps: ComponentProps<typeof SpeechListBoard>; showDrillGuide: boolean; onToggleDrillGuide: () => void; }
+export function LessonBuilderCenterColumn({ speechListProps, showDrillGuide, onToggleDrillGuide }: Props) {
+  return <><SpeechListBoard {...speechListProps} /><div className="mt-4 bg-white border border-slate-200 rounded-2xl p-4 shadow-xs text-left"><button type="button" onClick={onToggleDrillGuide} className="w-full flex items-center justify-between text-slate-800 font-bold text-xs cursor-pointer"><span className="flex items-center gap-2"><HelpCircle className="w-4 h-4 text-indigo-600" />Hướng dẫn tạo bài nghe chính tả</span><span className="text-[10px] text-indigo-600">{showDrillGuide ? 'Ẩn' : 'Hiện'}</span></button>{showDrillGuide && <div className="flex items-start gap-3 mt-3 pt-3 border-t border-slate-100"><div className="bg-indigo-50 p-2 rounded-xl text-indigo-650 shrink-0"><HelpCircle className="w-4 h-4" /></div><div className="text-left text-xs text-slate-500 leading-relaxed space-y-1"><h4 className="font-bold text-slate-900 text-xs mb-1">Cách tạo bài nghe chính tả hoàn hảo:</h4><ol className="list-decimal list-inside space-y-1"><li>Cài số lần lặp cho mỗi câu là 2 hoặc 3 lần.</li><li>Bật tự động chuyển câu và đặt thời gian nghỉ 3-4 giây.</li><li>Bấm Phát toàn bài để luyện nghe và chép chính tả.</li></ol></div></div>}</div></>;
+}

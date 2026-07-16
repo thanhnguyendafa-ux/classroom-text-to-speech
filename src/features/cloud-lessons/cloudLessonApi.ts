@@ -11,21 +11,12 @@ import {
   runTransaction,
 } from 'firebase/firestore';
 import { db, auth } from '../../lib/firebase/firebaseClient';
-import { cleanupLessonAudioAssets } from '../premium-tts/persistent-audio/premiumAudioManifestApi';
-import { cleanupLessonAudioStorage } from '../premium-tts/persistent-audio/premiumAudioStorageApi';
+import { cleanupLessonAudio } from '../../application/cloud-lessons/lessonAudioCleanup';
 import { LessonDocument, LessonDraft } from '../../types';
 import { hydrateLessonDocument } from '../../domain/lessonModel';
 import { assertExpectedRevision, LessonConflictError, nextRevision } from '../../domain/lessonRevision';
 import { summarizeCleanupResults } from '../../domain/lessonDeletion';
-
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
+import { OperationType } from '../../domain/operationType';
 
 export interface FirestoreErrorInfo {
   error: string;
@@ -224,10 +215,7 @@ export async function deleteLesson(uid: string, lessonId: string): Promise<void>
   const path = `users/${uid}/lessons/${lessonId}`;
   try {
     await updateLesson(uid, lessonId, { deletionStatus: 'deleting', deletionError: null });
-    const cleanupResults = await Promise.allSettled([
-      cleanupLessonAudioAssets(uid, lessonId),
-      cleanupLessonAudioStorage(uid, lessonId),
-    ]);
+    const cleanupResults = await cleanupLessonAudio(uid, lessonId);
     const summary = summarizeCleanupResults(cleanupResults);
     if (!summary.canFinalize) {
       await updateLesson(uid, lessonId, {

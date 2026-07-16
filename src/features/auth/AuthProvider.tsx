@@ -6,7 +6,7 @@ import {
   signOut as firebaseSignOut 
 } from 'firebase/auth';
 import { auth, googleProvider } from '../../lib/firebase/firebaseClient';
-import { createOrUpdateUserProfile } from '../cloud-lessons/cloudLessonApi';
+import { createOrUpdateUserProfile } from '../cloud-lessons/public';
 import { errorCode, errorMessage } from '../../lib/errorMessage';
 
 interface AuthContextType {

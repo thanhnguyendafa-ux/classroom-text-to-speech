@@ -1,0 +1,4 @@
+import type { Dispatch, SetStateAction } from 'react';
+import type { SpeechItem } from '../../types';
+interface Input { selectedItem: SpeechItem | null; universalMode: boolean; setSpeechList: Dispatch<SetStateAction<SpeechItem[]>>; setSelectedItem: (item: SpeechItem | null) => void; setUniversalMode: (value: boolean) => void; setUniversalUrl: (url: string) => void; }
+export function createImageAssignmentActions(input: Input) { return { assign(url: string) { if (input.universalMode) { input.setUniversalUrl(url); input.setUniversalMode(false); input.setSelectedItem(null); return; } if (!input.selectedItem) return; input.setSpeechList(items => items.map(item => item.id === input.selectedItem?.id ? { ...item, imageUrl: url } : item)); input.setSelectedItem(null); }, clear(id: string) { input.setSpeechList(items => items.map(item => { if (item.id !== id) return item; const { imageUrl: _removed, ...rest } = item; return rest; })); } }; }

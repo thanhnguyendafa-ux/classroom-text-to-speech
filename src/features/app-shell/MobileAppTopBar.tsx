@@ -1,6 +1,6 @@
 import React from 'react';
 import { Volume2, LogIn, LogOut, Loader2 } from 'lucide-react';
-import { useAuth } from '../auth/useAuth';
+import { useAuth } from '../auth/public';
 
 export const MobileAppTopBar: React.FC = () => {
   const { user, isAuthLoading, signInWithGoogle, signOut } = useAuth();

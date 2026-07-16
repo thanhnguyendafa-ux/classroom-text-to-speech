@@ -27,31 +27,20 @@ import {
 import { LessonDocument, LessonDraft, LessonSettings, SpeechItem } from '../types';
 import { buildLessonDraft } from '../domain/lessonModel';
 import { useAuth } from '../features/auth/useAuth';
-import {
-  CloudFolder,
-  CloudLesson,
-  listFolders,
-  createFolder,
-  updateFolder,
-  deleteFolder,
-  listLessons,
-  createLesson,
-  updateLesson,
-  deleteLesson
-} from '../features/cloud-lessons/cloudLessonApi';
+import type { CloudLesson } from '../features/cloud-lessons/cloudLessonApi';
 
 import { LibraryToolbar } from '../features/lessons/components/LibraryToolbar';
 import { MigrationNotice } from '../features/lessons/components/MigrationNotice';
 import { LibraryGallery } from '../features/lessons/components/LibraryGallery';
 import { LibraryList } from '../features/lessons/components/LibraryList';
 import type { SavedFolder, SavedLesson } from '../features/lessons/localLibraryRepository';
+import { CreateFolderForm, SaveLessonForm } from '../features/lessons/LibraryForms';
+import { LibraryDeleteDialog, type LibraryDeleteTarget } from '../features/lessons/LibraryDeleteDialog';
 import { mergeLibraryBackup, parseLibraryBackup, serializeLibraryBackup } from '../features/lessons/libraryBackup';
-import { migrateLocalLibraryToCloud } from '../features/lessons/libraryCloudMigration';
 import { useLessonLibraryDataController } from '../application/lesson-library/useLessonLibraryDataController';
-import { createCloudLibraryService } from '../features/lessons/cloudLibraryService';
+import { createCloudLibraryActions } from '../application/lesson-library/createCloudLibraryActions';
+import { createLocalLibraryActions } from '../application/lesson-library/createLocalLibraryActions';
 export type { SavedFolder, SavedLesson } from '../features/lessons/localLibraryRepository';
-
-const cloudLibraryService = createCloudLibraryService({ listFolders, listLessons, createFolder, updateFolder, deleteFolder, createLesson, updateLesson, deleteLesson });
 
 
 interface LessonLibraryProps {
@@ -87,12 +76,7 @@ export default function LessonLibrary({
   const [showMigrationBanner, setShowMigrationBanner] = useState(true);
 
   // Custom Deletion Confirmation Modal target state
-  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
-    type: 'lesson' | 'folder';
-    id: string;
-    title: string;
-    folderId?: string;
-  } | null>(null);
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<LibraryDeleteTarget | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -110,324 +94,38 @@ export default function LessonLibrary({
   const uncategorizedLessons: SavedLesson[] = displayUncategorized;
   const cloudLessons: CloudLesson[] = [...displayFolders.flatMap(folder => folder.lessons), ...displayUncategorized];
 
-  // --- Cloud Operations ---
-  const handleCreateCloudFolder = async () => {
-    if (!user) return;
-    const trimmed = newFolderName.trim();
-    if (!trimmed) return;
-
-    startCloudMutation();
-    try {
-      const newId = `folder-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      await cloudLibraryService.createFolder(user.uid, newId, trimmed);
-      setNewFolderName('');
-      setShowNewFolderInput(false);
-      flashMessage(`Đã tạo thư mục đám mây "${trimmed}"`, 'success');
-      await fetchCloudData();
-    } catch (err) {
-      console.error('Error creating cloud folder:', err);
-      flashMessage('Không thể tạo thư mục trên đám mây.', 'error');
-      failCloudMutation();
-    }
-  };
-
-  const handleSaveRenameCloudFolder = async () => {
-    if (!user || !editingFolderId) return;
-    const trimmed = editingFolderName.trim();
-    if (!trimmed) return;
-
-    startCloudMutation();
-    try {
-      await cloudLibraryService.renameFolder(user.uid, editingFolderId, trimmed);
-      setEditingFolderId(null);
-      flashMessage('Đã đổi tên thư mục đám mây thành công', 'success');
-      await fetchCloudData();
-    } catch (err) {
-      console.error('Error renaming cloud folder:', err);
-      flashMessage('Không thể đổi tên thư mục trên đám mây.', 'error');
-      failCloudMutation();
-    }
-  };
-
-  const handleDeleteCloudFolder = async (folderId: string, keepLessons: boolean) => {
-    if (!user) return;
-    startCloudMutation();
-    try {
-      await cloudLibraryService.deleteFolder(user.uid, folderId, keepLessons, cloudLessons);
-
-      flashMessage(keepLessons ? 'Đã xóa thư mục và giữ lại các bài học đám mây.' : 'Đã xóa thư mục cùng toàn bộ bài học trên đám mây.', 'info');
-      await fetchCloudData();
-    } catch (err) {
-      console.error('Error deleting cloud folder:', err);
-      flashMessage('Có lỗi xảy ra khi xóa thư mục đám mây.', 'error');
-      failCloudMutation();
-    }
-  };
-
-  const handleSaveCurrentCloudLesson = async () => {
-    if (!user) return;
-    const trimmedTitle = newLessonTitle.trim();
-    if (!trimmedTitle) {
-      flashMessage('Vui lòng nhập tiêu đề cho bài giảng', 'error');
-      return;
-    }
-
-    if (!currentRawText.trim()) {
-      flashMessage('Nội dung bài học trống, không thể lưu!', 'error');
-      return;
-    }
-
-    startCloudMutation();
-    try {
-      const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      await cloudLibraryService.createLesson(user.uid, newId, {
-        title: trimmedTitle,
-        rawText: currentRawText,
-        speechList: currentSpeechList,
-        settings: currentSettings,
-        folderId: targetFolderId === 'unassigned' ? null : targetFolderId
-      });
-
-      setNewLessonTitle('');
-      setShowSaveLessonForm(false);
-      flashMessage(`Đã lưu bài học đám mây "${trimmedTitle}" thành công!`, 'success');
-      await fetchCloudData();
-      setExpandedFolders(prev => ({ ...prev, [targetFolderId]: true }));
-    } catch (err) {
-      console.error('Error saving cloud lesson:', err);
-      flashMessage('Không thể lưu bài giảng lên đám mây.', 'error');
-      failCloudMutation();
-    }
-  };
-
-  const handleDeleteCloudLesson = async (lessonId: string) => {
-    if (!user) return;
-    startCloudMutation();
-    try {
-      await cloudLibraryService.deleteLesson(user.uid, lessonId);
-      flashMessage('Đã xóa bài học đám mây', 'info');
-      await fetchCloudData();
-    } catch (err) {
-      console.error('Error deleting cloud lesson:', err);
-      flashMessage('Không thể xóa bài học đám mây.', 'error');
-      failCloudMutation();
-    }
-  };
-
-  const handleSaveRenameCloudLesson = async () => {
-    if (!user || !editingLessonId) return;
-    const trimmed = editingLessonTitle.trim();
-    if (!trimmed) return;
-
-    startCloudMutation();
-    try {
-      await cloudLibraryService.renameLesson(user.uid, editingLessonId, trimmed);
-      setEditingLessonId(null);
-      flashMessage('Đã đổi tên bài học đám mây', 'success');
-      await fetchCloudData();
-    } catch (err) {
-      console.error('Error renaming cloud lesson:', err);
-      flashMessage('Không thể đổi tên bài học đám mây.', 'error');
-      failCloudMutation();
-    }
-  };
-
-  const handleLoadCloudLesson = (lesson: CloudLesson) => {
-    onLoadLesson(lesson);
-    flashMessage(`Đã nạp bài học đám mây "${lesson.title}" thành công!`, 'success');
-    const mainEl = document.getElementById('words-maker-box');
-    if (mainEl) {
-      mainEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const handleMigrateLocalToCloud = async () => {
-    if (!user) return;
-    startCloudMutation();
-    try {
-      await migrateLocalLibraryToCloud(user.uid, { folders, uncategorized: uncategorizedLessons }, { createFolder, createLesson });
-      await fetchCloudData();
-      clearLocalAfterMigration();
-      setActiveTab('cloud');
-      setShowMigrationBanner(false);
-      flashMessage('ÄĂ£ chuyá»ƒn toĂ n bá»™ thÆ° má»¥c & bĂ i giáº£ng lĂªn Ä‘Ă¡m mĂ¢y. ThÆ° viá»‡n Ä‘Ă¡m mĂ¢y hiá»‡n lĂ  dá»¯ liá»‡u chĂ­nh.', 'success');
-    } catch (err) {
-      console.error('Migration error:', err);
-      flashMessage('ÄĂ£ xáº£y ra lá»—i khi Ä‘á»“ng bá»™ dá»¯ liá»‡u lĂªn Ä‘Ă¡m mĂ¢y.', 'error');
-      failCloudMutation();
-    }
-  };
+  const cloudActions = createCloudLibraryActions({
+    userId: user?.uid ?? null, newFolderName, editingFolderId, editingFolderName, editingLessonId, editingLessonTitle, newLessonTitle, currentRawText, currentSpeechList, currentSettings, targetFolderId, cloudLessons, folders, uncategorizedLessons,
+    startMutation: startCloudMutation, failMutation: failCloudMutation, refresh: fetchCloudData, clearLocalAfterMigration, flash: flashMessage, onLoadLesson,
+    setNewFolderName, setShowNewFolderInput, setEditingFolderId, setNewLessonTitle, setShowSaveLessonForm, setEditingLessonId, setActiveTab, setShowMigrationBanner, setExpandedFolders,
+  });
+  const handleCreateCloudFolder = cloudActions.createFolder;
+  const handleSaveRenameCloudFolder = cloudActions.renameFolder;
+  const handleDeleteCloudFolder = cloudActions.deleteFolder;
+  const handleSaveCurrentCloudLesson = cloudActions.saveLesson;
+  const handleDeleteCloudLesson = cloudActions.deleteLesson;
+  const handleSaveRenameCloudLesson = cloudActions.renameLesson;
+  const handleLoadCloudLesson = cloudActions.loadLesson;
+  const handleMigrateLocalToCloud = cloudActions.migrate;
 
   // Persist through the scoped local-library repository.
   const saveToStorage = (updatedFolders: SavedFolder[], updatedUncategorized: SavedLesson[]) => {
     mutateLocal(() => ({ folders: updatedFolders, uncategorized: updatedUncategorized }));
   };
 
-  // Folders management
-  const handleCreateFolder = () => {
-    const trimmed = newFolderName.trim();
-    if (!trimmed) return;
-
-    const newFolder: SavedFolder = {
-      id: `folder-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      name: trimmed,
-      lessons: [],
-      createdAt: Date.now()
-    };
-
-    const updated = [...folders, newFolder];
-    saveToStorage(updated, uncategorizedLessons);
-    setNewFolderName('');
-    setShowNewFolderInput(false);
-    flashMessage(`Đã tạo thư mục "${trimmed}"`, 'success');
-  };
-
-  const handleDeleteFolder = (folderId: string, keepLessons: boolean) => {
-    const targetFolder = folders.find(f => f.id === folderId);
-    if (!targetFolder) return;
-
-    let updatedUncategorized = [...uncategorizedLessons];
-    if (keepLessons && targetFolder.lessons.length > 0) {
-      updatedUncategorized = [...updatedUncategorized, ...targetFolder.lessons];
-    }
-
-    const updatedFolders = folders.filter(f => f.id !== folderId);
-    saveToStorage(updatedFolders, updatedUncategorized);
-    flashMessage(keepLessons ? `Đã xóa thư mục và giữ lại các bài học.` : `Đã xóa thư mục cùng toàn bộ bài học bên trong.`, 'info');
-  };
-
-  const handleStartRenameFolder = (folderId: string, currentName: string) => {
-    setEditingFolderId(folderId);
-    setEditingFolderName(currentName);
-  };
-
-  const handleSaveRenameFolder = () => {
-    const trimmed = editingFolderName.trim();
-    if (!trimmed || !editingFolderId) return;
-
-    const updated = folders.map(f => f.id === editingFolderId ? { ...f, name: trimmed } : f);
-    saveToStorage(updated, uncategorizedLessons);
-    setEditingFolderId(null);
-    flashMessage('Đã đổi tên thư mục thành công', 'success');
-  };
-
-  // Toggle Folder Accordion
-  const toggleFolder = (folderId: string) => {
-    setExpandedFolders(prev => ({
-      ...prev,
-      [folderId]: !prev[folderId]
-    }));
-  };
-
-  // Lessons management within active editor
-  const handleSaveCurrentLesson = () => {
-    const trimmedTitle = newLessonTitle.trim();
-    if (!trimmedTitle) {
-      flashMessage('Vui lòng nhập tiêu đề cho bài giảng', 'error');
-      return;
-    }
-
-    if (!currentRawText.trim()) {
-      flashMessage('Nội dung bài học trống, không thể lưu!', 'error');
-      return;
-    }
-
-    const now = Date.now();
-    const draft = buildLessonDraft({
-      title: trimmedTitle,
-      rawText: currentRawText,
-      speechList: currentSpeechList,
-      settings: currentSettings,
-      folderId: targetFolderId === 'unassigned' ? null : targetFolderId,
-    });
-
-    const newLesson: SavedLesson = {
-      schemaVersion: 1,
-      revision: 1,
-      id: `lesson-${now}-${Math.random().toString(36).substring(2, 7)}`,
-      ...draft,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    if (targetFolderId === 'unassigned') {
-      const updatedUncategorized = [newLesson, ...uncategorizedLessons];
-      saveToStorage(folders, updatedUncategorized);
-    } else {
-      const updatedFolders = folders.map(f => {
-        if (f.id === targetFolderId) {
-          return { ...f, lessons: [newLesson, ...f.lessons] };
-        }
-        return f;
-      });
-      saveToStorage(updatedFolders, uncategorizedLessons);
-      // Ensure folder is expanded to show newly added item
-      setExpandedFolders(prev => ({ ...prev, [targetFolderId]: true }));
-    }
-
-    setNewLessonTitle('');
-    setShowSaveLessonForm(false);
-    flashMessage(`Đã lưu "${trimmedTitle}" kèm mọi cài đặt & hình ảnh thành công!`, 'success');
-  };
-
-  // Load a lesson into rawText & trigger speechList reconstruction
-  const handleLoadLesson = (lesson: SavedLesson) => {
-    onLoadLesson(lesson);
-    flashMessage(`Đã khôi phục bài học "${lesson.title}" cùng toàn bộ cài đặt & hình ảnh!`, 'success');
-
-    // Auto-scroll to top to view layout or player is good UX
-    const mainEl = document.getElementById('words-maker-box');
-    if (mainEl) {
-      mainEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const handleDeleteLesson = (lessonId: string, folderId?: string) => {
-    if (folderId) {
-      const updated = folders.map(f => {
-        if (f.id === folderId) {
-          return { ...f, lessons: f.lessons.filter(l => l.id !== lessonId) };
-        }
-        return f;
-      });
-      saveToStorage(updated, uncategorizedLessons);
-    } else {
-      const updatedUncategorized = uncategorizedLessons.filter(l => l.id !== lessonId);
-      saveToStorage(folders, updatedUncategorized);
-    }
-    flashMessage('Đã xóa bài học khỏi thư viện', 'info');
-  };
-
-  const handleStartRenameLesson = (lessonId: string, currentTitle: string) => {
-    setEditingLessonId(lessonId);
-    setEditingLessonTitle(currentTitle);
-  };
-
-  const handleSaveRenameLesson = (folderId?: string) => {
-    const trimmed = editingLessonTitle.trim();
-    if (!trimmed || !editingLessonId) return;
-
-    if (folderId) {
-      const updated = folders.map(f => {
-        if (f.id === folderId) {
-          return {
-            ...f,
-            lessons: f.lessons.map(l => l.id === editingLessonId ? { ...l, title: trimmed } : l)
-          };
-        }
-        return f;
-      });
-      saveToStorage(updated, uncategorizedLessons);
-    } else {
-      const updatedUncategorized = uncategorizedLessons.map(l =>
-        l.id === editingLessonId ? { ...l, title: trimmed } : l
-      );
-      saveToStorage(folders, updatedUncategorized);
-    }
-
-    setEditingLessonId(null);
-    flashMessage('Đã đổi tên bài học', 'success');
-  };
+  const localActions = createLocalLibraryActions({
+    folders, uncategorizedLessons, newFolderName, editingFolderId, editingFolderName, newLessonTitle, editingLessonId, editingLessonTitle, targetFolderId, currentRawText, currentSpeechList, currentSettings,
+    save: saveToStorage, flash: flashMessage, onLoadLesson, setNewFolderName, setShowNewFolderInput, setEditingFolderId, setEditingFolderName, setNewLessonTitle, setShowSaveLessonForm, setEditingLessonId, setEditingLessonTitle, setExpandedFolders,
+  });
+  const handleCreateFolder = localActions.createFolder;
+  const handleDeleteFolder = localActions.deleteFolder;
+  const handleStartRenameFolder = localActions.startRenameFolder;
+  const handleSaveRenameFolder = localActions.saveRenameFolder;
+  const handleSaveCurrentLesson = localActions.saveLesson;
+  const handleLoadLesson = localActions.loadLesson;
+  const handleDeleteLesson = localActions.deleteLesson;
+  const handleStartRenameLesson = localActions.startRenameLesson;
+  const handleSaveRenameLesson = localActions.saveRenameLesson;
 
   // JSON Import & Export Backup management
   const handleExportBackup = () => {
@@ -547,99 +245,22 @@ export default function LessonLibrary({
         </div>
       )}
 
-      {/* 5. Save Current Lesson Form */}
-      {((activeTab === 'local') || (activeTab === 'cloud' && user)) && showSaveLessonForm && (
-        <div id="save-lesson-form" className="p-4 bg-indigo-50/40 border border-indigo-100/60 rounded-xl mb-4 space-y-3 animate-fadeIn">
-          <h4 className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Lưu văn bản đang soạn thành bài giảng mới:</span>
-          </h4>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider font-extrabold text-slate-450 mb-1">Tên bài học</label>
-              <input
-                type="text"
-                id="save-lesson-title-input"
-                placeholder="Ví dụ: Bài đọc quả táo, Tiếng Anh Du Lịch..."
-                value={newLessonTitle}
-                onChange={(e) => setNewLessonTitle(e.target.value)}
-                className="w-full text-xs font-sans bg-white border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider font-extrabold text-slate-450 mb-1">Thư mục chứa</label>
-              <select
-                id="save-lesson-folder-select"
-                value={targetFolderId}
-                onChange={(e) => setTargetFolderId(e.target.value)}
-                className="w-full text-xs bg-white border border-slate-200 rounded-lg p-2 text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                <option value="unassigned">-- Chưa phân loại (Bài lẻ) --</option>
-                {activeTab === 'cloud' ? (
-                  displayFolders.map(f => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
-                  ))
-                ) : (
-                  folders.map(f => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
-                  ))
-                )}
-              </select>
-            </div>
-          </div>
-
-          <div className="text-[10px] text-indigo-700/80 leading-relaxed font-medium bg-white/50 border border-indigo-100/40 p-2.5 rounded-lg">
-            💡 Tự động đính kèm và đồng bộ: Tốc độ đọc, thời gian nghỉ, giọng đọc và các liên kết hình ảnh minh họa cho từng từ thoại.
-          </div>
-
-          <div className="flex gap-2 justify-end pt-1">
-            <button
-              type="button"
-              id="cancel-save-lesson-btn"
-              onClick={() => setShowSaveLessonForm(false)}
-              className="px-3 py-1.5 text-[10px] font-bold text-slate-500 hover:bg-slate-200/50 rounded-lg transition cursor-pointer"
-            >
-              Hủy
-            </button>
-            <button
-              type="button"
-              id="submit-save-lesson-btn"
-              onClick={activeTab === 'cloud' ? handleSaveCurrentCloudLesson : handleSaveCurrentLesson}
-              className="px-3.5 py-1.5 text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-2xs transition cursor-pointer"
-            >
-              Lưu bài giảng
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 6. Create Folder Form */}
-      {((activeTab === 'local') || (activeTab === 'cloud' && user)) && showNewFolderInput && (
-        <div id="create-folder-form" className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-xl mb-4 space-y-2.5 animate-fadeIn">
-          <h4 className="text-xs font-bold text-slate-700">Tạo thư mục mới trong thư viện:</h4>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              id="new-folder-name-input"
-              placeholder="Ví dụ: Du lịch, Giao tiếp song ngữ..."
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              className="flex-1 text-xs font-sans bg-white border border-slate-200 rounded-lg p-2 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-              onKeyDown={(e) => e.key === 'Enter' && (activeTab === 'cloud' ? handleCreateCloudFolder() : handleCreateFolder())}
-            />
-            <button
-              type="button"
-              id="submit-create-folder-btn"
-              onClick={activeTab === 'cloud' ? handleCreateCloudFolder : handleCreateFolder}
-              className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 text-xs font-bold rounded-lg transition cursor-pointer"
-            >
-              Tạo mới
-            </button>
-          </div>
-        </div>
-      )}
+      <SaveLessonForm
+        visible={((activeTab === 'local') || (activeTab === 'cloud' && !!user)) && showSaveLessonForm}
+        title={newLessonTitle}
+        folderId={targetFolderId}
+        folders={activeTab === 'cloud' ? displayFolders : folders}
+        onTitleChange={setNewLessonTitle}
+        onFolderChange={setTargetFolderId}
+        onCancel={() => setShowSaveLessonForm(false)}
+        onSave={activeTab === 'cloud' ? handleSaveCurrentCloudLesson : handleSaveCurrentLesson}
+      />
+      <CreateFolderForm
+        visible={((activeTab === 'local') || (activeTab === 'cloud' && !!user)) && showNewFolderInput}
+        name={newFolderName}
+        onNameChange={setNewFolderName}
+        onCreate={activeTab === 'cloud' ? handleCreateCloudFolder : handleCreateFolder}
+      />
 
       {/* 7. Loading state spinner */}
       {isCloudLoading && (
@@ -702,105 +323,20 @@ export default function LessonLibrary({
         )
       )}
 
-      {/* 9. Custom Deletion Confirmation Dialog Modal */}
-      {deleteConfirmTarget && (
-        <div id="delete-confirm-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-150 animate-scaleUp text-left">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shrink-0">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="text-xs font-extrabold text-slate-900">
-                  {deleteConfirmTarget.type === 'folder' ? 'Xác nhận xóa thư mục?' : 'Xác nhận xóa bài học?'}
-                </h4>
-                <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                  {deleteConfirmTarget.type === 'folder' ? (
-                    <>
-                      Bạn đang xóa thư mục <strong className="text-slate-850">"{deleteConfirmTarget.title}"</strong>. Hãy chọn cách xử lý cho các bài học bên trong:
-                    </>
-                  ) : (
-                    <>
-                      Bạn có chắc chắn muốn xóa vĩnh viễn bài giảng <strong className="text-slate-850">"{deleteConfirmTarget.title}"</strong> không? Hành động này không thể hoàn tác.
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 flex flex-col gap-2 justify-end">
-              {deleteConfirmTarget.type === 'folder' ? (
-                <div className="space-y-1.5 w-full">
-                  <button
-                    type="button"
-                    id="confirm-delete-folder-keep-lessons-btn"
-                    onClick={() => {
-                      if (activeTab === 'cloud') {
-                        handleDeleteCloudFolder(deleteConfirmTarget.id, true);
-                      } else {
-                        handleDeleteFolder(deleteConfirmTarget.id, true);
-                      }
-                      setDeleteConfirmTarget(null);
-                    }}
-                    className="w-full px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-650 text-slate-700 rounded-lg text-[10px] font-bold cursor-pointer text-center border border-transparent transition"
-                  >
-                    Xóa thư mục (Giữ các bài trong "Chưa Phân Loại")
-                  </button>
-                  <button
-                    type="button"
-                    id="confirm-delete-folder-all-btn"
-                    onClick={() => {
-                      if (activeTab === 'cloud') {
-                        handleDeleteCloudFolder(deleteConfirmTarget.id, false);
-                      } else {
-                        handleDeleteFolder(deleteConfirmTarget.id, false);
-                      }
-                      setDeleteConfirmTarget(null);
-                    }}
-                    className="w-full px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold cursor-pointer text-center transition"
-                  >
-                    Xóa tất cả (Thư mục & Bài học bên trong)
-                  </button>
-                  <button
-                    type="button"
-                    id="cancel-delete-folder-btn"
-                    onClick={() => setDeleteConfirmTarget(null)}
-                    className="w-full px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 rounded-lg text-[10px] font-bold cursor-pointer text-center transition"
-                  >
-                    Hủy bỏ
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    id="cancel-delete-lesson-btn"
-                    onClick={() => setDeleteConfirmTarget(null)}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-650 rounded-lg text-[10px] font-bold cursor-pointer text-center transition"
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    type="button"
-                    id="confirm-delete-lesson-btn"
-                    onClick={() => {
-                      if (activeTab === 'cloud') {
-                        handleDeleteCloudLesson(deleteConfirmTarget.id);
-                      } else {
-                        handleDeleteLesson(deleteConfirmTarget.id, deleteConfirmTarget.folderId);
-                      }
-                      setDeleteConfirmTarget(null);
-                    }}
-                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold cursor-pointer text-center transition"
-                  >
-                    Xóa vĩnh viễn
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <LibraryDeleteDialog
+        target={deleteConfirmTarget}
+        onCancel={() => setDeleteConfirmTarget(null)}
+        onDeleteFolder={(target, keepLessons) => {
+          if (activeTab === 'cloud') handleDeleteCloudFolder(target.id, keepLessons);
+          else handleDeleteFolder(target.id, keepLessons);
+          setDeleteConfirmTarget(null);
+        }}
+        onDeleteLesson={(target) => {
+          if (activeTab === 'cloud') handleDeleteCloudLesson(target.id);
+          else handleDeleteLesson(target.id, target.folderId);
+          setDeleteConfirmTarget(null);
+        }}
+      />
     </div>
   );
 }

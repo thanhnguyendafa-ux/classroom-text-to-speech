@@ -37,7 +37,6 @@ import {
   Search,
   Radio
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { SpeechItem, LanguageCode, LessonSettings } from './types';
 import { buildLessonDraft, hydrateLessonDocument } from './domain/lessonModel';
 import { useGeminiApiKey } from './features/premium-tts/useGeminiApiKey';
@@ -53,28 +52,32 @@ import { SpeechSettingsPanel } from './components/SpeechSettingsPanel';
 import { LessonInputPanel, TEMPLATES } from './components/LessonInputPanel';
 import { PlaybackController } from './components/PlaybackController';
 import { SpeechListBoard } from './components/SpeechListBoard';
-import AppWorkspace from './components/AppWorkspace';
 import { useSharedPlaylistLoader } from './features/shared-playlist/useSharedPlaylistLoader';
 import SharedPlaylistBanner from './features/shared-playlist/SharedPlaylistBanner';
+import AppWorkspace from './components/AppWorkspace';
 import { useAuth } from './features/auth/useAuth';
 import AppShell from './features/app-shell/AppShell';
+import { AppToast, type AppToastModel } from './features/app-shell/AppToast';
+import { AppModalLayer } from './features/app-shell/AppModalLayer';
+import { LessonBuilderSettingsColumn } from './features/lesson-builder/LessonBuilderSettingsColumn';
+import { LessonBuilderCenterColumn } from './features/lesson-builder/LessonBuilderCenterColumn';
+import { LessonBuilderInputColumn } from './features/lesson-builder/LessonBuilderInputColumn';
 import LessonsView from './features/lessons/LessonsView';
 import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
 import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
 import { buildSpeechItems } from './features/lesson-editor/speechItemFactory';
-import { parseSpeechListImport } from './features/lesson-editor/speechListImport';
 import { useLessonEditorController } from './application/lesson-editor/useLessonEditorController';
 import { useLessonRowController } from './application/lesson-editor/useLessonRowController';
+import { createImageAssignmentActions } from './application/lesson-editor/createImageAssignmentActions';
+import { downloadSpeechList, importSpeechListFile } from './application/lesson-editor/speechListTransfer';
 import { useLessonPersistenceController } from './application/lesson-persistence/useLessonPersistenceController';
+import { loadLessonIntoWorkspace } from './application/lesson-persistence/loadLessonIntoWorkspace';
+import { buildLessonSettingsSnapshot, groupBrowserVoices } from './application/lesson-editor/lessonSettingsViewModel';
+import { createLessonWorkflowActions } from './application/lesson-editor/createLessonWorkflowActions';
 import { useBrowserVoiceCatalog } from './application/playback/useBrowserVoiceCatalog';
 import PromptGuidePanel from './features/prompt-guide/PromptGuidePanel';
 import { usePlaybackController } from './application/playback/usePlaybackController';
-
-const ImageSearchModal = React.lazy(() => import('./components/ImageSearchModal'));
-const TheaterPlayer = React.lazy(() => import('./components/TheaterPlayer'));
-const ShareModal = React.lazy(() => import('./components/ShareModal'));
-const AudioExportModal = React.lazy(() => import('./components/AudioExportModal'));
 
 
 export default function App() {
@@ -136,15 +139,7 @@ export default function App() {
   const { user } = useAuth();
   const [activeSection, setActiveSection] = useState<'lessons' | 'builder'>('lessons');
   const [cloudRefreshVersion, setCloudRefreshVersion] = useState<number>(0);
-  const [toast, setToast] = useState<{
-    type: 'success' | 'error' | 'info';
-    message: string;
-    description?: string;
-    action?: {
-      label: string;
-      onClick: () => void;
-    };
-  } | null>(null);
+  const [toast, setToast] = useState<AppToastModel | null>(null);
 
   const showToast = (
     type: 'success' | 'error' | 'info',
@@ -160,7 +155,8 @@ export default function App() {
       const timer = setTimeout(() => {
         setToast(null);
       }, 6000);
-      return () => clearTimeout(timer);
+
+  return () => clearTimeout(timer);
     }
   }, [toast]);
 
@@ -228,33 +224,7 @@ export default function App() {
     clearApiKey,
   } = useGeminiApiKey();
 
-  const getCurrentLessonSettings = (): LessonSettings => ({
-    speed,
-    volume,
-    autoAdvance,
-    timeBetweenLines,
-    rowLayoutMode,
-    engineMode,
-
-    selectedPremiumVoiceEn,
-    selectedPremiumVoiceVi,
-    selectedPremiumVoiceZhCn,
-    selectedPremiumVoiceZhTw,
-    selectedPremiumVoiceJa,
-    selectedPremiumVoiceKo,
-
-    selectedEnVoiceName,
-    selectedViVoiceName,
-    selectedZhCnVoiceName,
-    selectedZhTwVoiceName,
-    selectedJaVoiceName,
-    selectedKoVoiceName,
-
-    autoGroupSet,
-    setMultiplier,
-    useUniversalImage,
-    universalImageUrl,
-  });
+  const getCurrentLessonSettings = () => buildLessonSettingsSnapshot({ speed, volume, autoAdvance, timeBetweenLines, rowLayoutMode, engineMode, selectedPremiumVoiceEn, selectedPremiumVoiceVi, selectedPremiumVoiceZhCn, selectedPremiumVoiceZhTw, selectedPremiumVoiceJa, selectedPremiumVoiceKo, selectedEnVoiceName, selectedViVoiceName, selectedZhCnVoiceName, selectedZhTwVoiceName, selectedJaVoiceName, selectedKoVoiceName, autoGroupSet, setMultiplier, useUniversalImage, universalImageUrl });
 
   const currentLessonDraft = buildLessonDraft({ title: currentLessonTitle, rawText, speechList, settings: getCurrentLessonSettings() });
   const { lessonId: currentLessonId, status: lessonSaveStatus, isDirty, isSaving: isSavingCloudLesson, error: lessonSaveError, save: handleSaveLesson, saveAsCopy: handleSaveLessonAsCopy, loadSession: loadLessonPersistence, resetSession: resetLessonPersistence, confirmDiscard } = useLessonPersistenceController({
@@ -265,18 +235,6 @@ export default function App() {
     onNavigateLessons: () => setActiveSection('lessons'),
     onCopyTitle: setCurrentLessonTitle,
   });
-
-  const handleCreateNewLesson = () => {
-    if (!confirmDiscard('Bài học hiện tại có thay đổi chưa lưu. Bạn có muốn bỏ các thay đổi này?')) return;
-    resetEditor('Bài học mới');
-    resetLessonPersistence(createLessonFingerprint(buildLessonDraft({ title: 'Bài học mới', rawText: '', speechList: [], settings: getCurrentLessonSettings() })));
-    setActiveSection('builder');
-  };
-
-  const handleSectionChange = (section: 'lessons' | 'builder') => {
-    if (section === 'lessons' && activeSection === 'builder' && !confirmDiscard('Bài học có thay đổi chưa lưu. Bạn có muốn rời khỏi trình soạn thảo?')) return;
-    setActiveSection(section);
-  };
 
   const {
     manifests,
@@ -311,6 +269,25 @@ export default function App() {
     setVolume(newVolume);
   };
 
+  const imageActions = createImageAssignmentActions({ selectedItem: selectedItemForImageSearch, universalMode: isSearchingUniversalImage, setSpeechList, setSelectedItem: setSelectedItemForImageSearch, setUniversalMode: setIsSearchingUniversalImage, setUniversalUrl: handleUniversalImageUrlChange });
+  const handleAssignImage = imageActions.assign;
+  const handleClearImage = (id: string, event: React.MouseEvent) => { event.stopPropagation(); imageActions.clear(id); };
+  const handleExportData = () => { try { downloadSpeechList(speechList); } catch (cause) { console.error(cause); window.alert(speechList.length ? 'Xuất dữ liệu thất bại.' : 'Danh sách câu đang trống.'); } };
+  const handleImportData = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]; if (!file) return;
+    try { const items = await importSpeechListFile(file); loadEditorLesson({ title: currentLessonTitle, rawText: items.map(item => item.text).join('\n'), speechList: items }); window.alert(`Nhập thành công ${items.length} câu thoại.`); }
+    catch (cause) { console.error(cause); window.alert(`Không thể đọc file: ${cause instanceof Error ? cause.message : 'JSON không hợp lệ.'}`); }
+    finally { event.target.value = ''; }
+  };
+
+  const workflowActions = createLessonWorkflowActions({ rawText, timeBetweenLines, speed, autoGroupSet, setMultiplier, speechList, activeSection, confirmDiscard, resetEditor, resetPersistence: resetLessonPersistence, createNewFingerprint: () => createLessonFingerprint(buildLessonDraft({ title: 'Bài học mới', rawText: '', speechList: [], settings: getCurrentLessonSettings() })), buildList: buildSpeechItems, setRawText, setSpeechList, stopPlayback: handleStopAll, clearCache: () => premiumTtsCacheStore.clear(), setActiveSection, setTheaterMode: setIsTheaterMode, speak: handleSpeakItem });
+  const handleCreateList = workflowActions.createList;
+  const handleCreateNewLesson = workflowActions.createNew;
+  const handleSectionChange = workflowActions.changeSection;
+  const handleClearAll = workflowActions.clearAll;
+  const handleApplyTemplate = workflowActions.applyTemplate;
+  const triggerPlaylistDrill = workflowActions.drill;
+
   // Shared playlist background loader hook
   const {
     shareLoading,
@@ -332,142 +309,19 @@ export default function App() {
     handleCreateList,
   });
 
-  // Helper to assign cover images dynamically
-  const handleAssignImage = (imageUrl: string) => {
-    if (isSearchingUniversalImage) {
-      handleUniversalImageUrlChange(imageUrl);
-      setIsSearchingUniversalImage(false);
-      setSelectedItemForImageSearch(null);
-      return;
-    }
-    if (!selectedItemForImageSearch) return;
-    setSpeechList(prev => prev.map(item => {
-      if (item.id === selectedItemForImageSearch.id) {
-        return { ...item, imageUrl };
-      }
-      return item;
-    }));
-    setSelectedItemForImageSearch(null);
-  };
-
-  const handleClearImage = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSpeechList(prev => prev.map(item => {
-      if (item.id === id) {
-        const { imageUrl, ...rest } = item;
-        return rest;
-      }
-      return item;
-    }));
-  };
-
-  // Export speechList to portable JSON file
-  const handleExportData = () => {
-    if (speechList.length === 0) {
-      alert("Danh sách câu đang trống, không có gì để xuất.");
-      return;
-    }
-    try {
-      const dataStr = JSON.stringify({
-        version: "classroom-speech-v1",
-        exportedAt: new Date().toISOString(),
-        items: speechList
-      }, null, 2);
-
-      const blob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-
-      // Create a nice file name based on local date
-      const dateStr = new Date().toLocaleDateString('vi-VN').replace(/\//g, '-');
-      link.download = `giao-an-luyen-phat-am-${dateStr}.json`;
-
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
-      alert("Xuất dữ liệu thất bại. Có lỗi xảy ra.");
-    }
-  };
-
-  // Import speechList from chosen JSON file
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const sanitizedItems = parseSpeechListImport(String(event.target?.result ?? ''));
-        setSpeechList(sanitizedItems);
-        setRawText(sanitizedItems.map(item => item.text).join('\n'));
-        alert(`Nháº­p thĂ nh cĂ´ng ${sanitizedItems.length} cĂ¢u thoáº¡i tá»« file backup! Táº¥t cáº£ thiáº¿t láº­p, thá»i gian chá» nghá»‰ (delay), sá»‘ láº§n láº·p vĂ  hĂ¬nh áº£nh gĂ¡n sẵn Ä‘Ă£ Ä‘Æ°á»£c khĂ´i phá»¥c nguyĂªn váº¹n.`);
-      } catch (err: unknown) {
-        console.error(err);
-        alert(`KhĂ´ng thá»ƒ Ä‘á»c file: ${err instanceof Error ? err.message : 'Äá»‹nh dáº¡ng JSON khĂ´ng há»£p lá»‡.'}`);
-      } finally {
-        e.target.value = '';
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  function handleCreateList(textOverride?: string) {
-    const sourceText = typeof textOverride === 'string' ? textOverride : rawText;
-    const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const newList = buildSpeechItems({
-      sourceText,
-      timeBetweenLines,
-      speed,
-      autoGroupSet,
-      setMultiplier,
-      createId: (kind, index) => `${kind}-${nonce}-${index}`,
-    });
-
-    setSpeechList(newList);
-    handleStopAll();
-  }
   const { draggedIndex, dragOverIndex, newRowText, setNewRowText, newRowLang, setNewRowLang, newRowRepeats, setNewRowRepeats, newRowDelay, setNewRowDelay, addSingleRow: handleAddSingleRow, dragStart: handleDragStart, dragEnd: handleDragEnd, dragOver: handleDragOver, dropRow: handleDropRow, updateRepeats: handleRowRepeatsChange, updateDelay: handleRowDelayChange, updateSpeed: handleRowSpeedChange, updateLanguage: handleRowLangChange, startEditing: startEditingRow, saveEditing: saveEditedRow, deleteRow: handleDeleteRow, joinNext: handleJoinWithNext, ungroup: handleUngroupSet, duplicate: handleDuplicateSet } = useLessonRowController({ speechList, setSpeechList, speed, playingItemId, stopPlayback: handleStopAll, editingItemId, setEditingItemId, editingText, setEditingText });
 
-  const handleClearAll = () => {
-    handleStopAll();
-    setSpeechList([]);
-    premiumTtsCacheStore.clear();
-  };
-
-  // Apply templates
-  const handleApplyTemplate = (content: string) => {
-    setRawText(content);
-    handleCreateList(content);
-  };
-
-  // Generate speech starting from row index zero
-  const triggerPlaylistDrill = () => {
-    if (speechList.length > 0) {
-      setIsTheaterMode(true);
-      handleSpeakItem(speechList[0]);
-    }
-  };
-
   // Filter categories for all supported languages
-  const englishVoices = voices.filter(v => v.lang.toLowerCase().startsWith('en'));
-  const vietnameseVoices = voices.filter(v => v.lang.toLowerCase().startsWith('vi'));
-  const zhCnVoices = voices.filter(v =>
-    v.lang.toLowerCase().replace('_', '-').startsWith('zh-cn') ||
-    v.lang.toLowerCase().replace('_', '-').startsWith('zh-chs') ||
-    (v.lang.toLowerCase().startsWith('zh') && !v.lang.toLowerCase().includes('tw') && !v.lang.toLowerCase().includes('hk'))
-  );
-  const zhTwVoices = voices.filter(v =>
-    v.lang.toLowerCase().replace('_', '-').startsWith('zh-tw') ||
-    v.lang.toLowerCase().replace('_', '-').startsWith('zh-hk') ||
-    v.lang.toLowerCase().replace('_', '-').startsWith('zh-cht') ||
-    (v.lang.toLowerCase().startsWith('zh') && (v.lang.toLowerCase().includes('tw') || v.lang.toLowerCase().includes('hk')))
-  );
-  const japaneseVoices = voices.filter(v => v.lang.toLowerCase().startsWith('ja'));
-  const koreanVoices = voices.filter(v => v.lang.toLowerCase().startsWith('ko'));
+  const { englishVoices, vietnameseVoices, zhCnVoices, zhTwVoices, japaneseVoices, koreanVoices } = groupBrowserVoices(voices);
+
+  const handleLoadLessonIntoWorkspace = (lesson: { id: string }) => loadLessonIntoWorkspace({
+    lesson, setSpeed, setTimeBetweenLines, setRowLayoutMode, setEngineMode,
+    setPremiumVoice: { en: setSelectedPremiumVoiceEn, vi: setSelectedPremiumVoiceVi, 'zh-cn': setSelectedPremiumVoiceZhCn, 'zh-tw': setSelectedPremiumVoiceZhTw, ja: setSelectedPremiumVoiceJa, ko: setSelectedPremiumVoiceKo },
+    setBrowserVoice: { en: setSelectedEnVoiceName, vi: setSelectedViVoiceName, 'zh-cn': setSelectedZhCnVoiceName, 'zh-tw': setSelectedZhTwVoiceName, ja: setSelectedJaVoiceName, ko: setSelectedKoVoiceName },
+    setAutoGroupSet: handleAutoGroupSetChange, setMultiplier: handleSetMultiplierChange, setUniversalImage: handleUseUniversalImageChange, setUniversalImageUrl: handleUniversalImageUrlChange, loadEditorLesson,
+    buildLegacySpeechList: normalized => buildSpeechItems({ sourceText: normalized.rawText, timeBetweenLines: normalized.settings.timeBetweenLines, speed: normalized.settings.speed, autoGroupSet: normalized.settings.autoGroupSet, setMultiplier: normalized.settings.setMultiplier, createId: (kind, index) => `loaded-${kind}-${index}` }),
+    createFingerprint: createLessonFingerprint, loadPersistence: loadLessonPersistence, onSectionChange: setActiveSection,
+  });
 
   return (
     <div id="classroom-tts-root" className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900">
@@ -486,52 +340,7 @@ export default function App() {
             currentSpeechList={speechList}
             currentSettings={getCurrentLessonSettings()}
             cloudRefreshVersion={cloudRefreshVersion}
-            onLoadLesson={(lesson) => {
-              const normalizedLesson = hydrateLessonDocument(lesson.id, lesson);
-              const s = normalizedLesson.settings;
-
-              // 1. Restore raw text editor
-              setRawText(normalizedLesson.rawText);
-
-              // 2. Restore all configurations
-              setSpeed(s.speed);
-              setTimeBetweenLines(s.timeBetweenLines);
-              setRowLayoutMode(s.rowLayoutMode);
-              setEngineMode(s.engineMode);
-
-              setSelectedPremiumVoiceEn(s.selectedPremiumVoiceEn);
-              setSelectedPremiumVoiceVi(s.selectedPremiumVoiceVi);
-              setSelectedPremiumVoiceZhCn(s.selectedPremiumVoiceZhCn);
-              setSelectedPremiumVoiceZhTw(s.selectedPremiumVoiceZhTw);
-              setSelectedPremiumVoiceJa(s.selectedPremiumVoiceJa);
-              setSelectedPremiumVoiceKo(s.selectedPremiumVoiceKo);
-
-              setSelectedEnVoiceName(s.selectedEnVoiceName);
-              setSelectedViVoiceName(s.selectedViVoiceName);
-              setSelectedZhCnVoiceName(s.selectedZhCnVoiceName);
-              setSelectedZhTwVoiceName(s.selectedZhTwVoiceName);
-              setSelectedJaVoiceName(s.selectedJaVoiceName);
-              setSelectedKoVoiceName(s.selectedKoVoiceName);
-
-              handleAutoGroupSetChange(s.autoGroupSet);
-              handleSetMultiplierChange(s.setMultiplier);
-              handleUseUniversalImageChange(s.useUniversalImage);
-              handleUniversalImageUrlChange(s.universalImageUrl);
-
-              // 3. Restore list of cards & its custom images
-              if (normalizedLesson.speechList.length > 0) {
-                setSpeechList(normalizedLesson.speechList);
-              } else {
-                handleCreateList(normalizedLesson.rawText);
-              }
-
-              // Set active lesson identification
-              loadLessonPersistence(normalizedLesson.id, normalizedLesson.revision, createLessonFingerprint(buildLessonDraft({ title: normalizedLesson.title, rawText: normalizedLesson.rawText, speechList: normalizedLesson.speechList, settings: normalizedLesson.settings, folderId: normalizedLesson.folderId })));
-              setCurrentLessonTitle(normalizedLesson.title);
-
-              // Transition to builder workspace
-              setActiveSection('builder');
-            }}
+            onLoadLesson={handleLoadLessonIntoWorkspace}
           />
         ) : (
           <LessonBuilderView
@@ -547,432 +356,45 @@ export default function App() {
             onOpenShare={() => setIsShareModalOpen(true)}
             speechCount={speechList.length}
             leftColumn={
-              <>
-              {/* Standard Text Editor Input */}
-              <LessonInputPanel
-                rawText={rawText}
-                setRawText={setRawText}
-                autoGroupSet={autoGroupSet}
-                onAutoGroupSetChange={handleAutoGroupSetChange}
-                setMultiplier={setMultiplier}
-                onSetMultiplierChange={handleSetMultiplierChange}
-                onCreateList={() => handleCreateList()}
-                onClearInput={() => setRawText('')}
-                onApplyTemplate={handleApplyTemplate}
-              />
-
-
-
-              <PromptGuidePanel />
-            </>
+            <LessonBuilderInputColumn inputProps={{ rawText, setRawText, autoGroupSet, onAutoGroupSetChange: handleAutoGroupSetChange, setMultiplier, onSetMultiplierChange: handleSetMultiplierChange, onCreateList: () => handleCreateList(), onClearInput: () => setRawText(''), onApplyTemplate: handleApplyTemplate }} guide={<PromptGuidePanel />} />
           }
           centerColumn={
-            <>
-              <SpeechListBoard
-                speechList={speechList}
-                rowLayoutMode={rowLayoutMode}
-                toggleRowLayoutMode={toggleRowLayoutMode}
-                fileInputRef={fileInputRef}
-                handleExportData={handleExportData}
-                triggerPlaylistDrill={triggerPlaylistDrill}
-                handleStopAll={handleStopAll}
-                handleClearAll={handleClearAll}
-                autoAdvance={autoAdvance}
-                newRowText={newRowText}
-                setNewRowText={setNewRowText}
-                newRowLang={newRowLang}
-                setNewRowLang={setNewRowLang}
-                newRowRepeats={newRowRepeats}
-                setNewRowRepeats={setNewRowRepeats}
-                newRowDelay={newRowDelay}
-                setNewRowDelay={setNewRowDelay}
-                handleAddSingleRow={handleAddSingleRow}
-                setIsShareModalOpen={setIsShareModalOpen}
-                setIsAudioExportModalOpen={setIsAudioExportModalOpen}
-                handleApplyTemplate={handleApplyTemplate}
-
-                playingItemId={playingItemId}
-                currentRepeatIndex={currentRepeatIndex}
-                waitingState={waitingState}
-                editingItemId={editingItemId}
-                editingText={editingText}
-                setEditingText={setEditingText}
-                startEditingRow={startEditingRow}
-                saveEditedRow={saveEditedRow}
-                setEditingItemId={setEditingItemId}
-
-                draggedIndex={draggedIndex}
-                dragOverIndex={dragOverIndex}
-                handleDragStart={handleDragStart}
-                handleDragEnd={handleDragEnd}
-                handleDragOver={handleDragOver}
-                handleDropRow={handleDropRow}
-
-                speed={speed}
-                handleSpeakItem={handleSpeakItem}
-                handleClearImage={handleClearImage}
-                setSelectedItemForImageSearch={setSelectedItemForImageSearch}
-                setIsImageSearchModalOpen={setIsImageSearchModalOpen}
-                handleRowRepeatsChange={handleRowRepeatsChange}
-                handleRowDelayChange={handleRowDelayChange}
-                handleRowSpeedChange={handleRowSpeedChange}
-                handleRowLangChange={handleRowLangChange}
-                handleJoinWithNext={handleJoinWithNext}
-                handleDeleteRow={handleDeleteRow}
-                handleDuplicateSet={handleDuplicateSet}
-                handleUngroupSet={handleUngroupSet}
-              />
-
-              {/* Instruction workflow summary tips - COLLAPSED / TOGGLED */}
-              <div id="classroom-drill-card" className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs text-left">
-                <button
-                  type="button"
-                  onClick={() => setShowDrillGuide(!showDrillGuide)}
-                  className="w-full flex items-center justify-between text-slate-800 font-bold select-none cursor-pointer text-xs"
-                >
-                  <div className="flex items-center space-x-2">
-                    <HelpCircle className="w-4 h-4 text-slate-500 shrink-0" />
-                    <span>Mẹo kiểm tra và thi chính tả (Dictation Drill)</span>
-                  </div>
-                  <span className="text-[10px] text-indigo-600 underline font-extrabold shrink-0 ml-2">
-                    {showDrillGuide ? 'Ẩn trợ giúp' : 'Bấm Trợ giúp'}
-                  </span>
-                </button>
-                {showDrillGuide && (
-                  <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-3 items-start animate-fade-in">
-                    <div className="bg-indigo-50 p-2 rounded-xl text-indigo-650 shrink-0">
-                      <HelpCircle className="w-4 h-4" />
-                    </div>
-                    <div className="text-left text-xs text-slate-500 leading-relaxed space-y-1">
-                      <h4 className="font-bold text-slate-900 text-xs mb-1">Cách tạo bài nghe chính tả hoàn hảo:</h4>
-                      <ol className="list-decimal list-inside space-y-1">
-                        <li>Cài số lần lặp (<strong className="text-slate-700">Lặp</strong>) cho mỗi câu là <strong className="text-indigo-650 font-semibold">2 hoặc 3 lần</strong>.</li>
-                        <li>Bật nút tắt <strong className="text-indigo-600 font-semibold">Tự động chuyển câu</strong> ở cột phải và đặt thời gian nghỉ là <strong className="text-slate-700 font-semibold">3-4 giây</strong>.</li>
-                        <li>Bấm <strong className="text-slate-800 font-semibold">Phát toàn bài (Play)</strong>. Hệ thống sẽ đọc câu, lặp lại phù hợp, chờ ghi chép rồi tự đi tiếp mượt mà!</li>
-                      </ol>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
+            <LessonBuilderCenterColumn
+              speechListProps={{
+                speechList, rowLayoutMode, toggleRowLayoutMode, fileInputRef, handleExportData, triggerPlaylistDrill, handleStopAll, handleClearAll, autoAdvance, newRowText, setNewRowText, newRowLang, setNewRowLang, newRowRepeats, setNewRowRepeats, newRowDelay, setNewRowDelay, handleAddSingleRow, setIsShareModalOpen, setIsAudioExportModalOpen, handleApplyTemplate, playingItemId, currentRepeatIndex, waitingState, editingItemId, editingText, setEditingText, startEditingRow, saveEditedRow, setEditingItemId, draggedIndex, dragOverIndex, handleDragStart, handleDragEnd, handleDragOver, handleDropRow, speed, handleSpeakItem, handleClearImage, setSelectedItemForImageSearch, setIsImageSearchModalOpen, handleRowRepeatsChange, handleRowDelayChange, handleRowSpeedChange, handleRowLangChange, handleJoinWithNext, handleDeleteRow, handleDuplicateSet, handleUngroupSet,
+              }}
+              showDrillGuide={showDrillGuide}
+              onToggleDrillGuide={() => setShowDrillGuide(value => !value)}
+            />
           }
           rightColumn={
-            <>
-              {/* Custom Control Settings box */}
-              <SpeechSettingsPanel
-                engineMode={engineMode}
-                setEngineMode={setEngineMode}
-                speed={speed}
-                setSpeed={setSpeed}
-                onApplySpeedToAll={() => {
-                  setSpeechList(prev => prev.map(item => ({ ...item, speed: speed })));
-                }}
-                volume={volume}
-                handleVolumeChange={handleVolumeChange}
-                autoAdvance={autoAdvance}
-                setAutoAdvance={setAutoAdvance}
-                timeBetweenLines={timeBetweenLines}
-                setTimeBetweenLines={setTimeBetweenLines}
-                onApplyDelayToAll={() => {
-                  setSpeechList(prev => prev.map(item => ({ ...item, delaySec: timeBetweenLines })));
-                }}
-                playlistLoopMode={playlistLoopMode}
-                handlePlaylistLoopModeChange={handlePlaylistLoopModeChange}
-                selectedEnVoiceName={selectedEnVoiceName}
-                setSelectedEnVoiceName={setSelectedEnVoiceName}
-                selectedViVoiceName={selectedViVoiceName}
-                setSelectedViVoiceName={setSelectedViVoiceName}
-                selectedZhCnVoiceName={selectedZhCnVoiceName}
-                setSelectedZhCnVoiceName={setSelectedZhCnVoiceName}
-                selectedZhTwVoiceName={selectedZhTwVoiceName}
-                setSelectedZhTwVoiceName={setSelectedZhTwVoiceName}
-                selectedJaVoiceName={selectedJaVoiceName}
-                setSelectedJaVoiceName={setSelectedJaVoiceName}
-                selectedKoVoiceName={selectedKoVoiceName}
-                setSelectedKoVoiceName={setSelectedKoVoiceName}
-                englishVoices={englishVoices}
-                vietnameseVoices={vietnameseVoices}
-                zhCnVoices={zhCnVoices}
-                zhTwVoices={zhTwVoices}
-                japaneseVoices={japaneseVoices}
-                koreanVoices={koreanVoices}
-                userGeminiApiKey={userGeminiApiKey}
-                showApiKey={showApiKey}
-                setShowApiKey={setShowApiKey}
-                handleApiKeyChange={handleApiKeyChange}
-                clearApiKey={clearApiKey}
-                selectedPremiumVoices={selectedPremiumVoices}
-                onVoiceChange={onVoiceChange}
-              />
-
-              {/* Unified Background Theme Configurations (Optional) */}
-              <div id="universal-theme-box" className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs text-left">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-3">
-                  <h3 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4 text-indigo-600" />
-                    Ảnh nền đồng nhất chuỗi học
-                  </h3>
-                  <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase">Tùy chọn</span>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3">
-                    <div className="flex flex-col pr-2 text-xs">
-                      <span className="font-bold text-slate-700">Đồng nhất ảnh minh họa</span>
-                      <span className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
-                        Áp dụng 1 ảnh nền duy nhất cho tất cả các câu
-                      </span>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={useUniversalImage}
-                        onChange={(e) => handleUseUniversalImageChange(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                    </label>
-                  </div>
-
-                  {useUniversalImage && (
-                    <div className="space-y-2 animate-fade-in text-left">
-                      <label htmlFor="universal-img-url" className="text-[10px] font-bold text-slate-500 uppercase block">
-                        URL hình ảnh chủ đề hoặc ảnh chụp
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          id="universal-img-url"
-                          type="text"
-                          placeholder="Dán URL hình hoặc click Tìm ảnh..."
-                          className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-hidden text-slate-705 font-sans"
-                          value={universalImageUrl}
-                          onChange={(e) => handleUniversalImageUrlChange(e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsSearchingUniversalImage(true);
-                            setSelectedItemForImageSearch({
-                              id: 'universal',
-                              text: 'Background template model scenery',
-                              lang: 'auto',
-                              resolvedLang: 'en',
-                              repeats: 1,
-                              delaySec: 2.0
-                            });
-                            setIsImageSearchModalOpen(true);
-                          }}
-                          className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold border border-indigo-200 text-xs px-2.5 py-1.5 rounded-lg transition shrink-0 cursor-pointer flex items-center justify-center gap-1"
-                        >
-                          <Search className="w-3.5 h-3.5" />
-                          Tìm ảnh
-                        </button>
-                      </div>
-
-                      {universalImageUrl && (
-                        <div className="relative mt-2 rounded-xl overflow-hidden aspect-[16/6] border border-slate-200 group/uimg">
-                          <img
-                            src={universalImageUrl}
-                            alt="Universal Theme Background"
-                            className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleUniversalImageUrlChange('')}
-                            className="absolute top-1 right-1 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full opacity-90 transition shadow-xs cursor-pointer"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Instruction on Chrome High-Quality Voice Activation - COLLAPSED / TOGGLED */}
-              <div id="chrome-voice-info-card" className="bg-emerald-50/50 border border-emerald-150 rounded-2xl p-4 text-xs text-emerald-800 text-left">
-                <button
-                  type="button"
-                  onClick={() => setShowChromeTip(!showChromeTip)}
-                  className="w-full flex items-center justify-between text-emerald-900 font-bold select-none cursor-pointer"
-                >
-                  <div className="flex items-center space-x-2">
-                    <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Mẹo dùng giọng Chrome hay nhất</span>
-                  </div>
-                  <span className="text-[10px] text-emerald-650 underline font-extrabold shrink-0 ml-2">
-                    {showChromeTip ? 'Ẩn trợ giúp' : 'Bấm Trợ giúp'}
-                  </span>
-                </button>
-                {showChromeTip && (
-                  <p className="leading-relaxed mt-2.5 pt-2.5 border-t border-emerald-100/60 text-slate-700 text-[11px] animate-fade-in">
-                    Mặc định trình duyệt Chrome có sẵn gói tts online cực hay như <strong className="text-slate-900">&quot;Google tiếng Việt&quot;</strong> và <strong className="text-slate-900">&quot;Google US English&quot;</strong>. Chọn các giọng có chữ &quot;Google&quot; trong phần cấu hình hoặc chuyển sang chế độ Premium AI để tận dụng sức mạnh trí tuệ nhân tạo Gemini!
-                  </p>
-                )}
-              </div>
-            </>
+            <LessonBuilderSettingsColumn
+              speechSettings={{
+                engineMode, setEngineMode, speed, setSpeed, onApplySpeedToAll: () => setSpeechList(prev => prev.map(item => ({ ...item, speed }))), volume, handleVolumeChange, autoAdvance, setAutoAdvance, timeBetweenLines, setTimeBetweenLines, onApplyDelayToAll: () => setSpeechList(prev => prev.map(item => ({ ...item, delaySec: timeBetweenLines }))), playlistLoopMode, handlePlaylistLoopModeChange, selectedEnVoiceName, setSelectedEnVoiceName, selectedViVoiceName, setSelectedViVoiceName, selectedZhCnVoiceName, setSelectedZhCnVoiceName, selectedZhTwVoiceName, setSelectedZhTwVoiceName, selectedJaVoiceName, setSelectedJaVoiceName, selectedKoVoiceName, setSelectedKoVoiceName, englishVoices, vietnameseVoices, zhCnVoices, zhTwVoices, japaneseVoices, koreanVoices, userGeminiApiKey, showApiKey, setShowApiKey, handleApiKeyChange, clearApiKey, selectedPremiumVoices, onVoiceChange,
+              }}
+              useUniversalImage={useUniversalImage}
+              universalImageUrl={universalImageUrl}
+              showChromeTip={showChromeTip}
+              onUniversalImageChange={handleUseUniversalImageChange}
+              onSearchUniversalImage={() => { setIsSearchingUniversalImage(true); setIsImageSearchModalOpen(true); }}
+              onClearUniversalImage={() => handleUniversalImageUrlChange('')}
+              onToggleChromeTip={() => setShowChromeTip(value => !value)}
+            />
           }
           />
         )}
       </AppShell>
 
-      {/* Modern Search & Assign Image Modal */}
-      {isImageSearchModalOpen && (
-        <React.Suspense fallback={null}>
-          <ImageSearchModal
-            isOpen
-            onClose={() => {
-              setIsImageSearchModalOpen(false);
-              setSelectedItemForImageSearch(null);
-            }}
-            item={selectedItemForImageSearch}
-            onAssignImage={handleAssignImage}
-          />
-        </React.Suspense>
-      )}
+      <SharedPlaylistBanner message={bannerMessage} type={bannerType} loadedDetails={loadedDetails} onClose={closeBanner} onRetry={handleRetry} onCreateNew={handleCreateNew} />
 
-      {/* Shared Playlist Imported Banner Notification */}
-      <SharedPlaylistBanner
-        message={bannerMessage}
-        type={bannerType}
-        loadedDetails={loadedDetails}
-        onClose={closeBanner}
-        onRetry={handleRetry}
-        onCreateNew={handleCreateNew}
+      <AppModalLayer
+        imageSearch={{ open: isImageSearchModalOpen, item: selectedItemForImageSearch, onClose: () => { setIsImageSearchModalOpen(false); setSelectedItemForImageSearch(null); }, onAssign: handleAssignImage }}
+        share={{ open: isShareModalOpen, onClose: () => setIsShareModalOpen(false), speechList, speed, volume, autoAdvance, timeBetweenLines, playlistLoopMode, engineMode }}
+        theater={{ open: isTheaterMode, onClose: () => setIsTheaterMode(false), speechList, playingItemId, playingState, currentRepeatIndex, waitingState, volume, speed, onVolumeChange: handleVolumeChange, onSpeedChange: setSpeed, onPlayItem: handleSpeakItem, onStop: handleStopAll, timeBetweenLines, onTimeBetweenLinesChange: setTimeBetweenLines, autoAdvance, onAutoAdvanceChange: setAutoAdvance, engineMode, playlistLoopMode, onPlaylistLoopModeChange: handlePlaylistLoopModeChange, useUniversalImage, universalImageUrl, isManualPaused, onPause: handleGlobalPause, onPlay: handleGlobalPlay }}
+        audioExport={{ open: isAudioExportModalOpen, onClose: () => setIsAudioExportModalOpen(false), speechList, speed, volume, timeBetweenLines, engineMode, apiKey: userGeminiApiKey, voices, browserVoices: browserVoicePreferences, premiumVoices: selectedPremiumVoices, userId: user?.uid ?? null, lessonId: currentLessonId }}
       />
 
-      {/* Share Playlist Modal */}
-      {isShareModalOpen && (
-        <React.Suspense fallback={null}>
-          <ShareModal
-            isOpen
-            onClose={() => setIsShareModalOpen(false)}
-            speechList={speechList}
-            speed={speed}
-            volume={volume}
-            autoAdvance={autoAdvance}
-            timeBetweenLines={timeBetweenLines}
-            playlistLoopMode={playlistLoopMode}
-            engineMode={engineMode}
-          />
-        </React.Suspense>
-      )}
-
-      {/* Cinematic Theater/Movie Practice Board Overlay */}
-      {isTheaterMode && (
-        <React.Suspense fallback={null}>
-          <TheaterPlayer
-            isOpen
-            onClose={() => setIsTheaterMode(false)}
-            speechList={speechList}
-            playingItemId={playingItemId}
-            playingState={playingState}
-            currentRepeatIndex={currentRepeatIndex}
-            waitingState={waitingState}
-            volume={volume}
-            speed={speed}
-            onVolumeChange={handleVolumeChange}
-            onSpeedChange={(val) => {
-              setSpeed(val);
-            }}
-            onPlayItem={handleSpeakItem}
-            onStop={handleStopAll}
-            timeBetweenLines={timeBetweenLines}
-            onTimeBetweenLinesChange={setTimeBetweenLines}
-            autoAdvance={autoAdvance}
-            onAutoAdvanceChange={setAutoAdvance}
-            engineMode={engineMode}
-            playlistLoopMode={playlistLoopMode}
-            onPlaylistLoopModeChange={handlePlaylistLoopModeChange}
-            useUniversalImage={useUniversalImage}
-            universalImageUrl={universalImageUrl}
-            isManualPaused={isManualPaused}
-            onPause={handleGlobalPause}
-            onPlay={handleGlobalPlay}
-          />
-        </React.Suspense>
-      )}
-
-      {/* Independent Speech/Playlist Audio To MP3/WAV Exporter Overlay */}
-      {isAudioExportModalOpen && (
-        <React.Suspense fallback={null}>
-          <AudioExportModal
-            isOpen
-            onClose={() => setIsAudioExportModalOpen(false)}
-            speechList={speechList}
-            speed={speed}
-            volume={volume}
-            timeBetweenLines={timeBetweenLines}
-            engineMode={engineMode}
-            userGeminiApiKey={userGeminiApiKey}
-            voices={voices}
-            selectedEnVoiceName={selectedEnVoiceName}
-            selectedViVoiceName={selectedViVoiceName}
-            selectedZhCnVoiceName={selectedZhCnVoiceName}
-            selectedZhTwVoiceName={selectedZhTwVoiceName}
-            selectedJaVoiceName={selectedJaVoiceName}
-            selectedKoVoiceName={selectedKoVoiceName}
-            selectedPremiumVoiceEn={selectedPremiumVoiceEn}
-            selectedPremiumVoiceVi={selectedPremiumVoiceVi}
-            selectedPremiumVoiceZhCn={selectedPremiumVoiceZhCn}
-            selectedPremiumVoiceZhTw={selectedPremiumVoiceZhTw}
-            selectedPremiumVoiceJa={selectedPremiumVoiceJa}
-            selectedPremiumVoiceKo={selectedPremiumVoiceKo}
-            userId={user?.uid || null}
-            lessonId={currentLessonId}
-          />
-        </React.Suspense>
-      )}
-
-      {/* Sleek Toast Notifications */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-[999] max-w-sm w-full bg-slate-900 border border-slate-800 text-white rounded-2xl shadow-xl p-4 flex gap-3.5 items-start font-sans"
-          >
-            <div className="flex-1 space-y-1">
-              <h4 className="text-xs font-extrabold flex items-center gap-1.5">
-                {toast.type === 'success' && <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />}
-                {toast.type === 'error' && <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />}
-                {toast.type === 'info' && <span className="inline-block w-2.5 h-2.5 rounded-full bg-sky-500 shrink-0" />}
-                {toast.message}
-              </h4>
-              {toast.description && (
-                <p className="text-[11px] text-slate-400 font-medium leading-relaxed">
-                  {toast.description}
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setToast(null)}
-                className="text-slate-400 hover:text-white p-0.5 rounded-lg hover:bg-slate-800 transition cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-              {toast.action && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    toast.action?.onClick();
-                    setToast(null);
-                  }}
-                  className="mt-1 text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1.5 rounded-lg transition active:scale-95 cursor-pointer shadow-sm"
-                >
-                  {toast.action.label}
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <AppToast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

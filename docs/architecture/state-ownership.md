@@ -21,4 +21,4 @@ This document is an enforceable migration contract for the God Component remedia
 - UI components emit intents and never persist domain state directly.
 - Firebase, provider SDKs, Web Audio, Web Speech and MediaRecorder stay behind repositories or adapters.
 - Transitional duplicate state may not survive beyond the extraction commit that removes the previous owner.
-- Existing cross-feature exceptions are finite and tracked in `scripts/architecture-boundary-baseline.json`; Phase F must reduce that file to an empty array.
+- Cross-feature exceptions are forbidden; `scripts/architecture-boundary-baseline.json` must remain an empty array.

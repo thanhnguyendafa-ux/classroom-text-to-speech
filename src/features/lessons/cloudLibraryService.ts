@@ -1,5 +1,5 @@
 import type { LessonDraft } from '../../types';
-import type { CloudFolder, CloudLesson } from '../cloud-lessons/cloudLessonApi';
+import type { CloudFolder, CloudLesson } from '../cloud-lessons/public';
 
 type CloudLibraryApi = {
   listFolders(uid: string): Promise<CloudFolder[]>;
