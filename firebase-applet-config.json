@@ -1,10 +1,9 @@
 {
-  "projectId": "hypnic-stratum-jr6mz",
-  "appId": "1:401618261180:web:a40fc8ae73b535c8f2ecb9",
-  "apiKey": "AIzaSyA7eXaCpegvtFdwDvJ3z-_p3522syyeAlE",
-  "authDomain": "hypnic-stratum-jr6mz.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-fd44b495-a2ab-4f58-93e1-006564f355aa",
-  "storageBucket": "hypnic-stratum-jr6mz.firebasestorage.app",
-  "messagingSenderId": "401618261180",
+  "projectId": "waytts-production",
+  "appId": "1:816190960682:web:813eb7c1ade3f7d09cbf53",
+  "apiKey": "AIzaSyCth3sbGklfwROSwuHf_yJjBnncmojDyqk",
+  "authDomain": "waytts-production.firebaseapp.com",
+  "storageBucket": "waytts-production.firebasestorage.app",
+  "messagingSenderId": "816190960682",
   "measurementId": ""
 }
