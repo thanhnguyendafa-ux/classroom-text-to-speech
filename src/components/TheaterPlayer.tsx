@@ -26,7 +26,8 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { SpeechItem, LanguageCode } from '../types';
-import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, errorMessage, errorName, stopMediaStream } from '../features/media-capture/mediaCaptureAdapter';
+import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, errorMessage as getErrorMessage, errorName, stopMediaStream } from '../features/media-capture/mediaCaptureAdapter';
+import { useRecordingController } from '../application/theater/useRecordingController';
 
 interface TheaterPlayerProps {
   isOpen: boolean;
@@ -88,18 +89,14 @@ export default function TheaterPlayer({
   onPause = () => {},
   onPlay = () => {},
 }: TheaterPlayerProps) {
-  // Recording states
-  const [isRecording, setIsRecording] = React.useState<boolean>(false);
-  const [recordingTimeSec, setRecordingTimeSec] = React.useState<number>(0);
-  const [showRecordConfig, setShowRecordConfig] = React.useState<boolean>(false);
-  const [recordResolution, setRecordResolution] = React.useState<'480p' | '720p' | '1080p'>('720p');
-  const [includeMic, setIncludeMic] = React.useState<boolean>(false);
-  const [disableEchoCancellation, setDisableEchoCancellation] = React.useState<boolean>(true);
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [onlyCurrentTab, setOnlyCurrentTab] = React.useState<boolean>(true);
-  const [showRecordingHelp, setShowRecordingHelp] = React.useState<boolean>(false);
-  const [hideControls, setHideControls] = React.useState<boolean>(false);
-  const [isBottomBarCollapsed, setIsBottomBarCollapsed] = React.useState<boolean>(false);
+  const {
+    isRecording, recordingTimeSec, showRecordConfig, recordResolution, includeMic,
+    disableEchoCancellation, errorMessage, onlyCurrentTab, showRecordingHelp,
+    hideControls, isBottomBarCollapsed, setIsRecording, setRecordingTimeSec,
+    setShowRecordConfig, setRecordResolution, setIncludeMic, setDisableEchoCancellation,
+    setErrorMessage, clearError, setOnlyCurrentTab, setShowRecordingHelp,
+    setHideControls, setIsBottomBarCollapsed,
+  } = useRecordingController();
 
   // Keyboard shortcut to toggle UI controls quickly (using 'h' or 'H')
   React.useEffect(() => {
@@ -177,7 +174,7 @@ export default function TheaterPlayer({
 
     } catch (downloadErr: unknown) {
       console.error("Lỗi khi kết xuất file tải xuống:", downloadErr);
-      setErrorMessage(`Lỗi lưu video file: ${errorMessage(downloadErr)}`);
+      setErrorMessage(`Lỗi lưu video file: ${getErrorMessage(downloadErr)}`);
     }
   };
 
@@ -341,12 +338,12 @@ export default function TheaterPlayer({
     } catch (err: unknown) {
       console.error("Recording start error:", err);
       const isIframe = window.self !== window.top;
-      if (isIframe && (errorName(err) === 'SecurityError' || errorMessage(err).toLowerCase().includes('iframe') || errorMessage(err)?.toLowerCase().includes('sandboxed') || errorMessage(err)?.toLowerCase().includes('permission'))) {
+      if (isIframe && (errorName(err) === 'SecurityError' || getErrorMessage(err).toLowerCase().includes('iframe') || getErrorMessage(err)?.toLowerCase().includes('sandboxed') || getErrorMessage(err)?.toLowerCase().includes('permission'))) {
         setErrorMessage("LỖI BẢO MẬT IFRAME: Trình duyệt chặn chức năng quay màn hình từ bên trong khung xem thử của AI Studio. Vui lòng nhấn vào biểu tượng 'Mở tab mới' (Open in new tab) nằm ở góc phải phía trên trình duyệt của bạn để chạy ứng dụng độc lập bên ngoài, sau đó tính năng ghi hình sẽ hoạt động hoàn hảo!");
       } else if (errorName(err) === 'NotAllowedError') {
         setErrorMessage("Bạn đã từ chối cấp quyền chia sẻ/ghi hình màn hình của trình duyệt.");
       } else {
-        setErrorMessage(`Không thể chuẩn bị công cụ ghi: ${errorMessage(err)}`);
+        setErrorMessage(`Không thể chuẩn bị công cụ ghi: ${getErrorMessage(err)}`);
       }
     }
   };
@@ -680,7 +677,7 @@ export default function TheaterPlayer({
               <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
               <span>Gợi ý xử lý ghi hình màn hình</span>
               <button 
-                onClick={() => setErrorMessage(null)}
+                onClick={clearError}
                 className="absolute top-2.5 right-3 text-red-400 hover:text-white p-1 hover:bg-red-900/30 rounded cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
