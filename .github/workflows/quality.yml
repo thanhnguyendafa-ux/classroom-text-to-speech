@@ -21,6 +21,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      - run: npm run check:architecture
       - name: Firestore integration and rules
         run: npx firebase emulators:exec --project demo-classroom-tts --only firestore "tsx --test --test-concurrency=1 test/firestore.rules.test.ts test/firebase-admin.smoke.ts test/playlist-storage.smoke.ts test/rate-limiter.smoke.ts"
       - name: Storage rules
