@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { SpeechItem } from '../../types';
-import { duplicateSet, joinWithNext, updateSpeechItem, ungroupSet } from './speechItemCommands';
+import { duplicateSet, joinWithNext, moveSpeechItem, updateSpeechItem, ungroupSet } from './speechItemCommands';
 
 const items: SpeechItem[] = [
   { id: 'a', text: 'A', detectedLang: 'en', selectedLang: 'auto', resolvedLang: 'en', repeats: 1, delaySec: 2, speed: 1, setId: 'set-1' },
@@ -28,4 +28,10 @@ test('duplicates a set immediately after its last member', () => {
   const result = duplicateSet(items, 'set-1', { createSetId: () => 'set-copy', createRowId: (id) => `${id}-copy` });
   assert.deepEqual(result.map((item) => item.id), ['a', 'b', 'a-copy', 'b-copy', 'c']);
   assert.equal(result[2].setId, 'set-copy');
+});
+
+test('moves one row without mutating the source list', () => {
+  const moved = moveSpeechItem(items, 0, 2);
+  assert.deepEqual(moved.map((item) => item.id), ['b', 'c', 'a']);
+  assert.deepEqual(items.map((item) => item.id), ['a', 'b', 'c']);
 });
