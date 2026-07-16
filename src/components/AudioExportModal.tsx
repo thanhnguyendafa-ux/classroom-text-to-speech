@@ -22,6 +22,7 @@ import { getPremiumVoiceForLang } from '../features/premium-tts/premiumVoices';
 import { premiumTtsCacheStore } from '../features/premium-tts/premiumTtsCacheStore';
 import { resolvePremiumAudio } from '../features/premium-tts/persistent-audio/premiumAudioResolver';
 import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, errorMessage, stopMediaStream } from '../features/media-capture/mediaCaptureAdapter';
+import { concatenatePcm, createSilence, createWavBlob } from '../infrastructure/audio/audioExportAssembler';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -195,64 +196,11 @@ export default function AudioExportModal({
     }
   };
 
-  // WAV header generator helper (standard 16-bit PCM mono 24000Hz or 44100Hz)
-  const createWavFileBytes = (pcmBuffer: Int16Array, sampleRate: number): Blob => {
-    const buffer = new ArrayBuffer(44 + pcmBuffer.byteLength);
-    const view = new DataView(buffer);
-
-    // RIFF identifier
-    writeString(view, 0, 'RIFF');
-    // File length
-    view.setUint32(4, 36 + pcmBuffer.byteLength, true);
-    // RIFF type
-    writeString(view, 8, 'WAVE');
-    // Format chunk identifier
-    writeString(view, 12, 'fmt ');
-    // Format chunk length
-    view.setUint32(16, 16, true);
-    // Sample format (raw PCM)
-    view.setUint16(20, 1, true); // 1 = PCM (Integer)
-    // Channel count
-    view.setUint16(22, 1, true); // Mono
-    // Sample rate
-    view.setUint32(24, sampleRate, true);
-    // Byte rate (sample rate * block align)
-    view.setUint32(28, sampleRate * 2, true);
-    // Block align (channel count * bytes per sample)
-    view.setUint16(32, 2, true); // 2 bytes per sample (16-bit mono)
-    // Bits per sample
-    view.setUint16(34, 16, true); // 16-bit
-    // Data chunk identifier
-    writeString(view, 36, 'data');
-    // Data chunk length
-    view.setUint32(40, pcmBuffer.byteLength, true);
-
-    // Copy raw audio PCM shorts into WAV bytes body
-    const wavArray = new Int16Array(buffer, 44);
-    wavArray.set(pcmBuffer);
-
-    return new Blob([buffer], { type: 'audio/wav' });
-  };
-
-  const writeString = (view: DataView, offset: number, string: string) => {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  };
-
-  // Convert base64 string to a raw PCM Float32 or Int16 array, slicing first 44 bytes wav header
   const extractPcmFromWavDataUrl = (dataUrl: string): Int16Array => {
     const base64 = dataUrl.split(',')[1];
-    const binaryStr = window.atob(base64);
-    const len = binaryStr.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryStr.charCodeAt(i);
-    }
-    
-    // Slice off first 44 bytes to remove the WAV container headers
+    const binary = window.atob(base64);
+    const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
     const pcmBytes = bytes.slice(44);
-    // Cast to Int16Array (since Gemini TTS output is 16-bit PCM)
     return new Int16Array(pcmBytes.buffer, pcmBytes.byteOffset, pcmBytes.length / 2);
   };
 
@@ -324,15 +272,13 @@ export default function AudioExportModal({
           audioBuffers.push(rawPcm);
           // Insert silent buffers between repetitions
           if (rep < lineRepeats - 1 && lineDelay > 0) {
-            const silenceSamplesCount = Math.round(sampleRate * lineDelay);
-            audioBuffers.push(new Int16Array(silenceSamplesCount)); // Array filled with zeroes
+            audioBuffers.push(createSilence(sampleRate, lineDelay)); // Array filled with zeroes
           }
         }
         
         // Insert silence after line before auto advancing to next
         if (i < itemsToExport.length - 1 && lineDelay > 0) {
-          const advanceSilenceSamplesCount = Math.round(sampleRate * lineDelay);
-          audioBuffers.push(new Int16Array(advanceSilenceSamplesCount));
+          audioBuffers.push(createSilence(sampleRate, lineDelay));
         }
       }
       
@@ -340,19 +286,11 @@ export default function AudioExportModal({
       setProgressPercent(90);
       setProgressText("Đang liên kết các mảnh âm thanh & chèn khoảng lặng giữa các câu...");
       
-      let totalLength = 0;
-      audioBuffers.forEach(buf => totalLength += buf.length);
-      
-      const compiledPcm = new Int16Array(totalLength);
-      let offset = 0;
-      audioBuffers.forEach(buf => {
-        compiledPcm.set(buf, offset);
-        offset += buf.length;
-      });
+      const compiledPcm = concatenatePcm(audioBuffers);
       
       // Save compiled WAV container
       addLog("Gói định dạng WAV container chất lượng cao...");
-      const finalWavBlob = createWavFileBytes(compiledPcm, sampleRate);
+      const finalWavBlob = createWavBlob(compiledPcm, sampleRate);
       const url = URL.createObjectURL(finalWavBlob);
       
       setAudioBlobUrl(url);
