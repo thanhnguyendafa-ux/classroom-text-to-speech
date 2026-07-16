@@ -86,6 +86,7 @@ export default function AudioExportModal({
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [logs, setLogs] = useState<string[]>([]);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  const audioBlobUrlRef = useRef<string | null>(null);
   
   // Live capture/volume states
   const [soundLevel, setSoundLevel] = useState<number>(0);
@@ -108,10 +109,18 @@ export default function AudioExportModal({
   const availableSets = useMemo(() => Array.from(new Set(speechList.flatMap(item => item.setId ? [item.setId] : []))), [speechList]);
   const itemsToExport = useMemo(() => selectedRange === 'all' ? speechList : speechList.filter(item => item.setId === selectedRange), [speechList, selectedRange]);
 
+  const replaceAudioBlobUrl = (nextUrl: string | null) => {
+    const previousUrl = audioBlobUrlRef.current;
+    if (previousUrl && previousUrl !== nextUrl) URL.revokeObjectURL(previousUrl);
+    audioBlobUrlRef.current = nextUrl;
+    setAudioBlobUrl(nextUrl);
+  };
+
   // Clean-up on close/unmount
   useEffect(() => {
     return () => {
       cancelAllProcesses();
+      replaceAudioBlobUrl(null);
     };
   }, []);
 
@@ -176,7 +185,7 @@ export default function AudioExportModal({
     isStoppedManuallyRef.current = false;
     setStatus('processing');
     setLogs([]);
-    setAudioBlobUrl(null);
+    replaceAudioBlobUrl(null);
     setProgressPercent(0);
     
     addLog(`Báº¯t Ä‘áº§u xá»­ lĂ½ sá»‘ hĂ³a Ă¢m thanh Premium vá»›i ${itemsToExport.length} cĂ¢u.`);
@@ -218,7 +227,7 @@ export default function AudioExportModal({
       setProgressText("?ang ??ng g?i WAV...");
       const finalWavBlob = createWavBlob(compiledPcm, sampleRate);
       const url = URL.createObjectURL(finalWavBlob);
-      setAudioBlobUrl(url);
+      replaceAudioBlobUrl(url);
       setProgressPercent(100);
       setStatus('success');
       addLog("Xu?t file ?m thanh th?nh c?ng.");
@@ -240,7 +249,7 @@ export default function AudioExportModal({
     isExpectingSpeechRef.current = false;
     setStatus('recording');
     setLogs([]);
-    setAudioBlobUrl(null);
+    replaceAudioBlobUrl(null);
     setProgressPercent(0);
     setSoundLevel(0);
     setSilentTimerCount(0);
@@ -564,7 +573,7 @@ export default function AudioExportModal({
             console.error("Failed to decode audio data", decErr);
             addLog("KhĂ´ng thá»ƒ giáº£i mĂ£ PCM tá»« bá»™ nhá»› táº¡m. LÆ°u trá»¯ trá»±c tiáº¿p dÆ°á»›i dáº¡ng WebM lĂ m phÆ°Æ¡ng Ă¡n dá»± phĂ²ng.");
             const webmUrl = URL.createObjectURL(webmBlob);
-            setAudioBlobUrl(webmUrl);
+            replaceAudioBlobUrl(webmUrl);
             setStatus('success');
             return;
           } finally {
@@ -625,7 +634,7 @@ export default function AudioExportModal({
           const finalMp3Blob = encodeMonoMp3(pcmInt16, decodedBuffer.sampleRate, 128);
           const mp3Url = URL.createObjectURL(finalMp3Blob);
           
-          setAudioBlobUrl(mp3Url);
+          replaceAudioBlobUrl(mp3Url);
           capturePhaseRef.current = 'success';
           setStatus('success');
           addLog("ChĂºc má»«ng! ÄĂ£ xuáº¥t file MP3 tháº­t (audio/mpeg) thĂ nh cĂ´ng.");
