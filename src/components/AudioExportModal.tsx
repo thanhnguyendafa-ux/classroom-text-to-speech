@@ -22,6 +22,7 @@ import { useOwnedObjectUrl } from '../application/audio-export/useOwnedObjectUrl
 import { BrowserCaptureResourceOwner } from '../application/audio-export/browserCaptureResourceOwner';
 import { executePremiumAudioExport } from '../application/audio-export/executePremiumAudioExport';
 import { prepareBrowserCapture } from '../application/audio-export/prepareBrowserCapture';
+import { runBrowserCaptureSession } from '../application/audio-export/runBrowserCaptureSession';
 import { createAudioSilenceMonitor } from '../domain/audio-export/audioSilenceMonitor';
 import { startBrowserCaptureLevelMonitor } from '../infrastructure/audio/browserCaptureLevelMonitor';
 
@@ -323,43 +324,31 @@ const handleRecordedBlob = async (webmBlob: Blob) => {
           void decodeContext.close().catch(() => {});
         }
       };
-      const recorderSession = createMediaRecorderSession(recorderStream, blob => { void handleRecordedBlob(blob); });
-      capture.recorderSession = recorderSession;
-      const recorder = recorderSession.recorder;
-      addLog(`K?ch ho?t m?y ghi ?m (codec: ${recorder.mimeType || "m?c ??nh"})`);
-      
-      // Start recording
-      recorderSession.start();
-      capture.phase = 'recording';
-      
-      // 4. Sequential browser SpeechSynthesis loop
-      await runBrowserSpeechSequence({
+      await runBrowserCaptureSession({
+        owner: capture,
+        recorderStream,
         items: itemsToExport,
         speed,
         volume,
         voices,
         preferredVoiceNames: { en: selectedEnVoiceName, vi: selectedViVoiceName, 'zh-cn': selectedZhCnVoiceName, 'zh-tw': selectedZhTwVoiceName, ja: selectedJaVoiceName, ko: selectedKoVoiceName },
+        defaultPauseSeconds: timeBetweenLines,
+        createRecorderSession: (stream, onBlob) => createMediaRecorderSession(stream, onBlob),
+        runSpeechSequence: runBrowserSpeechSequence,
+        onRecordedBlob: handleRecordedBlob,
+        onRecorderReady: mimeType => addLog(`Kích hoạt máy ghi âm (codec: ${mimeType}).`),
+        onProgress: (index, item) => {
+          setProgressPercent(Math.round((index / itemsToExport.length) * 100));
+          setProgressText(`Đang phát dòng ${index + 1}/${itemsToExport.length}: "${item.text.substring(0, 40)}"`);
+        },
+        onRepeat: (index, repeat, total) => addLog(`Đọc lại câu ${index + 1} (lần ${repeat}/${total})`),
+        onError: (index, error) => addLog(`TTS cảnh báo trên dòng ${index + 1}: ${error}`),
         speechSynthesis: window.speechSynthesis,
         createUtterance: text => new SpeechSynthesisUtterance(text),
         wait: (callback, delayMs) => window.setTimeout(callback, delayMs),
-        isCancelled: () => capture.stoppedManually,
-        defaultPauseSeconds: timeBetweenLines,
-        onProgress: (index, item) => { setProgressPercent(Math.round((index / itemsToExport.length) * 100)); setProgressText(`?ang ph?t d?ng ${index + 1}/${itemsToExport.length}: "${item.text.substring(0, 40)}"`); },
-        onRepeat: (index, repeat, total) => addLog(`??c l?i c?u ${index + 1} (l?n ${repeat}/${total})`),
-        onError: (index, error) => addLog(`H? th?ng TTS c?nh b?o tr?n d?ng ${index + 1}: ${error}`),
-        onExpectationChange: expecting => { capture.expectingSpeech = expecting; },
-        onUtterance: utterance => { capture.recordingUtterance = utterance; },
       });
-      if (!capture.stoppedManually) {
-        addLog("?? ch?y h?t danh s?ch c?u. ?ang d?ng ghi ?m...");
-        capture.phase = 'encoding';
-        capture.expectingSpeech = false;
-        capture.stopLevelMonitor?.(); capture.stopLevelMonitor = null;
-        recorderSession.stop();
-        stopMediaStream(capture.displayStream); capture.displayStream = null;
-        stopMediaStream(capture.microphoneStream); capture.microphoneStream = null;
-      }
-      
+      if (!capture.stoppedManually) addLog("Đã chạy hết danh sách câu. Đang dừng ghi âm...");
+
     } catch (err: unknown) {
       console.error(err);
       setExportPhase('error');
