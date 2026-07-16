@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Folder,
   FolderPlus,
@@ -44,12 +44,11 @@ import { LibraryToolbar } from '../features/lessons/components/LibraryToolbar';
 import { MigrationNotice } from '../features/lessons/components/MigrationNotice';
 import { LibraryGallery } from '../features/lessons/components/LibraryGallery';
 import { LibraryList } from '../features/lessons/components/LibraryList';
-import { createBrowserLocalLibraryRepository, type SavedFolder, type SavedLesson } from '../features/lessons/localLibraryRepository';
+import type { SavedFolder, SavedLesson } from '../features/lessons/localLibraryRepository';
 import { mergeLibraryBackup, parseLibraryBackup, serializeLibraryBackup } from '../features/lessons/libraryBackup';
 import { migrateLocalLibraryToCloud } from '../features/lessons/libraryCloudMigration';
-import type { LibraryDisplayFolder, LibraryDisplayLesson } from '../features/lessons/libraryDisplayModel';
+import { useLessonLibraryDataController } from '../application/lesson-library/useLessonLibraryDataController';
 import { createCloudLibraryService } from '../features/lessons/cloudLibraryService';
-import { createDefaultLocalLibrarySeed } from '../features/lessons/localLibrarySeed';
 export type { SavedFolder, SavedLesson } from '../features/lessons/localLibraryRepository';
 
 const cloudLibraryService = createCloudLibraryService({ listFolders, listLessons, createFolder, updateFolder, deleteFolder, createLesson, updateLesson, deleteLesson });
@@ -71,57 +70,6 @@ export default function LessonLibrary({
   cloudRefreshVersion
 }: LessonLibraryProps) {
   const { user, signInWithGoogle } = useAuth();
-  const localLibraryRepository = createBrowserLocalLibraryRepository(user ? user.uid : 'global');
-  const [activeTab, setActiveTab] = useState<'local' | 'cloud'>('cloud');
-  const [cloudFolders, setCloudFolders] = useState<CloudFolder[]>([]);
-  const [cloudLessons, setCloudLessons] = useState<CloudLesson[]>([]);
-  const [isCloudLoading, setIsCloudLoading] = useState<boolean>(false);
-  const [showMigrationBanner, setShowMigrationBanner] = useState<boolean>(true);
-
-  const [folders, setFolders] = useState<SavedFolder[]>([]);
-  const [uncategorizedLessons, setUncategorizedLessons] = useState<SavedLesson[]>([]);
-
-  // Gallery/List and Drilldown States
-  const [viewMode, setViewMode] = useState<'gallery' | 'list'>(() => {
-    return localLibraryRepository.readViewMode();
-  });
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-
-  // Persist viewMode
-  useEffect(() => {
-    localLibraryRepository.writeViewMode(viewMode);
-  }, [viewMode]);
-
-  // Reset drilldown when activeTab switches
-  useEffect(() => {
-    setSelectedFolderId(null);
-  }, [activeTab]);
-
-  const fetchCloudData = async () => {
-    if (!user) return;
-    setIsCloudLoading(true);
-    try {
-      const [foldersData, lessonsData] = await Promise.all([
-        listFolders(user.uid),
-        listLessons(user.uid)
-      ]);
-      setCloudFolders(foldersData || []);
-      setCloudLessons(lessonsData || []);
-    } catch (err) {
-      console.error('Error loading cloud library:', err);
-      flashMessage('Không thể tải thư viện đám mây. Vui lòng kiểm tra lại!', 'error');
-    } finally {
-      setIsCloudLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user && activeTab === 'cloud') {
-      fetchCloudData();
-    }
-  }, [user, activeTab, cloudRefreshVersion]);
-
   // UI toggles & input states
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
@@ -136,6 +84,7 @@ export default function LessonLibrary({
   const [showSaveLessonForm, setShowSaveLessonForm] = useState(false);
   const [newLessonTitle, setNewLessonTitle] = useState('');
   const [targetFolderId, setTargetFolderId] = useState<string>('unassigned'); // 'unassigned' or folder ID
+  const [showMigrationBanner, setShowMigrationBanner] = useState(true);
 
   // Custom Deletion Confirmation Modal target state
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
@@ -148,23 +97,6 @@ export default function LessonLibrary({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  // Load library from local storage on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const { snapshot, migrated } = localLibraryRepository.loadWithLegacyMigration();
-      if (localLibraryRepository.isSeeded() || migrated) {
-        setFolders(snapshot.folders);
-        setUncategorizedLessons(snapshot.uncategorized);
-      } else {
-        const initial = createDefaultLocalLibrarySeed(Date.now());
-        setFolders(initial.folders);
-        setUncategorizedLessons(initial.uncategorized);
-        localLibraryRepository.save(initial);
-        setExpandedFolders({ 'folder-seed-v3': true });
-      }
-    }
-  }, [user]);
-
   const flashMessage = (text: string, type: 'success' | 'error' | 'info') => {
     setStatusMessage({ text, type });
     setTimeout(() => {
@@ -172,13 +104,19 @@ export default function LessonLibrary({
     }, 3000);
   };
 
+  const { source: activeTab, setSource: setActiveTab, folders: filteredFolders, uncategorized: filteredUncategorized, allFolders: displayFolders, allUncategorized: displayUncategorized, selectedFolderId, selectFolder: setSelectedFolderId, query: searchQuery, setQuery: setSearchQuery, viewMode, setViewMode, loadStatus, mutateLocal, refreshCloud: fetchCloudData, startCloudMutation, failCloudMutation, clearLocalAfterMigration } = useLessonLibraryDataController({ userId: user?.uid ?? null, refreshVersion: cloudRefreshVersion, onError: (message) => flashMessage(message, 'error') });
+  const isCloudLoading = activeTab === 'cloud' && loadStatus === 'loading';
+  const folders: SavedFolder[] = displayFolders;
+  const uncategorizedLessons: SavedLesson[] = displayUncategorized;
+  const cloudLessons: CloudLesson[] = [...displayFolders.flatMap(folder => folder.lessons), ...displayUncategorized];
+
   // --- Cloud Operations ---
   const handleCreateCloudFolder = async () => {
     if (!user) return;
     const trimmed = newFolderName.trim();
     if (!trimmed) return;
 
-    setIsCloudLoading(true);
+    startCloudMutation();
     try {
       const newId = `folder-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       await cloudLibraryService.createFolder(user.uid, newId, trimmed);
@@ -189,8 +127,7 @@ export default function LessonLibrary({
     } catch (err) {
       console.error('Error creating cloud folder:', err);
       flashMessage('Không thể tạo thư mục trên đám mây.', 'error');
-    } finally {
-      setIsCloudLoading(false);
+      failCloudMutation();
     }
   };
 
@@ -199,7 +136,7 @@ export default function LessonLibrary({
     const trimmed = editingFolderName.trim();
     if (!trimmed) return;
 
-    setIsCloudLoading(true);
+    startCloudMutation();
     try {
       await cloudLibraryService.renameFolder(user.uid, editingFolderId, trimmed);
       setEditingFolderId(null);
@@ -208,14 +145,13 @@ export default function LessonLibrary({
     } catch (err) {
       console.error('Error renaming cloud folder:', err);
       flashMessage('Không thể đổi tên thư mục trên đám mây.', 'error');
-    } finally {
-      setIsCloudLoading(false);
+      failCloudMutation();
     }
   };
 
   const handleDeleteCloudFolder = async (folderId: string, keepLessons: boolean) => {
     if (!user) return;
-    setIsCloudLoading(true);
+    startCloudMutation();
     try {
       await cloudLibraryService.deleteFolder(user.uid, folderId, keepLessons, cloudLessons);
 
@@ -224,8 +160,7 @@ export default function LessonLibrary({
     } catch (err) {
       console.error('Error deleting cloud folder:', err);
       flashMessage('Có lỗi xảy ra khi xóa thư mục đám mây.', 'error');
-    } finally {
-      setIsCloudLoading(false);
+      failCloudMutation();
     }
   };
 
@@ -242,7 +177,7 @@ export default function LessonLibrary({
       return;
     }
 
-    setIsCloudLoading(true);
+    startCloudMutation();
     try {
       const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       await cloudLibraryService.createLesson(user.uid, newId, {
@@ -261,14 +196,13 @@ export default function LessonLibrary({
     } catch (err) {
       console.error('Error saving cloud lesson:', err);
       flashMessage('Không thể lưu bài giảng lên đám mây.', 'error');
-    } finally {
-      setIsCloudLoading(false);
+      failCloudMutation();
     }
   };
 
   const handleDeleteCloudLesson = async (lessonId: string) => {
     if (!user) return;
-    setIsCloudLoading(true);
+    startCloudMutation();
     try {
       await cloudLibraryService.deleteLesson(user.uid, lessonId);
       flashMessage('Đã xóa bài học đám mây', 'info');
@@ -276,8 +210,7 @@ export default function LessonLibrary({
     } catch (err) {
       console.error('Error deleting cloud lesson:', err);
       flashMessage('Không thể xóa bài học đám mây.', 'error');
-    } finally {
-      setIsCloudLoading(false);
+      failCloudMutation();
     }
   };
 
@@ -286,7 +219,7 @@ export default function LessonLibrary({
     const trimmed = editingLessonTitle.trim();
     if (!trimmed) return;
 
-    setIsCloudLoading(true);
+    startCloudMutation();
     try {
       await cloudLibraryService.renameLesson(user.uid, editingLessonId, trimmed);
       setEditingLessonId(null);
@@ -295,8 +228,7 @@ export default function LessonLibrary({
     } catch (err) {
       console.error('Error renaming cloud lesson:', err);
       flashMessage('Không thể đổi tên bài học đám mây.', 'error');
-    } finally {
-      setIsCloudLoading(false);
+      failCloudMutation();
     }
   };
 
@@ -311,28 +243,24 @@ export default function LessonLibrary({
 
   const handleMigrateLocalToCloud = async () => {
     if (!user) return;
-    setIsCloudLoading(true);
+    startCloudMutation();
     try {
       await migrateLocalLibraryToCloud(user.uid, { folders, uncategorized: uncategorizedLessons }, { createFolder, createLesson });
       await fetchCloudData();
-      localLibraryRepository.clear();
-      localLibraryRepository.markCloudMigrated();
-      setFolders([]);
-      setUncategorizedLessons([]);
+      clearLocalAfterMigration();
       setActiveTab('cloud');
       setShowMigrationBanner(false);
       flashMessage('ÄĂ£ chuyá»ƒn toĂ n bá»™ thÆ° má»¥c & bĂ i giáº£ng lĂªn Ä‘Ă¡m mĂ¢y. ThÆ° viá»‡n Ä‘Ă¡m mĂ¢y hiá»‡n lĂ  dá»¯ liá»‡u chĂ­nh.', 'success');
     } catch (err) {
       console.error('Migration error:', err);
       flashMessage('ÄĂ£ xáº£y ra lá»—i khi Ä‘á»“ng bá»™ dá»¯ liá»‡u lĂªn Ä‘Ă¡m mĂ¢y.', 'error');
-    } finally {
-      setIsCloudLoading(false);
+      failCloudMutation();
     }
   };
 
   // Persist through the scoped local-library repository.
   const saveToStorage = (updatedFolders: SavedFolder[], updatedUncategorized: SavedLesson[]) => {
-    localLibraryRepository.save({ folders: updatedFolders, uncategorized: updatedUncategorized });
+    mutateLocal(() => ({ folders: updatedFolders, uncategorized: updatedUncategorized }));
   };
 
   // Folders management
@@ -348,7 +276,6 @@ export default function LessonLibrary({
     };
 
     const updated = [...folders, newFolder];
-    setFolders(updated);
     saveToStorage(updated, uncategorizedLessons);
     setNewFolderName('');
     setShowNewFolderInput(false);
@@ -365,9 +292,6 @@ export default function LessonLibrary({
     }
 
     const updatedFolders = folders.filter(f => f.id !== folderId);
-
-    setFolders(updatedFolders);
-    setUncategorizedLessons(updatedUncategorized);
     saveToStorage(updatedFolders, updatedUncategorized);
     flashMessage(keepLessons ? `Đã xóa thư mục và giữ lại các bài học.` : `Đã xóa thư mục cùng toàn bộ bài học bên trong.`, 'info');
   };
@@ -382,7 +306,6 @@ export default function LessonLibrary({
     if (!trimmed || !editingFolderId) return;
 
     const updated = folders.map(f => f.id === editingFolderId ? { ...f, name: trimmed } : f);
-    setFolders(updated);
     saveToStorage(updated, uncategorizedLessons);
     setEditingFolderId(null);
     flashMessage('Đã đổi tên thư mục thành công', 'success');
@@ -429,7 +352,6 @@ export default function LessonLibrary({
 
     if (targetFolderId === 'unassigned') {
       const updatedUncategorized = [newLesson, ...uncategorizedLessons];
-      setUncategorizedLessons(updatedUncategorized);
       saveToStorage(folders, updatedUncategorized);
     } else {
       const updatedFolders = folders.map(f => {
@@ -438,7 +360,6 @@ export default function LessonLibrary({
         }
         return f;
       });
-      setFolders(updatedFolders);
       saveToStorage(updatedFolders, uncategorizedLessons);
       // Ensure folder is expanded to show newly added item
       setExpandedFolders(prev => ({ ...prev, [targetFolderId]: true }));
@@ -469,11 +390,9 @@ export default function LessonLibrary({
         }
         return f;
       });
-      setFolders(updated);
       saveToStorage(updated, uncategorizedLessons);
     } else {
       const updatedUncategorized = uncategorizedLessons.filter(l => l.id !== lessonId);
-      setUncategorizedLessons(updatedUncategorized);
       saveToStorage(folders, updatedUncategorized);
     }
     flashMessage('Đã xóa bài học khỏi thư viện', 'info');
@@ -498,13 +417,11 @@ export default function LessonLibrary({
         }
         return f;
       });
-      setFolders(updated);
       saveToStorage(updated, uncategorizedLessons);
     } else {
       const updatedUncategorized = uncategorizedLessons.map(l =>
         l.id === editingLessonId ? { ...l, title: trimmed } : l
       );
-      setUncategorizedLessons(updatedUncategorized);
       saveToStorage(folders, updatedUncategorized);
     }
 
@@ -550,9 +467,6 @@ export default function LessonLibrary({
           { folders, uncategorized: uncategorizedLessons },
           imported,
         );
-
-        setFolders(merged.folders);
-        setUncategorizedLessons(merged.uncategorized);
         saveToStorage(merged.folders, merged.uncategorized);
         flashMessage(`Đã nạp file thành công! Đồng bộ thêm ${imported.folders.length} thư mục & ${imported.uncategorized.length} bài học.`, 'success');
       } catch (err) {
@@ -564,50 +478,6 @@ export default function LessonLibrary({
     // Reset file input value
     e.target.value = '';
   };
-
-  // Calculate display and filtered items
-  const displayFolders: LibraryDisplayFolder[] = activeTab === 'cloud'
-    ? cloudFolders.map(cf => ({
-        id: cf.id,
-        name: cf.name,
-        lessons: cloudLessons.filter(cl => cl.folderId === cf.id).map(cl => ({
-          id: cl.id,
-          title: cl.title,
-          rawText: cl.rawText,
-          speechList: cl.speechList,
-          settings: cl.settings,
-          createdAt: cl.createdAt
-        }))
-      }))
-    : folders;
-
-  const displayUncategorized = activeTab === 'cloud'
-    ? cloudLessons.filter(cl => cl.folderId === null).map(cl => ({
-        id: cl.id,
-        title: cl.title,
-        rawText: cl.rawText,
-        speechList: cl.speechList,
-        settings: cl.settings,
-        createdAt: cl.createdAt
-      }))
-    : uncategorizedLessons;
-
-  const filteredFolders = displayFolders.map(f => {
-    const matchedLessons = f.lessons.filter((l) =>
-      l.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    return {
-      ...f,
-      lessons: matchedLessons
-    };
-  }).filter(f => {
-    const folderNameMatch = f.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return folderNameMatch || f.lessons.length > 0;
-  });
-
-  const filteredUncategorized = displayUncategorized.filter((l) =>
-    l.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   return (
     <div id="lesson-library-container" className="text-left font-sans">
@@ -708,7 +578,7 @@ export default function LessonLibrary({
               >
                 <option value="unassigned">-- Chưa phân loại (Bài lẻ) --</option>
                 {activeTab === 'cloud' ? (
-                  cloudFolders.map(f => (
+                  displayFolders.map(f => (
                     <option key={f.id} value={f.id}>{f.name}</option>
                   ))
                 ) : (

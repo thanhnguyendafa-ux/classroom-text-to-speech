@@ -18,6 +18,7 @@ export interface LibraryDisplayLesson {
 export interface LibraryDisplayFolder {
   id: string;
   name: string;
+  createdAt: number;
   lessons: LibraryDisplayLesson[];
 }
 
