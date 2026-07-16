@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { buildPromptGuide, type PromptType } from './features/prompt-guide/promptGuide';
 import {
   Volume2,
@@ -71,6 +71,7 @@ import { parseSpeechListImport } from './features/lesson-editor/speechListImport
 import { duplicateSet, joinWithNext, ungroupSet, updateSpeechItem } from './features/lesson-editor/speechItemCommands';
 import { useLessonEditorController } from './application/lesson-editor/useLessonEditorController';
 import { useLessonPersistenceController } from './application/lesson-persistence/useLessonPersistenceController';
+import { useBrowserVoiceCatalog } from './application/playback/useBrowserVoiceCatalog';
 
 const ImageSearchModal = React.lazy(() => import('./components/ImageSearchModal'));
 const TheaterPlayer = React.lazy(() => import('./components/TheaterPlayer'));
@@ -122,7 +123,6 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [isAudioExportModalOpen, setIsAudioExportModalOpen] = useState<boolean>(false);
   const [selectedItemForImageSearch, setSelectedItemForImageSearch] = useState<SpeechItem | null>(null);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   // Custom preferred voices
   const [selectedEnVoiceName, setSelectedEnVoiceName] = useState<string>('');
@@ -204,6 +204,11 @@ export default function App() {
   if (!audioPlaybackAdapterRef.current) audioPlaybackAdapterRef.current = createBrowserAudioPlaybackAdapter();
   const browserSpeechAdapterRef = useRef<ReturnType<typeof createWindowBrowserSpeechAdapter> | null>(null);
   if (!browserSpeechAdapterRef.current) browserSpeechAdapterRef.current = createWindowBrowserSpeechAdapter();
+  const browserVoicePreferences = useMemo(() => ({ en: selectedEnVoiceName, vi: selectedViVoiceName, 'zh-cn': selectedZhCnVoiceName, 'zh-tw': selectedZhTwVoiceName, ja: selectedJaVoiceName, ko: selectedKoVoiceName }), [selectedEnVoiceName, selectedViVoiceName, selectedZhCnVoiceName, selectedZhTwVoiceName, selectedJaVoiceName, selectedKoVoiceName]);
+  const applyBrowserVoiceDefaults = useCallback((defaults: typeof browserVoicePreferences) => {
+    setSelectedEnVoiceName(defaults.en); setSelectedViVoiceName(defaults.vi); setSelectedZhCnVoiceName(defaults['zh-cn']); setSelectedZhTwVoiceName(defaults['zh-tw']); setSelectedJaVoiceName(defaults.ja); setSelectedKoVoiceName(defaults.ko);
+  }, []);
+  const voices = useBrowserVoiceCatalog({ adapter: browserSpeechAdapterRef.current, preferences: browserVoicePreferences, onDefaultsChanged: applyBrowserVoiceDefaults });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     playingItemId,
@@ -391,69 +396,6 @@ export default function App() {
   useEffect(() => {
     speechListRef.current = speechList;
   }, [speechList]);
-
-  // Load browser speech synthesis voices
-  useEffect(() => {
-    const fetchVoices = () => {
-      const browserSpeechAdapter = browserSpeechAdapterRef.current;
-      if (browserSpeechAdapter) {
-        const availableVoices = browserSpeechAdapter.getVoices();
-        setVoices(availableVoices);
-
-        // Auto selection strategy for Vietnamese / English defaults
-        if (availableVoices.length > 0) {
-          // Check for Chrome or native US voice
-          const enVoice = availableVoices.find(v => v.lang.includes('en-US')) ||
-                          availableVoices.find(v => v.lang.startsWith('en'));
-          if (enVoice && !selectedEnVoiceName) {
-            setSelectedEnVoiceName(enVoice.name);
-          }
-
-          // Check for native Vietnamese voice
-          const viVoice = availableVoices.find(v => v.lang.includes('vi-VN')) ||
-                          availableVoices.find(v => v.lang.startsWith('vi'));
-          if (viVoice && !selectedViVoiceName) {
-            setSelectedViVoiceName(viVoice.name);
-          }
-
-          // Check for Chinese Simplified voice
-          const zhCnVoice = availableVoices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith('zh-cn') || v.lang.toLowerCase().replace('_', '-').startsWith('zh-chs')) ||
-                            availableVoices.find(v => v.lang.toLowerCase().startsWith('zh'));
-          if (zhCnVoice && !selectedZhCnVoiceName) {
-            setSelectedZhCnVoiceName(zhCnVoice.name);
-          }
-
-          // Check for Chinese Traditional voice
-          const zhTwVoice = availableVoices.find(v => v.lang.toLowerCase().replace('_', '-').startsWith('zh-tw') || v.lang.toLowerCase().replace('_', '-').startsWith('zh-hk') || v.lang.toLowerCase().replace('_', '-').startsWith('zh-cht'));
-          if (zhTwVoice && !selectedZhTwVoiceName) {
-            setSelectedZhTwVoiceName(zhTwVoice.name);
-          }
-
-          // Check for Japanese voice
-          const jaVoice = availableVoices.find(v => v.lang.toLowerCase().startsWith('ja'));
-          if (jaVoice && !selectedJaVoiceName) {
-            setSelectedJaVoiceName(jaVoice.name);
-          }
-
-          // Check for Korean voice
-          const koVoice = availableVoices.find(v => v.lang.toLowerCase().startsWith('ko'));
-          if (koVoice && !selectedKoVoiceName) {
-            setSelectedKoVoiceName(koVoice.name);
-          }
-        }
-      }
-    };
-
-    fetchVoices();
-    return browserSpeechAdapterRef.current?.subscribeToVoiceChanges(fetchVoices);
-  }, [
-    selectedEnVoiceName,
-    selectedViVoiceName,
-    selectedZhCnVoiceName,
-    selectedZhTwVoiceName,
-    selectedJaVoiceName,
-    selectedKoVoiceName
-  ]);
 
   // Clean speech when active item finishes or component unmounts
   useEffect(() => () => browserSpeechAdapterRef.current?.stop(), []);
