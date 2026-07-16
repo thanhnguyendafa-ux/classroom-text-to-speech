@@ -10,7 +10,7 @@ import { createWavBlob } from '../infrastructure/audio/audioExportAssembler';
 import { PremiumAudioExportCancelledError, runPremiumAudioExport } from '../infrastructure/audio/premiumAudioExportStrategy';
 import { runBrowserSpeechSequence } from '../infrastructure/audio/browserSpeechSequence';
 import { encodeCapturedAudio } from '../infrastructure/audio/browserAudioEncodingStrategy';
-import { selectMediaRecorderOptions } from '../infrastructure/media/mediaRecorderAdapter';
+import { createMediaRecorderSession, type MediaRecorderSession } from '../infrastructure/media/mediaRecorderAdapter';
 import { AudioExportResult } from '../features/audio-export/AudioExportResult';
 import { AudioExportProgress } from '../features/audio-export/AudioExportProgress';
 import { AudioExportSettings } from '../features/audio-export/AudioExportSettings';
@@ -98,8 +98,7 @@ export default function AudioExportModal({
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const recorderSessionRef = useRef<MediaRecorderSession | null>(null);
   const recordingUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const isStoppedManuallyRef = useRef<boolean>(false);
   const animationFrameRef = useRef<number | null>(null);
@@ -139,11 +138,8 @@ export default function AudioExportModal({
     isExpectingSpeechRef.current = false;
     
     // Stop recording refs
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch (e) {}
-    }
+    try { recorderSessionRef.current?.stop(); } catch {}
+    recorderSessionRef.current = null;
     
     // Stop streams
     stopMediaStream(mediaStreamRef.current);
@@ -189,11 +185,11 @@ export default function AudioExportModal({
     replaceAudioBlobUrl(null);
     setProgressPercent(0);
     
-    addLog(`BÄ‚Â¡Ă‚ÂºĂ‚Â¯t Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚ÂºĂ‚Â§u xÄ‚Â¡Ă‚Â»Ă‚Â­ lĂ„â€Ă‚Â½ sÄ‚Â¡Ă‚Â»Ă¢â‚¬Ëœ hĂ„â€Ă‚Â³a Ă„â€Ă‚Â¢m thanh Premium vÄ‚Â¡Ă‚Â»Ă¢â‚¬Âºi ${itemsToExport.length} cĂ„â€Ă‚Â¢u.`);
+    addLog(`BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¯t Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â§u xĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â­ lÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â½ sĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‹Å“ hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â³a Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh Premium vĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Âºi ${itemsToExport.length} cÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢u.`);
     
     if (!userGeminiApiKey || !userGeminiApiKey.trim()) {
       setExportPhase('error');
-      addLog("LÄ‚Â¡Ă‚Â»Ă¢â‚¬â€œI: ThiÄ‚Â¡Ă‚ÂºĂ‚Â¿u Gemini API Key. HĂ„â€Ă‚Â£y kĂ„â€Ă‚Â­ch hoÄ‚Â¡Ă‚ÂºĂ‚Â¡t Ä‚Â¡Ă‚Â»Ă…Â¸ bÄ‚Â¡Ă‚ÂºĂ‚Â£ng cÄ‚Â¡Ă‚ÂºĂ‚Â¥u hĂ„â€Ă‚Â¬nh bĂ„â€Ă‚Âªn trĂ„â€Ă‚Â¡i trÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă¢â‚¬Âºc.");
+      addLog("LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Å“I: ThiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿u Gemini API Key. HÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£y kÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­ch hoĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡t Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€¦Ă‚Â¸ bĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â£ng cĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥u hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh bÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Âªn trÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡i trĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Âºc.");
       return;
     }
     
@@ -233,9 +229,9 @@ export default function AudioExportModal({
       setExportPhase('success');
       addLog("Xu?t file ?m thanh th?nh c?ng.");
     } catch (err: unknown) {
-      console.error("LÄ‚Â¡Ă‚Â»Ă¢â‚¬â€i xuÄ‚Â¡Ă‚ÂºĂ‚Â¥t Premium AI:", err);
+      console.error("LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Âi xuĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥t Premium AI:", err);
       setExportPhase('error');
-      addLog(`LÄ‚Â¡Ă‚Â»Ă¢â‚¬â€i: ${errorMessage(err) || "KhĂ„â€Ă‚Â´ng thÄ‚Â¡Ă‚Â»Ă†â€™ tÄ‚Â¡Ă‚ÂºĂ‚Â£i giÄ‚Â¡Ă‚Â»Ă‚Âng Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă‚Âc AI."}`);
+      addLog(`LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Âi: ${errorMessage(err) || "KhÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢ tĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â£i giĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âng Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âc AI."}`);
     }
   };
 
@@ -255,13 +251,12 @@ export default function AudioExportModal({
     setSoundLevel(0);
     setSilentTimerCount(0);
     setMicActiveWarning(false);
-    chunksRef.current = [];
     
-    addLog("ChuÄ‚Â¡Ă‚ÂºĂ‚Â©n bÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¹ cÄ‚â€ Ă‚Â¡ chÄ‚Â¡Ă‚ÂºĂ‚Â¿ ghi Ă„â€Ă‚Â¢m SpeechSynthesis cÄ‚Â¡Ă‚Â»Ă‚Â§a trĂ„â€Ă‚Â¬nh duyÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡t...");
+    addLog("ChuĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â©n bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¹ cĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â¡ chĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿ ghi Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m SpeechSynthesis cĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â§a trÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh duyĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡t...");
     if (audioSource === 'system') {
-      addLog("HÄ‚â€ Ă‚Â¯Ä‚Â¡Ă‚Â»Ă‚ÂNG DÄ‚Â¡Ă‚ÂºĂ‚ÂªN BÄ‚Â¡Ă‚ÂºĂ‚Â®T BUÄ‚Â¡Ă‚Â»Ă‹Å“C: BÄ‚Â¡Ă‚ÂºĂ‚Â¡n hĂ„â€Ă‚Â£y chÄ‚Â¡Ă‚Â»Ă‚Ân tab 'ToĂ„â€Ă‚Â n bÄ‚Â¡Ă‚Â»Ă¢â€Â¢ mĂ„â€Ă‚Â n hĂ„â€Ă‚Â¬nh' (Entire Screen), tĂ„â€Ă‚Â­ch vĂ„â€Ă‚Â o Ă„â€Ă‚Â´ 'Chia sÄ‚Â¡Ă‚ÂºĂ‚Â» Ă„â€Ă‚Â¢m thanh hÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡ thÄ‚Â¡Ă‚Â»Ă¢â‚¬Ëœng' (Share system audio) Ä‚Â¡Ă‚Â»Ă…Â¸ gĂ„â€Ă‚Â³c trĂ„â€Ă‚Â¡i dÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă¢â‚¬Âºi, rÄ‚Â¡Ă‚Â»Ă¢â‚¬Å“i chÄ‚Â¡Ă‚Â»Ă‚Ân MĂ„â€Ă‚Â n hĂ„â€Ă‚Â¬nh cÄ‚Â¡Ă‚Â»Ă‚Â§a bÄ‚Â¡Ă‚ÂºĂ‚Â¡n.");
+      addLog("HĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â¯Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚ÂNG DĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚ÂªN BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â®T BUĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€¹Ă…â€œC: BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡n hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£y chĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Ân tab 'ToÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh' (Entire Screen), tÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­ch vÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â o Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ 'Chia sĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â» Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡ thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‹Å“ng' (Share system audio) Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€¦Ă‚Â¸ gÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â³c trÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡i dĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Âºi, rĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă…â€œi chĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Ân MÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh cĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â§a bĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡n.");
     } else {
-      addLog("HÄ‚â€ Ă‚Â¯Ä‚Â¡Ă‚Â»Ă‚ÂNG DÄ‚Â¡Ă‚ÂºĂ‚ÂªN: MĂ„â€Ă‚Â¡y ghi Ă„â€Ă‚Â¢m sÄ‚Â¡Ă‚ÂºĂ‚Â½ thu trÄ‚Â¡Ă‚Â»Ă‚Â±c tiÄ‚Â¡Ă‚ÂºĂ‚Â¿p tÄ‚Â¡Ă‚Â»Ă‚Â« Microphone qua loa ngoĂ„â€Ă‚Â i. HĂ„â€Ă‚Â£y bÄ‚Â¡Ă‚ÂºĂ‚Â­t mÄ‚Â¡Ă‚Â»Ă‚Â©c loa vÄ‚Â¡Ă‚Â»Ă‚Â«a Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă‚Â§ nghe.");
+      addLog("HĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â¯Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚ÂNG DĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚ÂªN: MÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡y ghi Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m sĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â½ thu trĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â±c tiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿p tĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â« Microphone qua loa ngoÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â i. HÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£y bĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­t mĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â©c loa vĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â«a Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â§ nghe.");
     }
 
     try {
@@ -283,10 +278,10 @@ export default function AudioExportModal({
             micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
           }
           micStreamRef.current = micStream;
-          addLog("Ä‚â€Ă‚ÂĂ„â€Ă‚Â£ khÄ‚Â¡Ă‚Â»Ă…Â¸i tÄ‚Â¡Ă‚ÂºĂ‚Â¡o Microphone thĂ„â€Ă‚Â nh cĂ„â€Ă‚Â´ng!");
+          addLog("Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ khĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€¦Ă‚Â¸i tĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡o Microphone thÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â nh cÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng!");
         } catch (micErr: unknown) {
           console.error("Microphone access is denied:", micErr);
-          throw new Error("KhĂ„â€Ă‚Â´ng thÄ‚Â¡Ă‚Â»Ă†â€™ truy cÄ‚Â¡Ă‚ÂºĂ‚Â­p Microphone. Vui lĂ„â€Ă‚Â²ng cÄ‚Â¡Ă‚ÂºĂ‚Â¥p quyÄ‚Â¡Ă‚Â»Ă‚Ân Microphone Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă†â€™ sÄ‚Â¡Ă‚Â»Ă‚Â­ dÄ‚Â¡Ă‚Â»Ă‚Â¥ng chÄ‚Â¡Ă‚ÂºĂ‚Â¿ Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă¢â€Â¢ dÄ‚Â¡Ă‚Â»Ă‚Â± phĂ„â€Ă‚Â²ng!");
+          throw new Error("KhÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢ truy cĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­p Microphone. Vui lÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â²ng cĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥p quyĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Ân Microphone Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢ sĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â­ dĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â¥ng chĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿ Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ dĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â± phÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â²ng!");
         }
       } else {
         // 1. Capture display stream with optimized entire screen / system audio cues
@@ -303,7 +298,7 @@ export default function AudioExportModal({
           mediaStreamRef.current = stream;
         } catch (displayErr: unknown) {
           console.error("Display media capturing failed:", displayErr);
-          throw new Error("BÄ‚Â¡Ă‚ÂºĂ‚Â¡n Ä‚â€Ă¢â‚¬ËœĂ„â€Ă‚Â£ hÄ‚Â¡Ă‚Â»Ă‚Â§y chia sÄ‚Â¡Ă‚ÂºĂ‚Â» mĂ„â€Ă‚Â n hĂ„â€Ă‚Â¬nh / Ă„â€Ă‚Â¢m thanh hÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡ thÄ‚Â¡Ă‚Â»Ă¢â‚¬Ëœng. Vui lĂ„â€Ă‚Â²ng bÄ‚Â¡Ă‚ÂºĂ‚Â¥m thÄ‚Â¡Ă‚Â»Ă‚Â­ lÄ‚Â¡Ă‚ÂºĂ‚Â¡i.");
+          throw new Error("BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡n Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â§y chia sĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â» mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh / Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡ thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‹Å“ng. Vui lÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â²ng bĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥m thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â­ lĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡i.");
         }
       }
       
@@ -316,10 +311,10 @@ export default function AudioExportModal({
       if (!hasDisplayAudio && !hasMicAudio) {
         stopMediaStream(stream);
         stopMediaStream(micStream);
-        throw new Error("KhĂ„â€Ă‚Â´ng bÄ‚Â¡Ă‚ÂºĂ‚Â¯t Ä‚â€Ă¢â‚¬ËœÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă‚Â£c nguÄ‚Â¡Ă‚Â»Ă¢â‚¬Å“n Ă„â€Ă‚Â¢m thanh nĂ„â€Ă‚Â o hÄ‚Â¡Ă‚Â»Ă‚Â£p lÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡. Vui lĂ„â€Ă‚Â²ng thÄ‚Â¡Ă‚Â»Ă‚Â­ lÄ‚Â¡Ă‚ÂºĂ‚Â¡i.");
+        throw new Error("KhÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng bĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¯t Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â£c nguĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă…â€œn Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh nÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â o hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â£p lĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡. Vui lÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â²ng thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â­ lĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡i.");
       }
       
-      addLog("KhÄ‚Â¡Ă‚Â»Ă…Â¸i tÄ‚Â¡Ă‚ÂºĂ‚Â¡o bÄ‚Â¡Ă‚Â»Ă¢â€Â¢ thu Ă„â€Ă‚Â¢m...");
+      addLog("KhĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€¦Ă‚Â¸i tĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡o bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ thu Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m...");
       
       const audioCtx = createAudioContext();
       audioContextRef.current = audioCtx;
@@ -331,11 +326,11 @@ export default function AudioExportModal({
       const dest = audioCtx.createMediaStreamDestination();
 
       // ==========================================
-      // STAGE 2: MANDATORY PREFLIGHT CHECK (KIÄ‚Â¡Ă‚Â»Ă¢â‚¬ÂM TRA TĂ„â€Ă‚ÂN HIÄ‚Â¡Ă‚Â»Ă¢â‚¬Â U CÄ‚Â¡Ă‚Â»Ă‚Â¨NG)
+      // STAGE 2: MANDATORY PREFLIGHT CHECK (KIĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚ÂM TRA TÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂN HIĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â U CĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â¨NG)
       // ==========================================
       if (hasDisplayAudio) {
-        addLog("Ä‚â€Ă‚Âang chÄ‚Â¡Ă‚ÂºĂ‚Â¡y Preflight check: kiÄ‚Â¡Ă‚Â»Ă†â€™m tra tĂ„â€Ă‚Â­n hiÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡u SpeechSynthesis...");
-        setProgressText("Preflight check: Ä‚â€Ă‚Âang kiÄ‚Â¡Ă‚Â»Ă†â€™m tra tĂ„â€Ă‚Â­n hiÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡u Ă„â€Ă‚Â¢m thanh...");
+        addLog("Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Âang chĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡y Preflight check: kiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢m tra tÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­n hiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡u SpeechSynthesis...");
+        setProgressText("Preflight check: Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Âang kiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢m tra tÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­n hiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡u Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh...");
         
         // Setup temporary preflight connections
         const preflightSource = audioCtx.createMediaStreamSource(stream);
@@ -390,10 +385,10 @@ export default function AudioExportModal({
         if (!preflightResult) {
           stream.getTracks().forEach(t => t.stop());
           if (micStream) micStream.getTracks().forEach(t => t.stop());
-          throw new Error(`PREFLIGHT_FAIL: Ă„â€Ă¢â‚¬Âm thanh hoĂ„â€Ă‚Â n toĂ„â€Ă‚Â n cĂ„â€Ă‚Â¢m (Ä‚â€Ă‚ÂÄ‚Â¡Ă‚Â»Ă¢â€Â¢ lÄ‚Â¡Ă‚Â»Ă¢â‚¬Âºn cÄ‚Â¡Ă‚Â»Ă‚Â±c Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚ÂºĂ‚Â¡i: ${peakLevel.toFixed(1)}). BÄ‚Â¡Ă‚ÂºĂ‚Â¡n PHÄ‚Â¡Ă‚ÂºĂ‚Â¢I chÄ‚Â¡Ă‚Â»Ă‚Ân mÄ‚Â¡Ă‚Â»Ă‚Â¥c 'ToĂ„â€Ă‚Â n bÄ‚Â¡Ă‚Â»Ă¢â€Â¢ mĂ„â€Ă‚Â n hĂ„â€Ă‚Â¬nh' vĂ„â€Ă‚Â  bÄ‚Â¡Ă‚ÂºĂ‚Â­t 'Chia sÄ‚Â¡Ă‚ÂºĂ‚Â» Ă„â€Ă‚Â¢m thanh hÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡ thÄ‚Â¡Ă‚Â»Ă¢â‚¬Ëœng' Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă†â€™ thu Ä‚â€Ă¢â‚¬ËœÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă‚Â£c giÄ‚Â¡Ă‚Â»Ă‚Âng nĂ„â€Ă‚Â³i.`);
+          throw new Error(`PREFLIGHT_FAIL: Ä‚â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚Âm thanh hoÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n toÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n cÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m (Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ lĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Âºn cĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â±c Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡i: ${peakLevel.toFixed(1)}). BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡n PHĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¢I chĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Ân mĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â¥c 'ToÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh' vÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â  bĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­t 'Chia sĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â» Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡ thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‹Å“ng' Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢ thu Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â£c giĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âng nÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â³i.`);
         }
         
-        addLog(`Preflight OK! NhÄ‚Â¡Ă‚ÂºĂ‚Â­n Ä‚â€Ă¢â‚¬ËœÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă‚Â£c tĂ„â€Ă‚Â­n hiÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡u Ă„â€Ă‚Â¢m thanh hÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡ thÄ‚Â¡Ă‚Â»Ă¢â‚¬Ëœng (CÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă‚Âng Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă¢â€Â¢ cÄ‚Â¡Ă‚Â»Ă‚Â±c Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚ÂºĂ‚Â¡i: ${peakLevel.toFixed(1)}).`);
+        addLog(`Preflight OK! NhĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­n Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â£c tÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­n hiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡u Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡ thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‹Å“ng (CĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âng Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ cĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â±c Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡i: ${peakLevel.toFixed(1)}).`);
       }
       
       // Setup permanent live routing
@@ -450,7 +445,7 @@ export default function AudioExportModal({
           if (avg < 1.0) {
             activeSilenceDuration += delta;
             if (activeSilenceDuration >= 3.0) {
-              addLog("CÄ‚Â¡Ă‚ÂºĂ‚Â¢NH BĂ„â€Ă‚ÂO: TĂ„â€Ă‚Â­n hiÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡u Ă„â€Ă‚Â¢m thanh biÄ‚Â¡Ă‚ÂºĂ‚Â¿n mÄ‚Â¡Ă‚ÂºĂ‚Â¥t khi Ä‚â€Ă¢â‚¬Ëœang Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă‚Âc bĂ„â€Ă‚Â i!");
+              addLog("CĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¢NH BÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂO: TÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­n hiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡u Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh biĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿n mĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥t khi Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“ang Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âc bÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â i!");
               abortReasonRef.current = 'silent-during-speech';
               capturePhaseRef.current = 'error';
               
@@ -458,12 +453,7 @@ export default function AudioExportModal({
                 cancelAnimationFrame(animationFrameRef.current);
                 animationFrameRef.current = null;
               }
-              
-              if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                try {
-                  mediaRecorderRef.current.stop();
-                } catch (e) {}
-              }
+              try { recorderSessionRef.current?.stop(); } catch {}
               
               if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
@@ -510,29 +500,17 @@ export default function AudioExportModal({
         }
       }
       
-      const options = selectMediaRecorderOptions(MediaRecorder.isTypeSupported.bind(MediaRecorder));
-      
-      addLog(`KĂ„â€Ă‚Â­ch hoÄ‚Â¡Ă‚ÂºĂ‚Â¡t mĂ„â€Ă‚Â¡y ghi Ă„â€Ă‚Â¢m phÄ‚Â¡Ă‚Â»Ă‚Â¥ trÄ‚Â¡Ă‚Â»Ă‚Â£ (codec: ${options.mimeType || "mÄ‚Â¡Ă‚ÂºĂ‚Â·c Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¹nh"})`);
-      const recorder = new MediaRecorder(recorderStream, options);
-      mediaRecorderRef.current = recorder;
-      
-      recorder.ondataavailable = (ev) => {
-        if (ev.data && ev.data.size > 0) {
-          chunksRef.current.push(ev.data);
-        }
-      };
-      
-      recorder.onstop = async () => {
+      const handleRecordedBlob = async (webmBlob: Blob) => {
         if (isStoppedManuallyRef.current) {
-          addLog("DÄ‚Â¡Ă‚Â»Ă‚Â«ng ghi Ă„â€Ă‚Â¢m do ngÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă‚Âi dĂ„â€Ă‚Â¹ng hÄ‚Â¡Ă‚Â»Ă‚Â§y bÄ‚Â¡Ă‚Â»Ă‚Â.");
+          addLog("DĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â«ng ghi Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m do ngĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âi dÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¹ng hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â§y bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â.");
           setExportPhase('idle');
           return;
         }
 
         if (abortReasonRef.current === 'silent-during-speech') {
           setExportPhase('error');
-          setProgressText("KhĂ„â€Ă‚Â´ng thu Ä‚â€Ă¢â‚¬ËœÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă‚Â£c tiÄ‚Â¡Ă‚ÂºĂ‚Â¿ng");
-          addLog("LÄ‚Â¡Ă‚Â»Ă¢â‚¬â€œI: TrĂ„â€Ă‚Â¬nh duyÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡t bÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¹ im lÄ‚Â¡Ă‚ÂºĂ‚Â·ng hÄ‚â€ Ă‚Â¡n 3 giĂ„â€Ă‚Â¢y liĂ„â€Ă‚Âªn tiÄ‚Â¡Ă‚ÂºĂ‚Â¿p trong quĂ„â€Ă‚Â¡ trĂ„â€Ă‚Â¬nh Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă‚Âc. BÄ‚Â¡Ă‚ÂºĂ‚Â£n ghi bÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¹ hÄ‚Â¡Ă‚Â»Ă‚Â§y.");
+          setProgressText("KhÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng thu Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â£c tiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿ng");
+          addLog("LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Å“I: TrÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh duyĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡t bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¹ im lĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â·ng hĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â¡n 3 giÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢y liÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Âªn tiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿p trong quÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡ trÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âc. BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â£n ghi bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¹ hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â§y.");
           
           if (mediaStreamRef.current) {
             mediaStreamRef.current.getTracks().forEach(t => t.stop());
@@ -545,18 +523,17 @@ export default function AudioExportModal({
           return;
         }
 
-        addLog("Ä‚â€Ă‚ÂÄ‚Â¡Ă‚Â»Ă‚Âc hoĂ„â€Ă‚Â n tÄ‚Â¡Ă‚ÂºĂ‚Â¥t. TiÄ‚Â¡Ă‚ÂºĂ‚Â¿n hĂ„â€Ă‚Â nh nĂ„â€Ă‚Â©n tÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡p tin mpeg-MP3 thÄ‚Â¡Ă‚ÂºĂ‚Â­t...");
-        setProgressText("Ä‚â€Ă‚Âang giÄ‚Â¡Ă‚ÂºĂ‚Â£i nĂ„â€Ă‚Â©n & nĂ„â€Ă‚Â©n sang Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¹nh dÄ‚Â¡Ă‚ÂºĂ‚Â¡ng MP3 thÄ‚Â¡Ă‚ÂºĂ‚Â­t...");
+        addLog("Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âc hoÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n tĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥t. TiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿n hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â nh nÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â©n tĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡p tin mpeg-MP3 thĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­t...");
+        setProgressText("Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Âang giĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â£i nÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â©n & nÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â©n sang Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¹nh dĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡ng MP3 thĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­t...");
         setExportPhase('processing');
         
-        if (chunksRef.current.length === 0) {
+        if (webmBlob.size === 0) {
           setExportPhase('error');
-          addLog("LÄ‚Â¡Ă‚Â»Ă¢â‚¬â€œI: BÄ‚Â¡Ă‚ÂºĂ‚Â£n ghi rÄ‚Â¡Ă‚Â»Ă¢â‚¬â€ng.");
+          addLog("LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Å“I: BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â£n ghi rĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Âng.");
           return;
         }
         
         try {
-          const webmBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
           const arrayBuffer = await webmBlob.arrayBuffer();
           
           // Decode raw audio webm/opus into float32 samples
@@ -566,7 +543,7 @@ export default function AudioExportModal({
             decodedBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
           } catch (decErr) {
             console.error("Failed to decode audio data", decErr);
-            addLog("KhĂ„â€Ă‚Â´ng thÄ‚Â¡Ă‚Â»Ă†â€™ giÄ‚Â¡Ă‚ÂºĂ‚Â£i mĂ„â€Ă‚Â£ PCM tÄ‚Â¡Ă‚Â»Ă‚Â« bÄ‚Â¡Ă‚Â»Ă¢â€Â¢ nhÄ‚Â¡Ă‚Â»Ă¢â‚¬Âº tÄ‚Â¡Ă‚ÂºĂ‚Â¡m. LÄ‚â€ Ă‚Â°u trÄ‚Â¡Ă‚Â»Ă‚Â¯ trÄ‚Â¡Ă‚Â»Ă‚Â±c tiÄ‚Â¡Ă‚ÂºĂ‚Â¿p dÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă¢â‚¬Âºi dÄ‚Â¡Ă‚ÂºĂ‚Â¡ng WebM lĂ„â€Ă‚Â m phÄ‚â€ Ă‚Â°Ä‚â€ Ă‚Â¡ng Ă„â€Ă‚Â¡n dÄ‚Â¡Ă‚Â»Ă‚Â± phĂ„â€Ă‚Â²ng.");
+            addLog("KhÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢ giĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â£i mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ PCM tĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â« bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ nhĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Âº tĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡m. LĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°u trĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â¯ trĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â±c tiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿p dĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Âºi dĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡ng WebM lÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â m phĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă¢â‚¬Â Ä‚â€Ă‚Â¡ng Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡n dĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â± phÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â²ng.");
             const webmUrl = URL.createObjectURL(webmBlob);
             replaceAudioBlobUrl(webmUrl);
             setExportPhase('success');
@@ -575,7 +552,7 @@ export default function AudioExportModal({
             decodeCtx.close().catch(() => {});
           }
           
-          addLog(`BÄ‚Â¡Ă‚ÂºĂ‚Â¯t Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚ÂºĂ‚Â§u chuyÄ‚Â¡Ă‚Â»Ă†â€™n Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¢i mĂ„â€Ă‚Â£ hĂ„â€Ă‚Â³a sang MP3 128kbps (TÄ‚Â¡Ă‚ÂºĂ‚Â§n sÄ‚Â¡Ă‚Â»Ă¢â‚¬Ëœ: ${decodedBuffer.sampleRate}Hz)...`);
+          addLog(`BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¯t Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â§u chuyĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢n Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¢i mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â³a sang MP3 128kbps (TĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â§n sĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‹Å“: ${decodedBuffer.sampleRate}Hz)...`);
           
           const encoded = encodeCapturedAudio(decodedBuffer, encodeMonoMp3);
           const { peak, rms, clippingRatio, duration, isLikelyClipped } = encoded.metrics;
@@ -587,18 +564,22 @@ export default function AudioExportModal({
           replaceAudioBlobUrl(mp3Url);
           capturePhaseRef.current = 'success';
           setExportPhase('success');
-          addLog("ChĂ„â€Ă‚Âºc mÄ‚Â¡Ă‚Â»Ă‚Â«ng! Ä‚â€Ă‚ÂĂ„â€Ă‚Â£ xuÄ‚Â¡Ă‚ÂºĂ‚Â¥t file MP3 thÄ‚Â¡Ă‚ÂºĂ‚Â­t (audio/mpeg) thĂ„â€Ă‚Â nh cĂ„â€Ă‚Â´ng.");
+          addLog("ChÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Âºc mĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â«ng! Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ xuĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥t file MP3 thĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­t (audio/mpeg) thÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â nh cÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng.");
           
         } catch (mp3Err: unknown) {
           console.error("MP3 encoder failed:", mp3Err);
-          addLog(`LÄ‚Â¡Ă‚Â»Ă¢â‚¬â€i mĂ„â€Ă‚Â£ hĂ„â€Ă‚Â³a MP3: ${errorMessage(mp3Err)}`);
+          addLog(`LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Âi mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â³a MP3: ${errorMessage(mp3Err)}`);
           capturePhaseRef.current = 'error';
           setExportPhase('error');
         }
       };
+      const recorderSession = createMediaRecorderSession(recorderStream, blob => { void handleRecordedBlob(blob); });
+      recorderSessionRef.current = recorderSession;
+      const recorder = recorderSession.recorder;
+      addLog(`K?ch ho?t m?y ghi ?m (codec: ${recorder.mimeType || "m?c ??nh"})`);
       
       // Start recording
-      recorder.start();
+      recorderSession.start();
       capturePhaseRef.current = 'recording';
       
       // 4. Sequential browser SpeechSynthesis loop
@@ -624,7 +605,7 @@ export default function AudioExportModal({
         capturePhaseRef.current = 'encoding';
         isExpectingSpeechRef.current = false;
         if (animationFrameRef.current) { cancelAnimationFrame(animationFrameRef.current); animationFrameRef.current = null; }
-        recorder.stop();
+        recorderSession.stop();
         stopMediaStream(mediaStreamRef.current); mediaStreamRef.current = null;
         stopMediaStream(micStreamRef.current); micStreamRef.current = null;
       }
@@ -632,7 +613,7 @@ export default function AudioExportModal({
     } catch (err: unknown) {
       console.error(err);
       setExportPhase('error');
-      addLog(`LÄ‚Â¡Ă‚Â»Ă¢â‚¬â€i chuÄ‚Â¡Ă‚ÂºĂ‚Â©n bÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¹ ghi Ă„â€Ă‚Â¢m: ${errorMessage(err)}`);
+      addLog(`LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Âi chuĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â©n bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¹ ghi Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m: ${errorMessage(err)}`);
     }
   };
 
@@ -673,8 +654,8 @@ export default function AudioExportModal({
               <Radio className="w-5 h-5 animate-pulse" />
             </div>
             <div>
-              <h3 className="font-extrabold text-slate-900 text-base">BÄ‚Â¡Ă‚Â»Ă¢â€Â¢ XuÄ‚Â¡Ă‚ÂºĂ‚Â¥t Ă„â€Ă¢â‚¬Âm Thanh Ä‚â€Ă‚ÂÄ‚Â¡Ă‚Â»Ă¢â€Â¢c LÄ‚Â¡Ă‚ÂºĂ‚Â­p</h3>
-              <p className="text-[11px] text-slate-500 font-medium">XuÄ‚Â¡Ă‚ÂºĂ‚Â¥t danh sĂ„â€Ă‚Â¡ch bĂ„â€Ă‚Â i tÄ‚Â¡Ă‚ÂºĂ‚Â­p thĂ„â€Ă‚Â nh cĂ„â€Ă‚Â¡c file Ă„â€Ă‚Â¢m thanh MP3/WAV ngoÄ‚Â¡Ă‚ÂºĂ‚Â¡i tuyÄ‚Â¡Ă‚ÂºĂ‚Â¿n</p>
+              <h3 className="font-extrabold text-slate-900 text-base">BĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ XuĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥t Ä‚â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚Âm Thanh Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢c LĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­p</h3>
+              <p className="text-[11px] text-slate-500 font-medium">XuĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥t danh sÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡ch bÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â i tĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­p thÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â nh cÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡c file Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh MP3/WAV ngoĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡i tuyĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿n</p>
             </div>
           </div>
           <button 
