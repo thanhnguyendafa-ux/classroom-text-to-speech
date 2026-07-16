@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveRateLimitIdentity } from './requestIdentity';
+import { requireAuthenticatedUser, resolveRateLimitIdentity } from './requestIdentity';
 
 test('uses IP identity for anonymous requests', async () => {
   const identity = await resolveRateLimitIdentity(
@@ -29,4 +29,29 @@ test('rejects invalid authorization headers', async () => {
     ),
     { status: 401, code: 'INVALID_AUTH_TOKEN' },
   );
+});
+
+test('required authentication rejects a missing bearer token', async () => {
+  await assert.rejects(
+    requireAuthenticatedUser(
+      { headers: {}, socket: { remoteAddress: '10.0.0.2' } },
+      async () => ({ uid: 'unused' }),
+    ),
+    { status: 401, code: 'AUTH_REQUIRED' },
+  );
+});
+
+test('required authentication returns the verified user identity', async () => {
+  const identity = await requireAuthenticatedUser(
+    { headers: { authorization: 'Bearer valid-token' } },
+    async (token) => {
+      assert.equal(token, 'valid-token');
+      return { uid: 'teacher-1' };
+    },
+  );
+
+  assert.deepEqual(identity, {
+    uid: 'teacher-1',
+    rateLimitKey: 'user:teacher-1',
+  });
 });

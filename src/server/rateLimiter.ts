@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { adminDb } from './firebaseAdmin';
+import { adminDb } from './firebaseAdmin.js';
 
 export interface RateLimitEntry {
   points: number;
@@ -121,5 +121,11 @@ export const imageSearchLimiter = createRateLimiter({
 export const sharePlaylistLimiter = createRateLimiter({
   keyPrefix: 'api_share_playlist',
   maxRequests: 15,
+  windowMs: 60 * 1000,
+});
+
+export const sharePlaylistReadLimiter = createRateLimiter({
+  keyPrefix: 'api_share_playlist_read',
+  maxRequests: 60,
   windowMs: 60 * 1000,
 });

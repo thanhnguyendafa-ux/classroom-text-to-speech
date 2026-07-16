@@ -1,5 +1,5 @@
-import { logger } from './structuredLogger';
-import { errorMonitor } from './errorMonitor';
+import { logger } from './structuredLogger.js';
+import { errorMonitor } from './errorMonitor.js';
 
 export class ApiError extends Error {
   constructor(

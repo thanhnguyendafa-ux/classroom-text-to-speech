@@ -1,6 +1,6 @@
-import { SharePlaylistPayload } from "../types";
-import { normalizeSharePlaylistPayload } from "../domain/lessonModel";
-import { ApiError } from './apiError';
+import { SharePlaylistPayload } from "../types.js";
+import { normalizeSharePlaylistPayload } from "../domain/lessonModel.js";
+import { ApiError } from './apiError.js';
 
 export type ValidatedPlaylistPayload = SharePlaylistPayload;
 

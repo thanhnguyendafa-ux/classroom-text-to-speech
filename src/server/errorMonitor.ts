@@ -1,4 +1,4 @@
-import { sanitizeLogContext } from './structuredLogger';
+import { sanitizeLogContext } from './structuredLogger.js';
 
 interface ErrorMonitorDependencies {
   endpoint: string;

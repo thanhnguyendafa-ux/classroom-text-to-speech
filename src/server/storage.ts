@@ -1,6 +1,6 @@
-import { SharePlaylistPayload } from "../types";
-import { adminDb } from './firebaseAdmin';
-import { logger } from './structuredLogger';
+import { SharePlaylistPayload } from "../types.js";
+import { adminDb } from './firebaseAdmin.js';
+import { logger } from './structuredLogger.js';
 
 // Error handling types and helpers as required by firebase-integration skill
 export enum OperationType {

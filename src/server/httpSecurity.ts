@@ -5,6 +5,21 @@ export function resolveAllowedOrigin(requestOrigin: unknown, configuredOrigin = 
   return allowed.includes(requestOrigin) ? requestOrigin : null;
 }
 
+export function buildContentSecurityPolicy(): string {
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' blob: https:",
+    "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com",
+    "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com",
+  ].join('; ');
+}
+
 interface SecurityHeaderRequest {
   headers?: { origin?: string | string[] };
 }
@@ -18,6 +33,7 @@ export function applySecurityHeaders(req: SecurityHeaderRequest, res: SecurityHe
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  res.setHeader('Content-Security-Policy-Report-Only', buildContentSecurityPolicy());
   const origin = resolveAllowedOrigin(req?.headers?.origin);
   if (origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);

@@ -3,7 +3,7 @@ import { useAuth } from './useAuth';
 import { Volume2, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
-  const { signInWithGoogle, isAuthLoading, error } = useAuth();
+  const { signInWithGoogle, signInWithGoogleRedirect, isAuthLoading, error, canUseRedirectFallback } = useAuth();
 
   return (
     <div id="login-screen" className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
@@ -86,6 +86,16 @@ export const LoginScreen: React.FC = () => {
           <p className="text-[11px] text-slate-500 text-center font-medium">
             Đăng nhập hoặc đăng ký bằng tài khoản Google.
           </p>
+          {canUseRedirectFallback && (
+            <button
+              type="button"
+              onClick={signInWithGoogleRedirect}
+              disabled={isAuthLoading}
+              className="w-full py-2 text-xs font-bold text-indigo-700 hover:text-indigo-900 disabled:opacity-50"
+            >
+              Đăng nhập bằng chuyển hướng
+            </button>
+          )}
         </div>
 
         {/* Support instructions / Footer notice */}

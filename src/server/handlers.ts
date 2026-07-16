@@ -1,9 +1,9 @@
 import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
-import { PlaylistStorageManager, PlaylistPayload } from "./storage";
-import { validatePlaylistPayload } from "./validation";
-import { ApiError } from './apiError';
-import { normalizeUnsplashResults, type UnsplashResult } from './unsplashResult';
+import { PlaylistStorageManager, PlaylistPayload } from "./storage.js";
+import { validatePlaylistPayload } from "./validation.js";
+import { ApiError } from './apiError.js';
+import { normalizeUnsplashResults, type UnsplashResult } from './unsplashResult.js';
 
 // Helper function to attach 44-byte standard WAV container headers to 16-bit PCM 24kHz stream
 function encodeWAV(pcmBuffer: Buffer, sampleRate = 24000): Buffer {

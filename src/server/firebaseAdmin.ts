@@ -3,7 +3,7 @@ import path from 'node:path';
 import { applicationDefault, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { resolveFirebaseAdminConfig, type FirebaseClientConfig } from './firebaseAdminConfig';
+import { resolveFirebaseAdminConfig, type FirebaseClientConfig } from './firebaseAdminConfig.js';
 
 function readClientConfig(): FirebaseClientConfig {
   const configPath = path.join(process.cwd(), 'firebase-applet-config.json');

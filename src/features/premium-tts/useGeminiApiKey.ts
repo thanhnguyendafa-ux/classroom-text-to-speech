@@ -1,24 +1,19 @@
 import { useState } from 'react';
+import {
+  clearBrowserGeminiApiKey,
+  loadBrowserGeminiApiKey,
+  saveBrowserGeminiApiKey,
+} from '../../lib/security/geminiApiKeyStorage';
 
 export function useGeminiApiKey() {
   const [apiKey, setApiKey] = useState<string>(() => {
-    try {
-      const sessionKey = sessionStorage.getItem('userGeminiApiKey') || '';
-      const legacyKey = localStorage.getItem('userGeminiApiKey') || '';
-      localStorage.removeItem('userGeminiApiKey');
-      if (!sessionKey && legacyKey) sessionStorage.setItem('userGeminiApiKey', legacyKey);
-      return sessionKey || legacyKey;
-    } catch {
-      return '';
-    }
+    try { return loadBrowserGeminiApiKey(); } catch { return ''; }
   });
   const [showApiKey, setShowApiKey] = useState(false);
 
   const saveApiKey = (val: string) => {
-    const trimmed = (val || '').trim();
-    setApiKey(trimmed);
     try {
-      sessionStorage.setItem('userGeminiApiKey', trimmed);
+      setApiKey(saveBrowserGeminiApiKey(val || ''));
     } catch (e) {
       console.error('sessionStorage is blocked or unavailable:', e);
     }
@@ -27,8 +22,7 @@ export function useGeminiApiKey() {
   const clearApiKey = () => {
     setApiKey('');
     try {
-      sessionStorage.removeItem('userGeminiApiKey');
-      localStorage.removeItem('userGeminiApiKey');
+      clearBrowserGeminiApiKey();
     } catch (e) {
       console.error('localStorage is blocked or unavailable:', e);
     }

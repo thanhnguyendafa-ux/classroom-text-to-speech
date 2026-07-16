@@ -1,8 +1,8 @@
-import { searchImages } from "../src/server/handlers";
-import { applyRateLimitHeaders, imageSearchLimiter } from "../src/server/rateLimiter";
-import { getRequestRateLimitIdentity } from '../src/server/requestIdentity';
-import { applySecurityHeaders } from "../src/server/httpSecurity";
-import { sendApiError } from '../src/server/apiError';
+import { searchImages } from "../src/server/handlers.js";
+import { applyRateLimitHeaders, imageSearchLimiter } from "../src/server/rateLimiter.js";
+import { requireRequestUser } from '../src/server/requestIdentity.js';
+import { applySecurityHeaders } from "../src/server/httpSecurity.js";
+import { sendApiError } from '../src/server/apiError.js';
 
 export default async function handler(req: any, res: any) {
   applySecurityHeaders(req, res, "GET,OPTIONS");
@@ -18,14 +18,14 @@ export default async function handler(req: any, res: any) {
   }
 
   // Rate Limiting on Serverless context
-  let identity: string;
+  let rateLimitKey: string;
   try {
-    identity = await getRequestRateLimitIdentity(req);
+    rateLimitKey = (await requireRequestUser(req)).rateLimitKey;
   } catch (error) {
     sendApiError(res, error, 'image-search-auth');
     return;
   }
-  const limitState = await imageSearchLimiter.consume(identity);
+  const limitState = await imageSearchLimiter.consume(rateLimitKey);
   applyRateLimitHeaders(res, limitState);
   if (!limitState.success) {
     res.status(429).json({

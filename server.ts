@@ -13,11 +13,12 @@ import {
   ttsLimiter,
   imageSearchLimiter,
   sharePlaylistLimiter,
+  sharePlaylistReadLimiter,
+  getClientIp,
 } from "./src/server/rateLimiter";
-import { checkFirestoreConnection } from "./src/server/storage";
 import { applySecurityHeaders } from "./src/server/httpSecurity";
 import { sendApiError } from './src/server/apiError';
-import { getRequestRateLimitIdentity } from './src/server/requestIdentity';
+import { requireRequestUser } from './src/server/requestIdentity';
 import { resolveServerPort } from "./src/server/serverConfig";
 
 dotenv.config();
@@ -33,29 +34,20 @@ app.use((req, res, next) => {
 });
 
 // 0. API Health and Connection Status Check
-app.get("/api/health", async (req, res) => {
-  try {
-    const isOk = await checkFirestoreConnection();
-    res.json({
-      status: isOk ? "ok" : "error",
-      service: "classroom-text-to-speech-api",
-      firestore: isOk ? "connected" : "disconnected"
-    });
-  } catch (error) {
-    sendApiError(res, error, 'health');
-  }
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", service: "classroom-text-to-speech-api" });
 });
 
 // 1. Unsplash Image Search with Rate Limiting
 app.get("/api/search-images", async (req, res) => {
-  let identity: string;
+  let rateLimitKey: string;
   try {
-    identity = await getRequestRateLimitIdentity(req);
+    rateLimitKey = (await requireRequestUser(req)).rateLimitKey;
   } catch (error) {
     sendApiError(res, error, 'image-search-auth');
     return;
   }
-  const rateLimit = await imageSearchLimiter.consume(identity);
+  const rateLimit = await imageSearchLimiter.consume(rateLimitKey);
   applyRateLimitHeaders(res, rateLimit);
   if (!rateLimit.success) {
     res.status(429).json({
@@ -76,14 +68,14 @@ app.get("/api/search-images", async (req, res) => {
 
 // 2. High-performance Gemini TTS with Rate Limiting
 app.post("/api/tts", async (req, res) => {
-  let identity: string;
+  let rateLimitKey: string;
   try {
-    identity = await getRequestRateLimitIdentity(req);
+    rateLimitKey = (await requireRequestUser(req)).rateLimitKey;
   } catch (error) {
     sendApiError(res, error, 'tts-auth');
     return;
   }
-  const rateLimit = await ttsLimiter.consume(identity);
+  const rateLimit = await ttsLimiter.consume(rateLimitKey);
   applyRateLimitHeaders(res, rateLimit);
   if (!rateLimit.success) {
     res.status(429).json({
@@ -103,14 +95,14 @@ app.post("/api/tts", async (req, res) => {
 
 // 3. Share custom playlist with Rate Limiting
 app.post("/api/share-playlist", async (req, res) => {
-  let identity: string;
+  let rateLimitKey: string;
   try {
-    identity = await getRequestRateLimitIdentity(req);
+    rateLimitKey = (await requireRequestUser(req)).rateLimitKey;
   } catch (error) {
     sendApiError(res, error, 'share-playlist-auth');
     return;
   }
-  const rateLimit = await sharePlaylistLimiter.consume(identity);
+  const rateLimit = await sharePlaylistLimiter.consume(rateLimitKey);
   applyRateLimitHeaders(res, rateLimit);
   if (!rateLimit.success) {
     res.status(429).json({
@@ -130,6 +122,12 @@ app.post("/api/share-playlist", async (req, res) => {
 // 4. Retrieve custom playlist by ID (No rate limit for views to keep user experience smooth, but lightweight lookup)
 app.get("/api/share-playlist/:id", async (req, res) => {
   try {
+    const rateLimit = await sharePlaylistReadLimiter.consume(`ip:${getClientIp(req)}`);
+    applyRateLimitHeaders(res, rateLimit);
+    if (!rateLimit.success) {
+      res.status(429).json({ error: "Bạn đã mở quá nhiều liên kết trong thời gian ngắn." });
+      return;
+    }
     const shareId = req.params.id;
     const result = await getSharedPlaylist(shareId);
     res.json(result);
