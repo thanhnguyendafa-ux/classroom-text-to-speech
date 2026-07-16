@@ -1,4 +1,4 @@
-import React, { useReducer, useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Play, Square, Volume2, Radio } from 'lucide-react';
 import { SpeechItem, LanguageCode } from '../types';
 import { encodeMonoMp3 } from '../audio/mp3Encoder';
@@ -12,7 +12,7 @@ import { runBrowserSpeechSequence } from '../infrastructure/audio/browserSpeechS
 import { AudioExportResult } from '../features/audio-export/AudioExportResult';
 import { AudioExportProgress } from '../features/audio-export/AudioExportProgress';
 import { AudioExportSettings } from '../features/audio-export/AudioExportSettings';
-import { audioExportReducer, createAudioExportState } from '../domain/audio-export/audioExportReducer';
+import { useAudioExportController } from '../application/audio-export/useAudioExportController';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -83,13 +83,8 @@ export default function AudioExportModal({
   const disableEchoCancellation = audioSource === 'system';
   
   // Progress states
-  const [exportState, dispatchExport] = useReducer(audioExportReducer, undefined, createAudioExportState);
-  const { status, progressText, progressPercent, logs, audioBlobUrl } = { ...exportState, audioBlobUrl: exportState.resultUrl };
-  const setExportPhase = (nextStatus: 'idle' | 'processing' | 'recording' | 'success' | 'error') => dispatchExport({ type: 'phaseChanged', status: nextStatus });
-  const setProgressPercent = (percent: number) => dispatchExport({ type: 'progressChanged', percent });
-  const setProgressText = (text: string) => dispatchExport({ type: 'progressChanged', text });
-  const clearLogs = () => dispatchExport({ type: 'logsCleared' });
-  const appendLog = (message: string) => dispatchExport({ type: 'logAdded', message });
+  const { state: exportState, setPhase: setExportPhase, setProgress: setProgressPercent, setProgressText, clearLogs, appendLog, setResultUrl, reset: resetExportState } = useAudioExportController();
+  const { status, progressText, progressPercent, logs, resultUrl: audioBlobUrl } = exportState;
   const audioBlobUrlRef = useRef<string | null>(null);
   
   // Live capture/volume states
@@ -117,11 +112,11 @@ export default function AudioExportModal({
     const previousUrl = audioBlobUrlRef.current;
     if (previousUrl && previousUrl !== nextUrl) URL.revokeObjectURL(previousUrl);
     audioBlobUrlRef.current = nextUrl;
-    dispatchExport({ type: 'resultChanged', url: nextUrl });
+    setResultUrl(nextUrl);
   };
   const resetExportSession = () => {
     replaceAudioBlobUrl(null);
-    dispatchExport({ type: 'reset' });
+    resetExportState();
   };
 
   // Clean-up on close/unmount
