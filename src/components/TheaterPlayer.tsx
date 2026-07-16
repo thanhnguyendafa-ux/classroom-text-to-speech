@@ -28,6 +28,7 @@ import {
 import { SpeechItem, LanguageCode } from '../types';
 import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, errorMessage as getErrorMessage, errorName, stopMediaStream } from '../features/media-capture/mediaCaptureAdapter';
 import { useRecordingController } from '../application/theater/useRecordingController';
+import { createTheaterRecordingSession, type TheaterRecordingSession } from '../application/theater/theaterRecordingSession';
 
 interface TheaterPlayerProps {
   isOpen: boolean;
@@ -121,6 +122,7 @@ export default function TheaterPlayer({
   const micStreamRef = React.useRef<MediaStream | null>(null);
   const chunksRef = React.useRef<Blob[]>([]);
   const timerIntervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingSessionRef = React.useRef<TheaterRecordingSession | null>(null);
 
   // Formatter for recorded seconds
   const formatTime = (totalSec: number) => {
@@ -130,18 +132,9 @@ export default function TheaterPlayer({
   };
 
   // Clean up recording structures on unmount
-  React.useEffect(() => {
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-      if (streamRef.current) {
-        stopMediaStream(streamRef.current);
-      }
-      if (micStreamRef.current) {
-        stopMediaStream(micStreamRef.current);
-      }
-    };
+  React.useEffect(() => () => {
+    recordingSessionRef.current?.stop();
+    recordingSessionRef.current = null;
   }, []);
 
   // Download logic helper
@@ -180,26 +173,8 @@ export default function TheaterPlayer({
 
   // Stop current active screen recording
   const handleStopRecording = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-
-    if (streamRef.current) {
-      stopMediaStream(streamRef.current);
-      streamRef.current = null;
-    }
-
-    if (micStreamRef.current) {
-      stopMediaStream(micStreamRef.current);
-      micStreamRef.current = null;
-    }
-
-    setIsRecording(false);
+    recordingSessionRef.current?.stop();
+    recordingSessionRef.current = null;
   };
 
   // Start screen and microphone recording
@@ -207,12 +182,7 @@ export default function TheaterPlayer({
     setErrorMessage(null);
     chunksRef.current = [];
     
-    const resMap = {
-      '480p': { width: 854, height: 480 },
-      '720p': { width: 1280, height: 720 },
-      '1080p': { width: 1920, height: 1080 }
-    };
-    const { width, height } = resMap[recordResolution];
+    const { width, height } = createTheaterRecordingSession.resolution(recordResolution);
 
     try {
       let micStream: MediaStream | null = null;
@@ -314,6 +284,16 @@ export default function TheaterPlayer({
 
       const recorder = new MediaRecorder(combinedStream, options);
       mediaRecorderRef.current = recorder;
+      recordingSessionRef.current = createTheaterRecordingSession({
+        recorder,
+        displayStream,
+        microphoneStream: micStream,
+        clearTimer: () => {
+          if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        },
+        onStopped: () => setIsRecording(false),
+      });
 
       recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
@@ -356,25 +336,9 @@ export default function TheaterPlayer({
         onStop();
         onClose();
       } else {
-        if (timerIntervalRef.current) {
-          clearInterval(timerIntervalRef.current);
-          timerIntervalRef.current = null;
-        }
-        if (mediaRecorderRef.current) {
-          mediaRecorderRef.current.onstop = null;
-          if (mediaRecorderRef.current.state === 'recording') {
-            mediaRecorderRef.current.stop();
-          }
-        }
-        if (streamRef.current) {
-          stopMediaStream(streamRef.current);
-          streamRef.current = null;
-        }
-        if (micStreamRef.current) {
-          stopMediaStream(micStreamRef.current);
-          micStreamRef.current = null;
-        }
-        setIsRecording(false);
+        if (mediaRecorderRef.current) mediaRecorderRef.current.onstop = null;
+        recordingSessionRef.current?.stop();
+        recordingSessionRef.current = null;
         onStop();
         onClose();
       }
