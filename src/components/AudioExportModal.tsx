@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Play, Square, Volume2, Radio } from 'lucide-react';
 import { SpeechItem, LanguageCode } from '../types';
 import { encodeMonoMp3 } from '../audio/mp3Encoder';
@@ -753,4 +753,3 @@ export default function AudioExportModal({
     </div>
   );
 }
-
