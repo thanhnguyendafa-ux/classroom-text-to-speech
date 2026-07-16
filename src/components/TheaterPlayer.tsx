@@ -30,6 +30,7 @@ import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, err
 import { useRecordingController } from '../application/theater/useRecordingController';
 import { createTheaterRecordingSession, type TheaterRecordingSession } from '../application/theater/theaterRecordingSession';
 import { prepareTheaterRecording, selectTheaterRecorderOptions } from '../application/theater/prepareTheaterRecording';
+import { TheaterPlaylist } from '../features/theater/TheaterPlaylist';
 
 interface TheaterPlayerProps {
   isOpen: boolean;
@@ -899,99 +900,7 @@ export default function TheaterPlayer({
 
       </div>
 
-      {/* RIGHT SIDEBAR: EXQUISITE PLAYLIST COLUMN */}
-      {!hideControls && (
-        <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-slate-900 bg-slate-900 overflow-y-auto shrink-0 flex flex-col h-1/3 md:h-full z-30">
-        
-        {/* Playlist Header */}
-        <div className="p-4 bg-slate-950 border-b border-slate-900 flex items-center justify-between shrink-0">
-          <div className="text-left">
-            <h3 className="font-extrabold text-sm text-white">Danh Sách Câu Huấn Luyện</h3>
-            <p className="text-[10px] text-slate-400 mt-1">Phát lần lượt từ trên xuống dưới</p>
-          </div>
-          <span className="text-[11px] font-bold text-indigo-400 bg-indigo-950 border border-indigo-900 px-2 py-0.5 rounded-full uppercase">
-            {speechList.length} Câu
-          </span>
-        </div>
-
-        {/* Scrollable listing */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-          {speechList.map((item, idx) => {
-            const isPlaying = playingItemId === item.id;
-            const itemImageUrl = (useUniversalImage && universalImageUrl) ? universalImageUrl : item.imageUrl;
-            const hasCover = !!itemImageUrl;
-
-            return (
-              <button
-                key={item.id}
-                onClick={() => onPlayItem(item)}
-                className={`w-full text-left p-2 rounded-xl transition flex items-center gap-3 border ${
-                  isPlaying
-                    ? 'bg-indigo-950/60 border-indigo-500/80 ring-1 ring-indigo-500'
-                    : 'bg-slate-950/40 border-slate-900 hover:bg-slate-900/50 hover:border-slate-800'
-                } cursor-pointer group`}
-              >
-                {/* Image Thumb Thumbnail */}
-                <div className="w-11 h-11 rounded-lg bg-slate-800 border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center relative shadow-3xs">
-                  {hasCover ? (
-                    <img
-                      src={itemImageUrl}
-                      alt="cover thumbnail"
-                      className="w-full h-full object-cover transition group-hover:scale-105"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    /* Default Blue frame */
-                    <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-950 flex items-center justify-center">
-                      <span className="text-[10px] font-mono font-extrabold text-white/90">
-                        {idx + 1}
-                      </span>
-                    </div>
-                  )}
-                  {isPlaying && (
-                    <div className="absolute inset-0 bg-indigo-950/65 flex items-center justify-center">
-                      <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Subtitle wording detail */}
-                <div className="min-w-0 flex-1 text-left">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[9px] font-mono font-bold text-slate-500 group-hover:text-slate-400">
-                      CÂU {idx + 1}
-                    </span>
-                    <span className={`text-[9px] font-extrabold rounded px-1 ${
-                      item.resolvedLang === 'vi' 
-                        ? 'bg-rose-950 border border-rose-900 text-rose-300' 
-                        : 'bg-indigo-950 border border-indigo-900 text-indigo-300'
-                    }`}>
-                      {item.resolvedLang === 'vi' ? '🇻🇳 VI' : '🇺🇸 EN'}
-                    </span>
-                  </div>
-                  <p className={`text-xs mt-1 font-semibold truncate leading-tight ${
-                    isPlaying ? 'text-indigo-200' : 'text-slate-300 group-hover:text-white'
-                  }`}>
-                    {item.text}
-                  </p>
-                </div>
-
-                {/* Active Indicator Wave */}
-                {isPlaying && (
-                  <div className="flex items-end space-x-0.5 h-3 shrink-0 pr-1 select-none animate-pulse">
-                    <span className="w-0.5 h-2.5 bg-indigo-400 rounded-full animate-[bounce_0.8s_infinite] delay-100"></span>
-                    <span className="w-0.5 h-1.5 bg-indigo-400 rounded-full animate-[bounce_0.8s_infinite] delay-300"></span>
-                    <span className="w-0.5 h-3 bg-indigo-400 rounded-full animate-[bounce_0.8s_infinite] delay-0"></span>
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-      </div>
-      )}
-
+      {!hideControls ? <TheaterPlaylist speechList={speechList} playingItemId={playingItemId} onPlayItem={onPlayItem} useUniversalImage={useUniversalImage} universalImageUrl={universalImageUrl} /> : null}
     </div>
   );
 }
