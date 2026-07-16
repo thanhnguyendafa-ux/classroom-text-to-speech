@@ -18,11 +18,12 @@ import { checkFirestoreConnection } from "./src/server/storage";
 import { applySecurityHeaders } from "./src/server/httpSecurity";
 import { sendApiError } from './src/server/apiError';
 import { getRequestRateLimitIdentity } from './src/server/requestIdentity';
+import { resolveServerPort } from "./src/server/serverConfig";
 
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = resolveServerPort(process.env.PORT);
 
 // Set payload body size limit to prevent oversized request attacks
 app.use(express.json({ limit: "500kb" }));
