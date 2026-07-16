@@ -1,0 +1,2 @@
+﻿import assert from "node:assert/strict"; import test from "node:test"; import { buildAudioExportFilename } from "./audioExportDownload";
+test("builds stable range and engine filenames", () => { assert.match(buildAudioExportFilename({ range: "all", engine: "premium", date: new Date(2026, 6, 16) }), /^am-thanh-luyen-nghe-FULL-.*\.wav$/); assert.match(buildAudioExportFilename({ range: "2", engine: "browser", date: new Date(2026, 6, 16) }), /Set-2-.*\.mp3$/); });

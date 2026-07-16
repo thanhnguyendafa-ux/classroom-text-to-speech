@@ -13,6 +13,7 @@ import { encodeCapturedAudio } from '../infrastructure/audio/browserAudioEncodin
 import { acquireCaptureStreams } from '../infrastructure/audio/browserCaptureStreams';
 import { createCaptureAudioMix } from '../infrastructure/audio/browserCaptureMix';
 import { runAudioPreflight } from '../infrastructure/audio/browserAudioPreflight';
+import { buildAudioExportFilename, downloadObjectUrl } from '../infrastructure/audio/audioExportDownload';
 import { createMediaRecorderSession, type MediaRecorderSession } from '../infrastructure/media/mediaRecorderAdapter';
 import { AudioExportResult } from '../features/audio-export/AudioExportResult';
 import { AudioExportProgress } from '../features/audio-export/AudioExportProgress';
@@ -491,19 +492,7 @@ export default function AudioExportModal({
   };
 
   const handleDownload = () => {
-    if (!audioBlobUrl) return;
-    
-    const link = document.createElement('a');
-    link.href = audioBlobUrl;
-    
-    const dateStr = new Date().toLocaleDateString('vi-VN').replace(/\//g, '-');
-    const rangeText = selectedRange === 'all' ? 'FULL' : `Set-${selectedRange}`;
-    const fileExt = exportEngine === 'premium' ? 'wav' : 'mp3'; // browser exports opus-webm, we name to mp3 for easier player triggers
-    
-    link.download = `am-thanh-luyen-nghe-${rangeText}-${dateStr}.${fileExt}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (audioBlobUrl) downloadObjectUrl(audioBlobUrl, buildAudioExportFilename({ range: selectedRange, engine: exportEngine, date: new Date() }));
   };
 
   if (!isOpen) return null;
