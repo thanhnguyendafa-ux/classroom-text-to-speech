@@ -71,6 +71,7 @@ import { useLessonPreferences } from './features/lesson-preferences/useLessonPre
 import { buildSpeechItems, detectLanguage, parseLineSymbols } from './features/lesson-editor/speechItemFactory';
 import { parseSpeechListImport } from './features/lesson-editor/speechListImport';
 import { duplicateSet, joinWithNext, ungroupSet, updateSpeechItem } from './features/lesson-editor/speechItemCommands';
+import { useLessonEditorController } from './application/lesson-editor/useLessonEditorController';
 
 const ImageSearchModal = React.lazy(() => import('./components/ImageSearchModal'));
 const TheaterPlayer = React.lazy(() => import('./components/TheaterPlayer'));
@@ -79,11 +80,25 @@ const AudioExportModal = React.lazy(() => import('./components/AudioExportModal'
 
 
 export default function App() {
-  const [rawText, setRawText] = useState<string>(
-    'popcorn\nbắp rang\ndelicious popcorn\nbắp rang ngon lành\nI love eating delicious popcorn. /1.5\nMình rất thích ăn bắp rang ngon lành.\nsharing popcorn\nchia sẻ bắp rang\nWe are sharing popcorn while watching a movie. ;2\nChúng mình đang chung nhau ăn bắp rang khi xem phim.'
-  );
+  const {
+    rawText,
+    setRawText,
+    speechList,
+    setSpeechList,
+    title: currentLessonTitle,
+    setTitle: setCurrentLessonTitle,
+    editingItemId,
+    setEditingItemId,
+    editingText,
+    setEditingText,
+    loadLesson: loadEditorLesson,
+    resetEditor,
+  } = useLessonEditorController({
+    title: 'Bài học mẫu: Bắp rang bơ',
+    rawText: 'popcorn\nbắp rang\ndelicious popcorn\nbắp rang ngon lành\nI love eating delicious popcorn. /1.5\nMình rất thích ăn bắp rang ngon lành.\nsharing popcorn\nchia sẻ bắp rang\nWe are sharing popcorn while watching a movie. ;2\nChúng mình đang chung nhau ăn bắp rang khi xem phim.',
+    speechList: [],
+  });
 
-  const [speechList, setSpeechList] = useState<SpeechItem[]>([]);
   const [speed, setSpeed] = useState<number>(1.0);
   const {
     volume,
@@ -125,7 +140,6 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<'lessons' | 'builder'>('lessons');
   const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
   const [currentLessonRevision, setCurrentLessonRevision] = useState<number>(1);
-  const [currentLessonTitle, setCurrentLessonTitle] = useState<string>('Bài học mẫu: Bắp rang bơ');
   const [isSavingCloudLesson, setIsSavingCloudLesson] = useState<boolean>(false);
   const [lessonSaveError, setLessonSaveError] = useState<string | null>(null);
   const [savedLessonFingerprint, setSavedLessonFingerprint] = useState<string | null>(null);
@@ -382,10 +396,6 @@ export default function App() {
   const [isSearchingUniversalImage, setIsSearchingUniversalImage] = useState<boolean>(false);
 
   const [timeBetweenLines, setTimeBetweenLines] = useState<number>(2.0); // Default pause time in seconds
-
-  // Inline editing row state
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState<string>('');
 
   // Quick addition line form
   const [newRowText, setNewRowText] = useState<string>('');
