@@ -29,6 +29,7 @@ import { SpeechItem, LanguageCode } from '../types';
 import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, errorMessage as getErrorMessage, errorName, stopMediaStream } from '../features/media-capture/mediaCaptureAdapter';
 import { useRecordingController } from '../application/theater/useRecordingController';
 import { createTheaterRecordingSession, type TheaterRecordingSession } from '../application/theater/theaterRecordingSession';
+import { prepareTheaterRecording, selectTheaterRecorderOptions } from '../application/theater/prepareTheaterRecording';
 
 interface TheaterPlayerProps {
   isOpen: boolean;
@@ -185,103 +186,24 @@ export default function TheaterPlayer({
     const { width, height } = createTheaterRecordingSession.resolution(recordResolution);
 
     try {
-      let micStream: MediaStream | null = null;
-      if (includeMic) {
-        try {
-          try {
-            micStream = await navigator.mediaDevices.getUserMedia({
-              audio: {
-                echoCancellation: !disableEchoCancellation,
-                noiseSuppression: !disableEchoCancellation,
-                autoGainControl: true
-              }
-            });
-          } catch (firstTryErr) {
-            console.warn("Direct customizable mic stream constraints failed, falling back to basic audio stream:", firstTryErr);
-            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          }
-          micStreamRef.current = micStream;
-        } catch (micErr: unknown) {
-          console.warn("Microphone access is denied, falling back:", micErr);
-          setErrorMessage("Không chọn được Microphone ngoài (có thể chưa cắm hoặc chưa đồng ý cấp quyền). Hệ thống vẫn tiến hành quay video nhưng chỉ ghi âm thanh của máy tính.");
-        }
-      }
-
-      // Display capture stream with optional preferCurrentTab parameter to bypass chrome blank list bug
-      const displayConstraints = buildDisplayCaptureConstraints({ width, height, onlyCurrentTab });
-
-      const displayStream = await captureDisplay(displayConstraints);
+      const prepared = await prepareTheaterRecording({
+        includeMicrophone: includeMic,
+        disableEchoCancellation,
+        displayConstraints: buildDisplayCaptureConstraints({ width, height, onlyCurrentTab }),
+        captureDisplay,
+        getUserMedia: constraints => navigator.mediaDevices.getUserMedia(constraints),
+        createCombinedStream: () => new MediaStream(),
+        createAudioContext,
+        onMicrophoneUnavailable: error => {
+          console.warn('Microphone access denied; continuing with display audio', error);
+          setErrorMessage("Không chọn được Microphone ngoài. Hệ thống vẫn tiếp tục quay video bằng âm thanh máy tính.");
+        },
+      });
+      const { displayStream, microphoneStream: micStream, combinedStream, videoTrack } = prepared;
       streamRef.current = displayStream;
-
-      // Make sure we stop everything if the system stops screen-record
-      const videoTrack = displayStream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.onended = () => {
-          handleStopRecording();
-        };
-      }
-
-      const combinedStream = new MediaStream();
-      combinedStream.addTrack(videoTrack);
-
-      try {
-        const displayAudioTracks = displayStream.getAudioTracks();
-        const micAudioTracks = includeMic && micStream ? micStream.getAudioTracks() : [];
-        
-        const hasDisplayAudio = displayAudioTracks.length > 0;
-        const hasMicAudio = micAudioTracks.length > 0;
-
-        if (hasDisplayAudio && hasMicAudio) {
-          // If we have BOTH systemic tab audio AND microphone, we must mix them using AudioContext
-          const audioCtx = createAudioContext();
-          if (audioCtx.state === 'suspended') {
-            await audioCtx.resume();
-          }
-          const dest = audioCtx.createMediaStreamDestination();
-          
-          // Connect tab audio source
-          const displaySource = audioCtx.createMediaStreamSource(displayStream);
-          displaySource.connect(dest);
-          displaySource.connect(audioCtx.destination); // Route to speakers so the user can still hear in real-time
-
-          // Connect microphone source
-          const micSource = audioCtx.createMediaStreamSource(micStream!);
-          micSource.connect(dest);
-
-          // Use the mixed output track
-          const mixedTrack = dest.stream.getAudioTracks()[0];
-          combinedStream.addTrack(mixedTrack);
-        } else {
-          // Fallback: If only one audio stream is present, add it directly to bypass AudioContext limitations completely!
-          if (hasDisplayAudio) {
-            combinedStream.addTrack(displayAudioTracks[0]);
-          } else if (hasMicAudio) {
-            combinedStream.addTrack(micAudioTracks[0]);
-          }
-        }
-      } catch (mixError) {
-        console.warn("Audio Context coupling failed, falling back to basic stream direct tracks:", mixError);
-        const displayAudioTracks = displayStream.getAudioTracks();
-        const micAudioTracks = includeMic && micStream ? micStream.getAudioTracks() : [];
-        if (displayAudioTracks.length > 0) {
-          combinedStream.addTrack(displayAudioTracks[0]);
-        } else if (micAudioTracks.length > 0) {
-          combinedStream.addTrack(micAudioTracks[0]);
-        }
-      }
-
-      // Determine best media type configuration
-      let options = { mimeType: 'video/webm;codecs=vp9,opus' };
-      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-        options = { mimeType: 'video/webm;codecs=vp8,opus' };
-      }
-      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-        options = { mimeType: 'video/webm' };
-      }
-      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-        options = { mimeType: '' };
-      }
-
+      micStreamRef.current = micStream;
+      if (videoTrack) videoTrack.onended = handleStopRecording;
+      const options = selectTheaterRecorderOptions(type => MediaRecorder.isTypeSupported(type));
       const recorder = new MediaRecorder(combinedStream, options);
       mediaRecorderRef.current = recorder;
       recordingSessionRef.current = createTheaterRecordingSession({
