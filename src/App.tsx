@@ -57,7 +57,6 @@ import AppWorkspace from './components/AppWorkspace';
 import { useSharedPlaylistLoader } from './features/shared-playlist/useSharedPlaylistLoader';
 import SharedPlaylistBanner from './features/shared-playlist/SharedPlaylistBanner';
 import { useAuth } from './features/auth/useAuth';
-import { createLesson, updateLesson } from './features/cloud-lessons/cloudLessonApi';
 import AppShell from './features/app-shell/AppShell';
 import LessonsView from './features/lessons/LessonsView';
 import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
@@ -66,12 +65,12 @@ import { createBrowserCountdownController, type CountdownController } from './fe
 import { createBrowserAudioPlaybackAdapter } from './features/playback/audioPlaybackAdapter';
 import { createWindowBrowserSpeechAdapter } from './features/playback/browserSpeechAdapter';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
-import { resolveLessonSaveStatus } from './features/lesson-editor/lessonSaveStatus';
 import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
 import { buildSpeechItems, detectLanguage, parseLineSymbols } from './features/lesson-editor/speechItemFactory';
 import { parseSpeechListImport } from './features/lesson-editor/speechListImport';
 import { duplicateSet, joinWithNext, ungroupSet, updateSpeechItem } from './features/lesson-editor/speechItemCommands';
 import { useLessonEditorController } from './application/lesson-editor/useLessonEditorController';
+import { useLessonPersistenceController } from './application/lesson-persistence/useLessonPersistenceController';
 
 const ImageSearchModal = React.lazy(() => import('./components/ImageSearchModal'));
 const TheaterPlayer = React.lazy(() => import('./components/TheaterPlayer'));
@@ -138,11 +137,6 @@ export default function App() {
 
   const { user } = useAuth();
   const [activeSection, setActiveSection] = useState<'lessons' | 'builder'>('lessons');
-  const [currentLessonId, setCurrentLessonId] = useState<string | null>(null);
-  const [currentLessonRevision, setCurrentLessonRevision] = useState<number>(1);
-  const [isSavingCloudLesson, setIsSavingCloudLesson] = useState<boolean>(false);
-  const [lessonSaveError, setLessonSaveError] = useState<string | null>(null);
-  const [savedLessonFingerprint, setSavedLessonFingerprint] = useState<string | null>(null);
   const [cloudRefreshVersion, setCloudRefreshVersion] = useState<number>(0);
   const [toast, setToast] = useState<{
     type: 'success' | 'error' | 'info';
@@ -171,113 +165,6 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
-
-  const handleSaveLesson = async () => {
-    if (!user) {
-      showToast('error', 'Yêu cầu đăng nhập', 'Vui lòng đăng nhập để lưu bài học lên đám mây.');
-      return;
-    }
-    const trimmedTitle = currentLessonTitle.trim();
-    if (!trimmedTitle) {
-      showToast('error', 'Thiếu tiêu đề', 'Vui lòng nhập tiêu đề cho bài giảng.');
-      return;
-    }
-
-    if (!rawText.trim()) {
-      showToast('error', 'Nội dung trống', 'Nội dung bài học trống, không thể lưu!');
-      return;
-    }
-
-    const lessonDraft = buildLessonDraft({ title: trimmedTitle, rawText, speechList, settings: getCurrentLessonSettings() });
-    setLessonSaveError(null);
-    setIsSavingCloudLesson(true);
-    try {
-      if (currentLessonId) {
-        // Update existing lesson
-        const revision = await updateLesson(user.uid, currentLessonId, lessonDraft, currentLessonRevision);
-        setCurrentLessonRevision(revision);
-        setCloudRefreshVersion(prev => prev + 1);
-        showToast(
-          'success',
-          'Đã cập nhật bài học',
-          `Bài học "${trimmedTitle}" đã được cập nhật thành công lên đám mây.`,
-          {
-            label: 'Đi tới Bài học',
-            onClick: () => setActiveSection('lessons')
-          }
-        );
-      } else {
-        // Create new lesson
-        const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-        await createLesson(user.uid, newId, { ...lessonDraft, folderId: null });
-        setCurrentLessonId(newId);
-        setCloudRefreshVersion(prev => prev + 1);
-        showToast(
-          'success',
-          'Đã lưu lên tài khoản đám mây',
-          `Bài học "${trimmedTitle}" đã được tạo thành công trong danh sách của bạn.`,
-          {
-            label: 'Đi tới Bài học',
-            onClick: () => setActiveSection('lessons')
-          }
-        );
-      }
-      setSavedLessonFingerprint(createLessonFingerprint(lessonDraft));
-    } catch (err) {
-      console.error('Error saving lesson:', err);
-      setLessonSaveError('KhĂ´ng thá»ƒ lÆ°u bĂ i giáº£ng lĂªn Ä‘Ă¡m mĂ¢y. Ná»™i dung Ä‘ang soáº¡n váº«n Ä‘Æ°á»£c giá»¯ nguyĂªn.');
-      showToast('error', 'Lỗi lưu trữ', 'Không thể lưu bài giảng lên đám mây.');
-    } finally {
-      setIsSavingCloudLesson(false);
-    }
-  };
-
-  const handleSaveLessonAsCopy = async () => {
-    if (!user) return;
-    const trimmedTitle = `${currentLessonTitle.trim()} (Bản sao)`;
-    if (!rawText.trim()) {
-      showToast('error', 'Nội dung trống', 'Nội dung bài học trống, không thể lưu!');
-      return;
-    }
-
-    setLessonSaveError(null);
-    setIsSavingCloudLesson(true);
-    try {
-      const newId = `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      const copiedDraft = buildLessonDraft({ title: trimmedTitle, rawText, speechList, settings: getCurrentLessonSettings(), folderId: null });
-      await createLesson(user.uid, newId, copiedDraft);
-      setCurrentLessonId(newId);
-      setCurrentLessonTitle(trimmedTitle);
-      setSavedLessonFingerprint(createLessonFingerprint(copiedDraft));
-      setCloudRefreshVersion(prev => prev + 1);
-      showToast(
-        'success',
-        'Đã lưu bản sao thành công',
-        `Đã tạo bản sao bài học "${trimmedTitle}" trên tài khoản đám mây của bạn.`,
-        {
-          label: 'Đi tới Bài học',
-          onClick: () => setActiveSection('lessons')
-        }
-      );
-    } catch (err) {
-      console.error('Error saving lesson copy:', err);
-      setLessonSaveError('Không thể lưu bản sao. Nội dung đang soạn vẫn được giữ nguyên.');
-      showToast('error', 'Lỗi lưu trữ', 'Không thể lưu bản sao bài giảng.');
-    } finally {
-      setIsSavingCloudLesson(false);
-    }
-  };
-
-  const handleCreateNewLesson = () => {
-    setLessonSaveError(null);
-    if (isDirty && !window.confirm('Bài học hiện tại có thay đổi chưa lưu. Bạn có muốn bỏ các thay đổi này?')) return;
-    setRawText('');
-    setSpeechList([]);
-    setCurrentLessonId(null);
-    setCurrentLessonTitle('Bài học mới');
-    setSavedLessonFingerprint(null);
-    setActiveSection('builder');
-  };
 
   const {
     selectedPremiumVoiceEn,
@@ -446,23 +333,24 @@ export default function App() {
   });
 
   const currentLessonDraft = buildLessonDraft({ title: currentLessonTitle, rawText, speechList, settings: getCurrentLessonSettings() });
-  const currentLessonFingerprint = createLessonFingerprint(currentLessonDraft);
-  const isDirty = savedLessonFingerprint !== null && savedLessonFingerprint !== currentLessonFingerprint;
-  const lessonSaveStatus = resolveLessonSaveStatus({ isSaving: isSavingCloudLesson, hasError: Boolean(lessonSaveError), isDirty, hasSavedLesson: Boolean(currentLessonId) });
+  const { lessonId: currentLessonId, status: lessonSaveStatus, isDirty, isSaving: isSavingCloudLesson, error: lessonSaveError, save: handleSaveLesson, saveAsCopy: handleSaveLessonAsCopy, loadSession: loadLessonPersistence, resetSession: resetLessonPersistence, confirmDiscard } = useLessonPersistenceController({
+    userId: user?.uid ?? null,
+    draft: currentLessonDraft,
+    notify: (notification) => showToast(notification.type, notification.message, notification.description, notification.action),
+    onCloudChanged: () => setCloudRefreshVersion((version) => version + 1),
+    onNavigateLessons: () => setActiveSection('lessons'),
+    onCopyTitle: setCurrentLessonTitle,
+  });
 
-  useEffect(() => {
-    if (savedLessonFingerprint === null) setSavedLessonFingerprint(currentLessonFingerprint);
-  }, [savedLessonFingerprint, currentLessonFingerprint]);
-
-  useEffect(() => {
-    if (!isDirty) return;
-    const warnBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
-    window.addEventListener('beforeunload', warnBeforeUnload);
-    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
-  }, [isDirty]);
+  const handleCreateNewLesson = () => {
+    if (!confirmDiscard('Bài học hiện tại có thay đổi chưa lưu. Bạn có muốn bỏ các thay đổi này?')) return;
+    resetEditor('Bài học mới');
+    resetLessonPersistence(createLessonFingerprint(buildLessonDraft({ title: 'Bài học mới', rawText: '', speechList: [], settings: getCurrentLessonSettings() })));
+    setActiveSection('builder');
+  };
 
   const handleSectionChange = (section: 'lessons' | 'builder') => {
-    if (section === 'lessons' && activeSection === 'builder' && isDirty && !window.confirm('Bài học có thay đổi chưa lưu. Bạn có muốn rời khỏi trình soạn thảo?')) return;
+    if (section === 'lessons' && activeSection === 'builder' && !confirmDiscard('Bài học có thay đổi chưa lưu. Bạn có muốn rời khỏi trình soạn thảo?')) return;
     setActiveSection(section);
   };
 
@@ -1186,7 +1074,6 @@ export default function App() {
             onLoadLesson={(lesson) => {
               const normalizedLesson = hydrateLessonDocument(lesson.id, lesson);
               const s = normalizedLesson.settings;
-              setSavedLessonFingerprint(createLessonFingerprint(buildLessonDraft({ title: normalizedLesson.title, rawText: normalizedLesson.rawText, speechList: normalizedLesson.speechList, settings: normalizedLesson.settings, folderId: normalizedLesson.folderId })));
 
               // 1. Restore raw text editor
               setRawText(normalizedLesson.rawText);
@@ -1224,8 +1111,7 @@ export default function App() {
               }
 
               // Set active lesson identification
-              setLessonSaveError(null);
-              setCurrentLessonId(normalizedLesson.id);
+              loadLessonPersistence(normalizedLesson.id, normalizedLesson.revision, createLessonFingerprint(buildLessonDraft({ title: normalizedLesson.title, rawText: normalizedLesson.rawText, speechList: normalizedLesson.speechList, settings: normalizedLesson.settings, folderId: normalizedLesson.folderId })));
               setCurrentLessonTitle(normalizedLesson.title);
 
               // Transition to builder workspace

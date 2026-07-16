@@ -31,3 +31,9 @@ test("loading and resetting replace the entire persistence session", () => {
   assert.equal(selectLessonPersistenceStatus(loaded, "fp"), "saved");
   assert.deepEqual(lessonPersistenceReducer(loaded, { type: "sessionReset" }), createLessonPersistenceState());
 });
+
+test("new lesson becomes dirty after its initialized baseline changes", () => {
+  const baseline = lessonPersistenceReducer(createLessonPersistenceState(), { type: "baselineInitialized", fingerprint: "fp-empty" });
+  assert.equal(selectLessonPersistenceStatus(baseline, "fp-empty"), "new");
+  assert.equal(selectLessonPersistenceStatus(baseline, "fp-edited"), "dirty");
+});

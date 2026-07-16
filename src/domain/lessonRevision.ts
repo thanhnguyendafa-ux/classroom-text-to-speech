@@ -1,6 +1,11 @@
 export class LessonConflictError extends Error {
+  readonly currentRevision: number;
+  readonly expectedRevision: number;
+
   constructor(currentRevision: number, expectedRevision: number) {
     super(`Lesson revision conflict: expected ${expectedRevision}, current ${currentRevision}.`);
+    this.currentRevision = currentRevision;
+    this.expectedRevision = expectedRevision;
     this.name = 'LessonConflictError';
   }
 }

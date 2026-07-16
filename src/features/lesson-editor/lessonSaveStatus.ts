@@ -1,4 +1,4 @@
-export type LessonSaveStatus = 'new' | 'dirty' | 'saving' | 'saved' | 'error';
+export type LessonSaveStatus = 'new' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict';
 
 export function resolveLessonSaveStatus(input: { isSaving: boolean; hasError: boolean; isDirty: boolean; hasSavedLesson: boolean }): LessonSaveStatus {
   if (input.isSaving) return 'saving';

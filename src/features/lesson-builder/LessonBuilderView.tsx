@@ -66,6 +66,7 @@ export const LessonBuilderView: React.FC<LessonBuilderViewProps> = ({
             {saveStatus === 'dirty' && <span className="text-[10px] uppercase font-black tracking-wider text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full">Có thay đổi chưa lưu</span>}
             {saveStatus === 'saved' && <span className="text-[10px] uppercase font-black tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-full">Đã lưu</span>}
             {saveStatus === 'error' && <span title={saveError ?? undefined} className="text-[10px] uppercase font-black tracking-wider text-rose-700 bg-rose-50 border border-rose-100 px-2.5 py-0.5 rounded-full">Lưu thất bại · Nội dung vẫn còn</span>}
+            {saveStatus === 'conflict' && <span className="text-[10px] uppercase font-black tracking-wider text-orange-800 bg-orange-50 border border-orange-200 px-2.5 py-0.5 rounded-full">Xung đột · Bản đang soạn vẫn còn</span>}
             {currentLessonId ? (
               <span className="text-[10px] uppercase font-black tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                 <Cloud className="w-3 h-3" />

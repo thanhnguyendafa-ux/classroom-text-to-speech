@@ -12,3 +12,7 @@ test('distinguishes dirty, saved, and new lessons', () => {
   assert.equal(resolveLessonSaveStatus({ isSaving: false, hasError: false, isDirty: false, hasSavedLesson: true }), 'saved');
   assert.equal(resolveLessonSaveStatus({ isSaving: false, hasError: false, isDirty: false, hasSavedLesson: false }), 'new');
 });
+
+test('distinguishes a remote conflict from a generic save error', () => {
+  assert.equal(resolveLessonSaveStatus({ isSaving: false, hasError: true, isDirty: true, hasSavedLesson: true }), 'error');
+});

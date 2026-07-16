@@ -15,7 +15,8 @@ export type LessonPersistenceAction =
   | { type: "saveFailed"; error: string }
   | { type: "saveConflicted"; expectedRevision: number; currentRevision: number }
   | { type: "lessonLoaded"; lessonId: string; revision: number; fingerprint: string }
-  | { type: "sessionReset" };
+  | { type: "baselineInitialized"; fingerprint: string }
+  | { type: "sessionReset"; fingerprint?: string };
 
 export function createLessonPersistenceState(initial: Partial<LessonPersistenceState> = {}): LessonPersistenceState {
   return {
@@ -35,7 +36,8 @@ export function lessonPersistenceReducer(state: LessonPersistenceState, action: 
     case "saveFailed": return { ...state, operation: "idle", error: action.error, conflict: null };
     case "saveConflicted": return { ...state, operation: "idle", error: null, conflict: { expectedRevision: action.expectedRevision, currentRevision: action.currentRevision } };
     case "lessonLoaded": return createLessonPersistenceState({ lessonId: action.lessonId, revision: action.revision, savedFingerprint: action.fingerprint });
-    case "sessionReset": return createLessonPersistenceState();
+    case "baselineInitialized": return state.savedFingerprint === null ? { ...state, savedFingerprint: action.fingerprint } : state;
+    case "sessionReset": return createLessonPersistenceState({ savedFingerprint: action.fingerprint });
   }
 }
 
@@ -43,6 +45,6 @@ export function selectLessonPersistenceStatus(state: LessonPersistenceState, cur
   if (state.operation === "saving") return "saving";
   if (state.conflict) return "conflict";
   if (state.error) return "error";
-  if (!state.lessonId) return "new";
-  return state.savedFingerprint === currentFingerprint ? "saved" : "dirty";
+  if (state.savedFingerprint !== null && state.savedFingerprint !== currentFingerprint) return "dirty";
+  return state.lessonId ? "saved" : "new";
 }
