@@ -10,7 +10,6 @@ import { PremiumAudioExportCancelledError } from '../infrastructure/audio/premiu
 import { runBrowserSpeechSequence } from '../infrastructure/audio/browserSpeechSequence';
 import { encodeCapturedAudio } from '../infrastructure/audio/browserAudioEncodingStrategy';
 import { processBrowserRecording } from '../infrastructure/audio/browserRecordingProcessor';
-import { acquireCaptureStreams } from '../infrastructure/audio/browserCaptureStreams';
 import { createCaptureAudioMix } from '../infrastructure/audio/browserCaptureMix';
 import { runAudioPreflight } from '../infrastructure/audio/browserAudioPreflight';
 import { buildAudioExportFilename, downloadObjectUrl } from '../infrastructure/audio/audioExportDownload';
@@ -22,6 +21,7 @@ import { useAudioExportController } from '../application/audio-export/useAudioEx
 import { useOwnedObjectUrl } from '../application/audio-export/useOwnedObjectUrl';
 import { BrowserCaptureResourceOwner } from '../application/audio-export/browserCaptureResourceOwner';
 import { executePremiumAudioExport } from '../application/audio-export/executePremiumAudioExport';
+import { prepareBrowserCapture } from '../application/audio-export/prepareBrowserCapture';
 import { createAudioSilenceMonitor } from '../domain/audio-export/audioSilenceMonitor';
 import { startBrowserCaptureLevelMonitor } from '../infrastructure/audio/browserCaptureLevelMonitor';
 
@@ -222,61 +222,35 @@ export default function AudioExportModal({
     }
 
     try {
-      const displayConstraints = buildDisplayCaptureConstraints({ width: 320, height: 180, frameRate: 10, onlyCurrentTab, captureSystemAudio: true });
-      const captureStreams = await acquireCaptureStreams({
+      if (audioSource === 'system') setProgressText("Preflight: đang kiểm tra tín hiệu âm thanh...");
+      const preparedCapture = await prepareBrowserCapture({
         source: audioSource,
-        displayConstraints,
+        displayConstraints: buildDisplayCaptureConstraints({ width: 320, height: 180, frameRate: 10, onlyCurrentTab, captureSystemAudio: true }),
         captureDisplay,
         getUserMedia: constraints => navigator.mediaDevices.getUserMedia(constraints),
+        createAudioContext,
+        runPreflight: runAudioPreflight,
+        createMix: createCaptureAudioMix,
+        cancelSpeech: () => window.speechSynthesis.cancel(),
+        speakProbe: () => {
+          const utterance = new SpeechSynthesisUtterance("Starting");
+          utterance.volume = 1;
+          utterance.rate = 1;
+          utterance.lang = "en-US";
+          window.speechSynthesis.speak(utterance);
+        },
       });
-      const stream = captureStreams.display;
-      const micStream = captureStreams.microphone;
+      const stream = preparedCapture.display;
+      const micStream = preparedCapture.microphone;
+      const audioCtx = preparedCapture.audioContext;
+      const analyserNode = preparedCapture.analyser;
+      const recorderStream = preparedCapture.recorderStream;
+      const hasDisplayAudio = preparedCapture.hasDisplayAudio;
       capture.displayStream = stream;
       capture.microphoneStream = micStream;
-      addLog(audioSource === 'mic' ? "?? kh?i t?o Microphone." : "?? nh?n lu?ng chia s? m?n h?nh v? ?m thanh h? th?ng.");
-      
-      // 2. Validate audio track selection
-      const displayAudioTracks = stream ? stream.getAudioTracks() : [];
-      const micAudioTracks = micStream ? micStream.getAudioTracks() : [];
-      const hasDisplayAudio = displayAudioTracks.length > 0;
-      const hasMicAudio = micAudioTracks.length > 0;
-
-      if (!hasDisplayAudio && !hasMicAudio) {
-        stopMediaStream(stream);
-        stopMediaStream(micStream);
-        throw new Error("KhÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng bĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¯t Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â£c nguĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă…â€œn Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh nÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â o hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â£p lĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡. Vui lÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â²ng thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â­ lĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡i.");
-      }
-      
-      addLog("KhĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€¦Ă‚Â¸i tĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡o bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ thu Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m...");
-      
-      const audioCtx = createAudioContext();
       capture.audioContext = audioCtx;
-
-      if (audioCtx.state === 'suspended') {
-        await audioCtx.resume();
-      }
-      
-      // Stage 2: mandatory system-audio preflight
-      if (hasDisplayAudio && stream) {
-        setProgressText("Preflight: ?ang ki?m tra t?n hi?u ?m thanh...");
-        const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        const result = await runAudioPreflight({
-          analyser,
-          cancel: () => window.speechSynthesis.cancel(),
-          speak: () => { const utterance = new SpeechSynthesisUtterance("Starting"); utterance.volume = 1; utterance.rate = 1; utterance.lang = "en-US"; window.speechSynthesis.speak(utterance); },
-        });
-        source.disconnect();
-        if (!result.detected) { stopMediaStream(stream); stopMediaStream(micStream); throw new Error(`PREFLIGHT_FAIL: Kh?ng nh?n ???c t?n hi?u ?m thanh h? th?ng (peak ${result.peak.toFixed(1)}).`); }
-        addLog(`Preflight OK, peak ${result.peak.toFixed(1)}.`);
-      }
-      
-      // Setup permanent live routing
-      const analyserNode = audioCtx.createAnalyser();
-      analyserNode.fftSize = 256;
-      const captureMix = createCaptureAudioMix(audioCtx, stream, micStream, analyserNode);
+      addLog(audioSource === 'mic' ? "Đã khởi tạo microphone." : "Đã nhận luồng âm thanh hệ thống.");
+      if (preparedCapture.preflightPeak !== null) addLog(`Preflight OK, peak ${preparedCapture.preflightPeak.toFixed(1)}.`);
       if (hasDisplayAudio) {
         const silenceMonitor = createAudioSilenceMonitor();
         capture.stopLevelMonitor = startBrowserCaptureLevelMonitor({
@@ -305,9 +279,7 @@ export default function AudioExportModal({
       }
 
       // 3. Initialize MediaRecorder to capture webm/opus buffer sequentially
-      const recorderStream = captureMix.recorderStream;
-      
-      const handleRecordedBlob = async (webmBlob: Blob) => {
+const handleRecordedBlob = async (webmBlob: Blob) => {
         if (capture.stoppedManually) {
           addLog("Đã dừng ghi âm theo yêu cầu.");
           setExportPhase('idle');
