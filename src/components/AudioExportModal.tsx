@@ -11,6 +11,7 @@ import { PremiumAudioExportCancelledError, runPremiumAudioExport } from '../infr
 import { runBrowserSpeechSequence } from '../infrastructure/audio/browserSpeechSequence';
 import { encodeCapturedAudio } from '../infrastructure/audio/browserAudioEncodingStrategy';
 import { acquireCaptureStreams } from '../infrastructure/audio/browserCaptureStreams';
+import { createCaptureAudioMix } from '../infrastructure/audio/browserCaptureMix';
 import { createMediaRecorderSession, type MediaRecorderSession } from '../infrastructure/media/mediaRecorderAdapter';
 import { AudioExportResult } from '../features/audio-export/AudioExportResult';
 import { AudioExportProgress } from '../features/audio-export/AudioExportProgress';
@@ -295,8 +296,6 @@ export default function AudioExportModal({
         await audioCtx.resume();
       }
       
-      const dest = audioCtx.createMediaStreamDestination();
-
       // ==========================================
       // STAGE 2: MANDATORY PREFLIGHT CHECK (KIĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚ÂM TRA TÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂN HIĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â U CĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â¨NG)
       // ==========================================
@@ -364,31 +363,10 @@ export default function AudioExportModal({
       }
       
       // Setup permanent live routing
-      let displaySourceNode: MediaStreamAudioSourceNode | null = null;
-      let analyserNode: AnalyserNode | null = null;
-      let analyserDataArray: Uint8Array | null = null;
-
-      if (hasDisplayAudio && stream) {
-        displaySourceNode = audioCtx.createMediaStreamSource(stream);
-        displaySourceNode.connect(dest);
-        
-        analyserNode = audioCtx.createAnalyser();
-        analyserNode.fftSize = 256;
-        displaySourceNode.connect(analyserNode);
-        analyserDataArray = new Uint8Array(analyserNode.frequencyBinCount);
-      }
-
-      if (hasMicAudio && micStream) {
-        const micSource = audioCtx.createMediaStreamSource(micStream);
-        micSource.connect(dest);
-
-        if (!analyserNode) {
-          analyserNode = audioCtx.createAnalyser();
-          analyserNode.fftSize = 256;
-          micSource.connect(analyserNode);
-          analyserDataArray = new Uint8Array(analyserNode.frequencyBinCount);
-        }
-      }
+      const analyserNode = audioCtx.createAnalyser();
+      analyserNode.fftSize = 256;
+      const captureMix = createCaptureAudioMix(audioCtx, stream, micStream, analyserNode);
+      const analyserDataArray = new Uint8Array(analyserNode.frequencyBinCount);
       
       // Setup active silence checker loop
       let lastCheckTime = Date.now();
@@ -460,17 +438,7 @@ export default function AudioExportModal({
       }
 
       // 3. Initialize MediaRecorder to capture webm/opus buffer sequentially
-      const recorderStream = new MediaStream();
-      const mixedTracks = dest.stream.getAudioTracks();
-      if (mixedTracks.length > 0) {
-        recorderStream.addTrack(mixedTracks[0]);
-      } else {
-        if (hasDisplayAudio) {
-          recorderStream.addTrack(displayAudioTracks[0]);
-        } else if (hasMicAudio) {
-          recorderStream.addTrack(micAudioTracks[0]);
-        }
-      }
+      const recorderStream = captureMix.recorderStream;
       
       const handleRecordedBlob = async (webmBlob: Blob) => {
         if (isStoppedManuallyRef.current) {
