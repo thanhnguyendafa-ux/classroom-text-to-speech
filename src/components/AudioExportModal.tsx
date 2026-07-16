@@ -9,6 +9,7 @@ import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, err
 import { PremiumAudioExportCancelledError } from '../infrastructure/audio/premiumAudioExportStrategy';
 import { runBrowserSpeechSequence } from '../infrastructure/audio/browserSpeechSequence';
 import { encodeCapturedAudio } from '../infrastructure/audio/browserAudioEncodingStrategy';
+import { processBrowserRecording } from '../infrastructure/audio/browserRecordingProcessor';
 import { acquireCaptureStreams } from '../infrastructure/audio/browserCaptureStreams';
 import { createCaptureAudioMix } from '../infrastructure/audio/browserCaptureMix';
 import { runAudioPreflight } from '../infrastructure/audio/browserAudioPreflight';
@@ -323,75 +324,46 @@ export default function AudioExportModal({
       
       const handleRecordedBlob = async (webmBlob: Blob) => {
         if (capture.stoppedManually) {
-          addLog("DĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â«ng ghi Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m do ngĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âi dÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¹ng hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â§y bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â.");
+          addLog("Đã dừng ghi âm theo yêu cầu.");
           setExportPhase('idle');
           return;
         }
-
         if (capture.abortReason === 'silent-during-speech') {
           setExportPhase('error');
-          setProgressText("KhÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng thu Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â£c tiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿ng");
-          addLog("LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Å“I: TrÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh duyĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡t bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¹ im lĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â·ng hĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â¡n 3 giÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢y liÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Âªn tiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿p trong quÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡ trÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âc. BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â£n ghi bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¹ hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â§y.");
-          
-          if (capture.displayStream) {
-            capture.displayStream.getTracks().forEach(t => t.stop());
-            capture.displayStream = null;
-          }
-          if (capture.microphoneStream) {
-            capture.microphoneStream.getTracks().forEach(t => t.stop());
-            capture.microphoneStream = null;
-          }
+          setProgressText("Không thu được tiếng");
+          addLog("LỖI: Trình duyệt bị im lặng liên tục khi đang đọc. Bản ghi đã bị hủy.");
+          stopMediaStream(capture.displayStream); capture.displayStream = null;
+          stopMediaStream(capture.microphoneStream); capture.microphoneStream = null;
           return;
         }
-
-        addLog("Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âc hoÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n tĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥t. TiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿n hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â nh nÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â©n tĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡p tin mpeg-MP3 thĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­t...");
-        setProgressText("Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Âang giĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â£i nÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â©n & nÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â©n sang Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¹nh dĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡ng MP3 thĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­t...");
+        setProgressText("Đang giải nén và chuyển sang MP3...");
         setExportPhase('processing');
-        
-        if (webmBlob.size === 0) {
-          setExportPhase('error');
-          addLog("LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Å“I: BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â£n ghi rĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Âng.");
-          return;
-        }
-        
+        const decodeContext = createAudioContext();
         try {
-          const arrayBuffer = await webmBlob.arrayBuffer();
-          
-          // Decode raw audio webm/opus into float32 samples
-          const decodeCtx = createAudioContext();
-          let decodedBuffer: AudioBuffer;
-          try {
-            decodedBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
-          } catch (decErr) {
-            console.error("Failed to decode audio data", decErr);
-            addLog("KhÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢ giĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â£i mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ PCM tĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â« bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ nhĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Âº tĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡m. LĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°u trĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â¯ trĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â±c tiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿p dĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Âºi dĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡ng WebM lÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â m phĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă¢â‚¬Â Ä‚â€Ă‚Â¡ng Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡n dĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â± phÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â²ng.");
-            const webmUrl = URL.createObjectURL(webmBlob);
-            replaceAudioBlobUrl(webmUrl);
-            setExportPhase('success');
-            return;
-          } finally {
-            decodeCtx.close().catch(() => {});
-          }
-          
-          addLog(`BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¯t Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â§u chuyĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢n Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¢i mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â³a sang MP3 128kbps (TĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â§n sĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‹Å“: ${decodedBuffer.sampleRate}Hz)...`);
-          
-          const encoded = encodeCapturedAudio(decodedBuffer, encodeMonoMp3);
-          const { peak, rms, clippingRatio, duration, isLikelyClipped } = encoded.metrics;
-          addLog(`Ch?t l??ng thu ?m - Peak: ${peak.toFixed(3)}, RMS: ${rms.toFixed(3)}, clipping: ${(clippingRatio * 100).toFixed(1)}%, th?i l??ng: ${duration.toFixed(1)} gi?y.`);
-          if (isLikelyClipped) addLog("C?NH B?O: T?n hi?u c? d?u hi?u clipping ho?c feedback. H?y d?ng System Audio Only v? gi?m ?m l??ng.");
-          const finalMp3Blob = encoded.blob;
-          const mp3Url = URL.createObjectURL(finalMp3Blob);
-          
-          replaceAudioBlobUrl(mp3Url);
+          const result = await processBrowserRecording({
+            blob: webmBlob,
+            decode: data => decodeContext.decodeAudioData(data),
+            encode: buffer => encodeCapturedAudio(buffer, encodeMonoMp3),
+            createObjectUrl: blob => URL.createObjectURL(blob),
+          });
+          replaceAudioBlobUrl(result.url);
           capture.phase = 'success';
           setExportPhase('success');
-          addLog("ChÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Âºc mĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â«ng! Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ xuĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥t file MP3 thĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­t (audio/mpeg) thÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â nh cÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng.");
-          
-        } catch (mp3Err: unknown) {
-          console.error("MP3 encoder failed:", mp3Err);
-          addLog(`LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Âi mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â³a MP3: ${errorMessage(mp3Err)}`);
+          if (result.kind === 'source-fallback') {
+            addLog(`Không thể mã hóa MP3 (${result.decodeError}). Giữ bản ghi WebM để tránh mất dữ liệu.`);
+            return;
+          }
+          const { peak, rms, clippingRatio, duration, isLikelyClipped } = result.metrics;
+          addLog(`Chất lượng thu âm - Peak: ${peak.toFixed(3)}, RMS: ${rms.toFixed(3)}, clipping: ${(clippingRatio * 100).toFixed(1)}%, thời lượng: ${duration.toFixed(1)} giây.`);
+          if (isLikelyClipped) addLog("CẢNH BÁO: Tín hiệu có dấu hiệu clipping hoặc feedback. Hãy dùng System Audio Only và giảm âm lượng.");
+          addLog("Đã xuất file MP3 thành công.");
+        } catch (error: unknown) {
+          console.error("Browser recording processing failed:", error);
+          addLog(`Lỗi mã hóa bản ghi: ${errorMessage(error)}`);
           capture.phase = 'error';
           setExportPhase('error');
+        } finally {
+          void decodeContext.close().catch(() => {});
         }
       };
       const recorderSession = createMediaRecorderSession(recorderStream, blob => { void handleRecordedBlob(blob); });
