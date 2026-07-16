@@ -1,0 +1,6 @@
+﻿export interface AudioPreflightResult { detected: boolean; peak: number; }
+export interface AudioPreflightInput { analyser: Pick<AnalyserNode, 'frequencyBinCount' | 'getByteFrequencyData'>; speak: () => void; cancel: () => void; now?: () => number; intervalMs?: number; timeoutMs?: number; setInterval?: typeof globalThis.setInterval; clearInterval?: typeof globalThis.clearInterval; }
+export function runAudioPreflight(input: AudioPreflightInput): Promise<AudioPreflightResult> {
+  const now = input.now ?? Date.now; const setTimer = input.setInterval ?? globalThis.setInterval; const clearTimer = input.clearInterval ?? globalThis.clearInterval; const timeout = input.timeoutMs ?? 2500; const interval = input.intervalMs ?? 100;
+  return new Promise(resolve => { let detected = false; let peak = 0; const started = now(); const data = new Uint8Array(input.analyser.frequencyBinCount); input.cancel(); input.speak(); const timer = setTimer(() => { input.analyser.getByteFrequencyData(data); const average = data.length ? data.reduce((sum, value) => sum + value, 0) / data.length : 0; peak = Math.max(peak, average); if (average > 2) detected = true; if (now() - started >= timeout) { clearTimer(timer); input.cancel(); resolve({ detected, peak }); } }, interval); });
+}

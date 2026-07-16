@@ -12,6 +12,7 @@ import { runBrowserSpeechSequence } from '../infrastructure/audio/browserSpeechS
 import { encodeCapturedAudio } from '../infrastructure/audio/browserAudioEncodingStrategy';
 import { acquireCaptureStreams } from '../infrastructure/audio/browserCaptureStreams';
 import { createCaptureAudioMix } from '../infrastructure/audio/browserCaptureMix';
+import { runAudioPreflight } from '../infrastructure/audio/browserAudioPreflight';
 import { createMediaRecorderSession, type MediaRecorderSession } from '../infrastructure/media/mediaRecorderAdapter';
 import { AudioExportResult } from '../features/audio-export/AudioExportResult';
 import { AudioExportProgress } from '../features/audio-export/AudioExportProgress';
@@ -297,70 +298,21 @@ export default function AudioExportModal({
         await audioCtx.resume();
       }
       
-      // ==========================================
-      // STAGE 2: MANDATORY PREFLIGHT CHECK (KIĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚ÂM TRA TÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂN HIĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â U CĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â¨NG)
-      // ==========================================
-      if (hasDisplayAudio) {
-        addLog("Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Âang chĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡y Preflight check: kiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢m tra tÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­n hiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡u SpeechSynthesis...");
-        setProgressText("Preflight check: Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Âang kiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢m tra tÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­n hiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡u Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh...");
-        
-        // Setup temporary preflight connections
-        const preflightSource = audioCtx.createMediaStreamSource(stream);
-        const preflightAnalyser = audioCtx.createAnalyser();
-        preflightAnalyser.fftSize = 256;
-        preflightSource.connect(preflightAnalyser);
-        
-        const preflightData = new Uint8Array(preflightAnalyser.frequencyBinCount);
-        
-        // Trigger short test utterance
-        const testUtterance = new SpeechSynthesisUtterance("Starting");
-        testUtterance.volume = 1.0;
-        testUtterance.rate = 1.0;
-        testUtterance.lang = "en-US";
-        
-        // Force cancellation and play
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(testUtterance);
-        
-        let detectedSignal = false;
-        let peakLevel = 0;
-        const startTime = Date.now();
-        
-        const checkPreflight = () => {
-          return new Promise<boolean>((resolve) => {
-            const checkTimer = setInterval(() => {
-              preflightAnalyser.getByteFrequencyData(preflightData);
-              let sum = 0;
-              for (let i = 0; i < preflightData.length; i++) {
-                sum += preflightData[i];
-              }
-              const avg = sum / preflightData.length;
-              if (avg > peakLevel) peakLevel = avg;
-              if (avg > 2.0) {
-                detectedSignal = true;
-              }
-              
-              if (Date.now() - startTime >= 2500) {
-                clearInterval(checkTimer);
-                resolve(detectedSignal);
-              }
-            }, 100);
-          });
-        };
-        
-        const preflightResult = await checkPreflight();
-        window.speechSynthesis.cancel(); // Stop preflight speech
-        
-        // Clean up preflight connections
-        preflightSource.disconnect();
-        
-        if (!preflightResult) {
-          stream.getTracks().forEach(t => t.stop());
-          if (micStream) micStream.getTracks().forEach(t => t.stop());
-          throw new Error(`PREFLIGHT_FAIL: Ä‚â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚Âm thanh hoÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n toÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n cÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m (Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ lĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Âºn cĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â±c Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡i: ${peakLevel.toFixed(1)}). BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡n PHĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¢I chĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Ân mĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â¥c 'ToÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh' vÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â  bĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­t 'Chia sĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â» Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡ thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‹Å“ng' Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢ thu Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â£c giĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âng nÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â³i.`);
-        }
-        
-        addLog(`Preflight OK! NhĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­n Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â£c tÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­n hiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡u Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡ thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‹Å“ng (CĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âng Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ cĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â±c Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡i: ${peakLevel.toFixed(1)}).`);
+      // Stage 2: mandatory system-audio preflight
+      if (hasDisplayAudio && stream) {
+        setProgressText("Preflight: ?ang ki?m tra t?n hi?u ?m thanh...");
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        const result = await runAudioPreflight({
+          analyser,
+          cancel: () => window.speechSynthesis.cancel(),
+          speak: () => { const utterance = new SpeechSynthesisUtterance("Starting"); utterance.volume = 1; utterance.rate = 1; utterance.lang = "en-US"; window.speechSynthesis.speak(utterance); },
+        });
+        source.disconnect();
+        if (!result.detected) { stopMediaStream(stream); stopMediaStream(micStream); throw new Error(`PREFLIGHT_FAIL: Kh?ng nh?n ???c t?n hi?u ?m thanh h? th?ng (peak ${result.peak.toFixed(1)}).`); }
+        addLog(`Preflight OK, peak ${result.peak.toFixed(1)}.`);
       }
       
       // Setup permanent live routing
