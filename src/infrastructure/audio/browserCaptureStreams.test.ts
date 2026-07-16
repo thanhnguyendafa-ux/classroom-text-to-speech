@@ -1,0 +1,3 @@
+﻿import assert from "node:assert/strict"; import test from "node:test"; import { acquireCaptureStreams, hasCaptureAudio } from "./browserCaptureStreams";
+const stream = (count: number) => ({ getAudioTracks: () => Array.from({ length: count }, () => ({})) } as MediaStream);
+test("acquires one canonical source and retries microphone constraints", async () => { let calls = 0; const result = await acquireCaptureStreams({ source: "mic", displayConstraints: {}, captureDisplay: async () => stream(1), getUserMedia: async () => { calls += 1; if (calls === 1) throw new Error("unsupported"); return stream(1); } }); assert.equal(result.display, null); assert.equal(calls, 2); assert.equal(hasCaptureAudio(result), true); });

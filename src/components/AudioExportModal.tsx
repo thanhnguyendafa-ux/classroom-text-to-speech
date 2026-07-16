@@ -10,6 +10,7 @@ import { createWavBlob } from '../infrastructure/audio/audioExportAssembler';
 import { PremiumAudioExportCancelledError, runPremiumAudioExport } from '../infrastructure/audio/premiumAudioExportStrategy';
 import { runBrowserSpeechSequence } from '../infrastructure/audio/browserSpeechSequence';
 import { encodeCapturedAudio } from '../infrastructure/audio/browserAudioEncodingStrategy';
+import { acquireCaptureStreams } from '../infrastructure/audio/browserCaptureStreams';
 import { createMediaRecorderSession, type MediaRecorderSession } from '../infrastructure/media/mediaRecorderAdapter';
 import { AudioExportResult } from '../features/audio-export/AudioExportResult';
 import { AudioExportProgress } from '../features/audio-export/AudioExportProgress';
@@ -260,47 +261,18 @@ export default function AudioExportModal({
     }
 
     try {
-      let micStream: MediaStream | null = null;
-      let stream: MediaStream | null = null;
-
-      if (audioSource === 'mic') {
-        try {
-          try {
-            micStream = await navigator.mediaDevices.getUserMedia({
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-              }
-            });
-          } catch (firstTryErr) {
-            console.warn("Direct customizable mic stream constraints failed, falling back to basic audio stream:", firstTryErr);
-            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          }
-          micStreamRef.current = micStream;
-          addLog("Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ khĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€¦Ă‚Â¸i tĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡o Microphone thÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â nh cÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng!");
-        } catch (micErr: unknown) {
-          console.error("Microphone access is denied:", micErr);
-          throw new Error("KhÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢ truy cĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­p Microphone. Vui lÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â²ng cĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥p quyĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Ân Microphone Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€ Ă¢â‚¬â„¢ sĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â­ dĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â¥ng chĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿ Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ dĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â± phÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â²ng!");
-        }
-      } else {
-        // 1. Capture display stream with optimized entire screen / system audio cues
-        const displayConstraints = buildDisplayCaptureConstraints({
-          width: 320,
-          height: 180,
-          frameRate: 10,
-          onlyCurrentTab,
-          captureSystemAudio: true,
-        });
-
-        try {
-          stream = await captureDisplay(displayConstraints);
-          mediaStreamRef.current = stream;
-        } catch (displayErr: unknown) {
-          console.error("Display media capturing failed:", displayErr);
-          throw new Error("BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡n Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â§y chia sĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â» mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh / Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡ thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‹Å“ng. Vui lÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â²ng bĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥m thĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â­ lĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡i.");
-        }
-      }
+      const displayConstraints = buildDisplayCaptureConstraints({ width: 320, height: 180, frameRate: 10, onlyCurrentTab, captureSystemAudio: true });
+      const captureStreams = await acquireCaptureStreams({
+        source: audioSource,
+        displayConstraints,
+        captureDisplay,
+        getUserMedia: constraints => navigator.mediaDevices.getUserMedia(constraints),
+      });
+      const stream = captureStreams.display;
+      const micStream = captureStreams.microphone;
+      mediaStreamRef.current = stream;
+      micStreamRef.current = micStream;
+      addLog(audioSource === 'mic' ? "?? kh?i t?o Microphone." : "?? nh?n lu?ng chia s? m?n h?nh v? ?m thanh h? th?ng.");
       
       // 2. Validate audio track selection
       const displayAudioTracks = stream ? stream.getAudioTracks() : [];
