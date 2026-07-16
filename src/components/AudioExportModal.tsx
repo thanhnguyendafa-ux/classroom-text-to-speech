@@ -23,6 +23,7 @@ import { useOwnedObjectUrl } from '../application/audio-export/useOwnedObjectUrl
 import { BrowserCaptureResourceOwner } from '../application/audio-export/browserCaptureResourceOwner';
 import { executePremiumAudioExport } from '../application/audio-export/executePremiumAudioExport';
 import { createAudioSilenceMonitor } from '../domain/audio-export/audioSilenceMonitor';
+import { startBrowserCaptureLevelMonitor } from '../infrastructure/audio/browserCaptureLevelMonitor';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -276,47 +277,31 @@ export default function AudioExportModal({
       const analyserNode = audioCtx.createAnalyser();
       analyserNode.fftSize = 256;
       const captureMix = createCaptureAudioMix(audioCtx, stream, micStream, analyserNode);
-      const analyserDataArray = new Uint8Array(analyserNode.frequencyBinCount);
-      
-      // Setup active silence checker loop
-      let lastCheckTime = Date.now();
-      const silenceMonitor = createAudioSilenceMonitor();
-
-      const updateVolumePeak = () => {
-        if (capture.stoppedManually || !analyserNode || !analyserDataArray) return;
-        
-        analyserNode.getByteFrequencyData(analyserDataArray);
-        let sum = 0;
-        for (let i = 0; i < analyserDataArray.length; i++) {
-          sum += analyserDataArray[i];
-        }
-        const avg = sum / analyserDataArray.length;
-        setSoundLevel(avg);
-        
-        const now = Date.now();
-        const delta = (now - lastCheckTime) / 1000;
-        lastCheckTime = now;
-        
-        const decision = silenceMonitor.sample({ level: avg, elapsedSeconds: delta, expectingSpeech: capture.expectingSpeech, recording: capture.phase === 'recording' });
-        setMicActiveWarning(decision.warn);
-        if (decision.abort) {
-          addLog("C?NH B?O: T?n hi?u ?m thanh bi?n m?t khi ?ang ??c b?i.");
-          capture.abortReason = 'silent-during-speech';
-          capture.phase = 'error';
-          if (capture.animationFrame) { cancelAnimationFrame(capture.animationFrame); capture.animationFrame = null; }
-          try { capture.recorderSession?.stop(); } catch {}
-          window.speechSynthesis.cancel();
-          return;
-        }
-        
-        capture.animationFrame = requestAnimationFrame(updateVolumePeak);
-      };
-
       if (hasDisplayAudio) {
-        lastCheckTime = Date.now();
-        updateVolumePeak();
+        const silenceMonitor = createAudioSilenceMonitor();
+        capture.stopLevelMonitor = startBrowserCaptureLevelMonitor({
+          analyser: analyserNode,
+          sample: input => silenceMonitor.sample(input),
+          isCancelled: () => capture.stoppedManually,
+          isExpectingSpeech: () => capture.expectingSpeech,
+          isRecording: () => capture.phase === 'recording',
+          now: () => Date.now(),
+          requestFrame: callback => requestAnimationFrame(callback),
+          cancelFrame: frame => cancelAnimationFrame(frame),
+          onLevel: level => setSoundLevel(level),
+          onWarning: warning => setMicActiveWarning(warning),
+          onAbort: () => {
+            addLog("CẢNH BÁO: Tín hiệu âm thanh biến mất khi đang đọc bài.");
+            capture.abortReason = 'silent-during-speech';
+            capture.phase = 'error';
+            capture.stopLevelMonitor?.();
+            capture.stopLevelMonitor = null;
+            capture.recorderSession?.stop();
+            window.speechSynthesis.cancel();
+          },
+        });
       } else {
-        setSoundLevel(5); // fallback level
+        setSoundLevel(5);
       }
 
       // 3. Initialize MediaRecorder to capture webm/opus buffer sequentially
@@ -397,7 +382,7 @@ export default function AudioExportModal({
         addLog("?? ch?y h?t danh s?ch c?u. ?ang d?ng ghi ?m...");
         capture.phase = 'encoding';
         capture.expectingSpeech = false;
-        if (capture.animationFrame) { cancelAnimationFrame(capture.animationFrame); capture.animationFrame = null; }
+        capture.stopLevelMonitor?.(); capture.stopLevelMonitor = null;
         recorderSession.stop();
         stopMediaStream(capture.displayStream); capture.displayStream = null;
         stopMediaStream(capture.microphoneStream); capture.microphoneStream = null;
