@@ -1,0 +1,2 @@
+﻿import assert from "node:assert/strict"; import test from "node:test"; import { BrowserCaptureResourceOwner } from "./browserCaptureResourceOwner";
+test("cancel owns the terminal resource cleanup transition", () => { const owner = new BrowserCaptureResourceOwner(); owner.phase = "recording"; owner.expectingSpeech = true; owner.cancel(); assert.equal(owner.stoppedManually, true); assert.equal(owner.phase, "error"); assert.equal(owner.expectingSpeech, false); });

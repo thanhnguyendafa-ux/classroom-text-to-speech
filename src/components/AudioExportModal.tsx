@@ -20,6 +20,7 @@ import { AudioExportProgress } from '../features/audio-export/AudioExportProgres
 import { AudioExportSettings } from '../features/audio-export/AudioExportSettings';
 import { useAudioExportController } from '../application/audio-export/useAudioExportController';
 import { useOwnedObjectUrl } from '../application/audio-export/useOwnedObjectUrl';
+import { BrowserCaptureResourceOwner } from '../application/audio-export/browserCaptureResourceOwner';
 import { createAudioSilenceMonitor } from '../domain/audio-export/audioSilenceMonitor';
 
 interface AudioExportModalProps {
@@ -100,16 +101,9 @@ export default function AudioExportModal({
   const [silentTimerCount, setSilentTimerCount] = useState<number>(0);
   
   // Refs
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const micStreamRef = useRef<MediaStream | null>(null);
-  const recorderSessionRef = useRef<MediaRecorderSession | null>(null);
-  const recordingUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const isStoppedManuallyRef = useRef<boolean>(false);
-  const animationFrameRef = useRef<number | null>(null);
-  const capturePhaseRef = useRef<'idle' | 'preflight' | 'recording' | 'encoding' | 'success' | 'error'>('idle');
-  const abortReasonRef = useRef<string | null>(null);
-  const isExpectingSpeechRef = useRef<boolean>(false);
+  const captureOwnerRef = useRef<BrowserCaptureResourceOwner | null>(null);
+  if (!captureOwnerRef.current) captureOwnerRef.current = new BrowserCaptureResourceOwner();
+  const capture = captureOwnerRef.current;
   
   const availableSets = useMemo(() => Array.from(new Set(speechList.flatMap(item => item.setId ? [item.setId] : []))), [speechList]);
   const itemsToExport = useMemo(() => selectedRange === 'all' ? speechList : speechList.filter(item => item.setId === selectedRange), [speechList, selectedRange]);
@@ -132,37 +126,8 @@ export default function AudioExportModal({
   };
 
   const cancelAllProcesses = () => {
-    isStoppedManuallyRef.current = true;
-    capturePhaseRef.current = 'error';
-    isExpectingSpeechRef.current = false;
-    
-    // Stop recording refs
-    try { recorderSessionRef.current?.stop(); } catch {}
-    recorderSessionRef.current = null;
-    
-    // Stop streams
-    stopMediaStream(mediaStreamRef.current);
-    mediaStreamRef.current = null;
-
-    stopMediaStream(micStreamRef.current);
-    micStreamRef.current = null;
-    
-    // Cancel system TTS playbacks
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    
-    // Close AudioContext
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
-    
-    // Clear anim
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
+    capture.cancel();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel();
   };
 
   const extractPcmFromWavDataUrl = (dataUrl: string): Int16Array => {
@@ -178,7 +143,7 @@ export default function AudioExportModal({
    * This retrieves clean audio blocks digitally with 0 background noise
    */
   const handleExportPremiumAI = async () => {
-    isStoppedManuallyRef.current = false;
+    capture.stoppedManually = false;
     setExportPhase('processing');
     clearLogs();
     replaceAudioBlobUrl(null);
@@ -199,7 +164,7 @@ export default function AudioExportModal({
         items: itemsToExport,
         defaultPauseSeconds: timeBetweenLines,
         sampleRate,
-        isCancelled: () => isStoppedManuallyRef.current,
+        isCancelled: () => capture.stoppedManually,
         onItemProgress: (completed, total, item) => {
           setProgressPercent(Math.round((completed / total) * 80));
           setProgressText(`?? t?i gi?ng ??c c?u ${completed}/${total}: "${item.text.substring(0, 40)}"`);
@@ -239,10 +204,10 @@ export default function AudioExportModal({
    * Records native window speechSynthesis played on the local tab
    */
   const handleExportBrowserTTS = async () => {
-    isStoppedManuallyRef.current = false;
-    capturePhaseRef.current = 'preflight';
-    abortReasonRef.current = null;
-    isExpectingSpeechRef.current = false;
+    capture.stoppedManually = false;
+    capture.phase = 'preflight';
+    capture.abortReason = null;
+    capture.expectingSpeech = false;
     setExportPhase('recording');
     clearLogs();
     replaceAudioBlobUrl(null);
@@ -268,8 +233,8 @@ export default function AudioExportModal({
       });
       const stream = captureStreams.display;
       const micStream = captureStreams.microphone;
-      mediaStreamRef.current = stream;
-      micStreamRef.current = micStream;
+      capture.displayStream = stream;
+      capture.microphoneStream = micStream;
       addLog(audioSource === 'mic' ? "?? kh?i t?o Microphone." : "?? nh?n lu?ng chia s? m?n h?nh v? ?m thanh h? th?ng.");
       
       // 2. Validate audio track selection
@@ -287,7 +252,7 @@ export default function AudioExportModal({
       addLog("KhĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€¦Ă‚Â¸i tĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¡o bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¢ thu Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m...");
       
       const audioCtx = createAudioContext();
-      audioContextRef.current = audioCtx;
+      capture.audioContext = audioCtx;
 
       if (audioCtx.state === 'suspended') {
         await audioCtx.resume();
@@ -321,7 +286,7 @@ export default function AudioExportModal({
       const silenceMonitor = createAudioSilenceMonitor();
 
       const updateVolumePeak = () => {
-        if (isStoppedManuallyRef.current || !analyserNode || !analyserDataArray) return;
+        if (capture.stoppedManually || !analyserNode || !analyserDataArray) return;
         
         analyserNode.getByteFrequencyData(analyserDataArray);
         let sum = 0;
@@ -335,19 +300,19 @@ export default function AudioExportModal({
         const delta = (now - lastCheckTime) / 1000;
         lastCheckTime = now;
         
-        const decision = silenceMonitor.sample({ level: avg, elapsedSeconds: delta, expectingSpeech: isExpectingSpeechRef.current, recording: capturePhaseRef.current === 'recording' });
+        const decision = silenceMonitor.sample({ level: avg, elapsedSeconds: delta, expectingSpeech: capture.expectingSpeech, recording: capture.phase === 'recording' });
         setMicActiveWarning(decision.warn);
         if (decision.abort) {
           addLog("C?NH B?O: T?n hi?u ?m thanh bi?n m?t khi ?ang ??c b?i.");
-          abortReasonRef.current = 'silent-during-speech';
-          capturePhaseRef.current = 'error';
-          if (animationFrameRef.current) { cancelAnimationFrame(animationFrameRef.current); animationFrameRef.current = null; }
-          try { recorderSessionRef.current?.stop(); } catch {}
+          capture.abortReason = 'silent-during-speech';
+          capture.phase = 'error';
+          if (capture.animationFrame) { cancelAnimationFrame(capture.animationFrame); capture.animationFrame = null; }
+          try { capture.recorderSession?.stop(); } catch {}
           window.speechSynthesis.cancel();
           return;
         }
         
-        animationFrameRef.current = requestAnimationFrame(updateVolumePeak);
+        capture.animationFrame = requestAnimationFrame(updateVolumePeak);
       };
 
       if (hasDisplayAudio) {
@@ -361,24 +326,24 @@ export default function AudioExportModal({
       const recorderStream = captureMix.recorderStream;
       
       const handleRecordedBlob = async (webmBlob: Blob) => {
-        if (isStoppedManuallyRef.current) {
+        if (capture.stoppedManually) {
           addLog("DĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â«ng ghi Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m do ngĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âi dÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¹ng hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â§y bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â.");
           setExportPhase('idle');
           return;
         }
 
-        if (abortReasonRef.current === 'silent-during-speech') {
+        if (capture.abortReason === 'silent-during-speech') {
           setExportPhase('error');
           setProgressText("KhÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng thu Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă¢â‚¬Â Ä‚â€Ă‚Â°Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â£c tiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿ng");
           addLog("LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Å“I: TrÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh duyĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡t bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¹ im lĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â·ng hĂ„â€Ă¢â‚¬Â Ä‚â€Ă‚Â¡n 3 giÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢y liÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Âªn tiĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿p trong quÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡ trÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âc. BĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â£n ghi bĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¹ hĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â§y.");
           
-          if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach(t => t.stop());
-            mediaStreamRef.current = null;
+          if (capture.displayStream) {
+            capture.displayStream.getTracks().forEach(t => t.stop());
+            capture.displayStream = null;
           }
-          if (micStreamRef.current) {
-            micStreamRef.current.getTracks().forEach(t => t.stop());
-            micStreamRef.current = null;
+          if (capture.microphoneStream) {
+            capture.microphoneStream.getTracks().forEach(t => t.stop());
+            capture.microphoneStream = null;
           }
           return;
         }
@@ -422,25 +387,25 @@ export default function AudioExportModal({
           const mp3Url = URL.createObjectURL(finalMp3Blob);
           
           replaceAudioBlobUrl(mp3Url);
-          capturePhaseRef.current = 'success';
+          capture.phase = 'success';
           setExportPhase('success');
           addLog("ChÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Âºc mĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Â«ng! Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ xuĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥t file MP3 thĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â­t (audio/mpeg) thÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â nh cÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ng.");
           
         } catch (mp3Err: unknown) {
           console.error("MP3 encoder failed:", mp3Err);
           addLog(`LĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă¢â‚¬Âi mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£ hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â³a MP3: ${errorMessage(mp3Err)}`);
-          capturePhaseRef.current = 'error';
+          capture.phase = 'error';
           setExportPhase('error');
         }
       };
       const recorderSession = createMediaRecorderSession(recorderStream, blob => { void handleRecordedBlob(blob); });
-      recorderSessionRef.current = recorderSession;
+      capture.recorderSession = recorderSession;
       const recorder = recorderSession.recorder;
       addLog(`K?ch ho?t m?y ghi ?m (codec: ${recorder.mimeType || "m?c ??nh"})`);
       
       // Start recording
       recorderSession.start();
-      capturePhaseRef.current = 'recording';
+      capture.phase = 'recording';
       
       // 4. Sequential browser SpeechSynthesis loop
       await runBrowserSpeechSequence({
@@ -452,22 +417,22 @@ export default function AudioExportModal({
         speechSynthesis: window.speechSynthesis,
         createUtterance: text => new SpeechSynthesisUtterance(text),
         wait: (callback, delayMs) => window.setTimeout(callback, delayMs),
-        isCancelled: () => isStoppedManuallyRef.current,
+        isCancelled: () => capture.stoppedManually,
         defaultPauseSeconds: timeBetweenLines,
         onProgress: (index, item) => { setProgressPercent(Math.round((index / itemsToExport.length) * 100)); setProgressText(`?ang ph?t d?ng ${index + 1}/${itemsToExport.length}: "${item.text.substring(0, 40)}"`); },
         onRepeat: (index, repeat, total) => addLog(`??c l?i c?u ${index + 1} (l?n ${repeat}/${total})`),
         onError: (index, error) => addLog(`H? th?ng TTS c?nh b?o tr?n d?ng ${index + 1}: ${error}`),
-        onExpectationChange: expecting => { isExpectingSpeechRef.current = expecting; },
-        onUtterance: utterance => { recordingUtteranceRef.current = utterance; },
+        onExpectationChange: expecting => { capture.expectingSpeech = expecting; },
+        onUtterance: utterance => { capture.recordingUtterance = utterance; },
       });
-      if (!isStoppedManuallyRef.current) {
+      if (!capture.stoppedManually) {
         addLog("?? ch?y h?t danh s?ch c?u. ?ang d?ng ghi ?m...");
-        capturePhaseRef.current = 'encoding';
-        isExpectingSpeechRef.current = false;
-        if (animationFrameRef.current) { cancelAnimationFrame(animationFrameRef.current); animationFrameRef.current = null; }
+        capture.phase = 'encoding';
+        capture.expectingSpeech = false;
+        if (capture.animationFrame) { cancelAnimationFrame(capture.animationFrame); capture.animationFrame = null; }
         recorderSession.stop();
-        stopMediaStream(mediaStreamRef.current); mediaStreamRef.current = null;
-        stopMediaStream(micStreamRef.current); micStreamRef.current = null;
+        stopMediaStream(capture.displayStream); capture.displayStream = null;
+        stopMediaStream(capture.microphoneStream); capture.microphoneStream = null;
       }
       
     } catch (err: unknown) {
