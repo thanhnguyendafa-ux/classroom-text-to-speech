@@ -9,6 +9,7 @@ import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, err
 import { createWavBlob } from '../infrastructure/audio/audioExportAssembler';
 import { PremiumAudioExportCancelledError, runPremiumAudioExport } from '../infrastructure/audio/premiumAudioExportStrategy';
 import { runBrowserSpeechSequence } from '../infrastructure/audio/browserSpeechSequence';
+import { encodeCapturedAudio } from '../infrastructure/audio/browserAudioEncodingStrategy';
 import { AudioExportResult } from '../features/audio-export/AudioExportResult';
 import { AudioExportProgress } from '../features/audio-export/AudioExportProgress';
 import { AudioExportSettings } from '../features/audio-export/AudioExportSettings';
@@ -581,56 +582,11 @@ export default function AudioExportModal({
           
           addLog(`BÄ‚Â¡Ă‚ÂºĂ‚Â¯t Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚ÂºĂ‚Â§u chuyÄ‚Â¡Ă‚Â»Ă†â€™n Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¢i mĂ„â€Ă‚Â£ hĂ„â€Ă‚Â³a sang MP3 128kbps (TÄ‚Â¡Ă‚ÂºĂ‚Â§n sÄ‚Â¡Ă‚Â»Ă¢â‚¬Ëœ: ${decodedBuffer.sampleRate}Hz)...`);
           
-          const numSamples = decodedBuffer.length;
-          const leftChan = decodedBuffer.getChannelData(0);
-          const rightChan = decodedBuffer.numberOfChannels > 1 ? decodedBuffer.getChannelData(1) : null;
-          
-          // Mixed to Mono Float32
-          const monoFloat = new Float32Array(numSamples);
-          if (rightChan) {
-            for (let i = 0; i < numSamples; i++) {
-              monoFloat[i] = (leftChan[i] + rightChan[i]) / 2;
-            }
-          } else {
-            monoFloat.set(leftChan);
-          }
-          
-          // Float32 to Int16
-          const pcmInt16 = new Int16Array(numSamples);
-          for (let i = 0; i < numSamples; i++) {
-            let s = monoFloat[i];
-            s = Math.max(-1.0, Math.min(1.0, s));
-            pcmInt16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-          }
-
-          // Quality gate check: measure peak, RMS, clipping ratio, duration
-          let peak = 0;
-          let sumSquares = 0;
-          let clippingCount = 0;
-          const duration = decodedBuffer.duration;
-          
-          for (let i = 0; i < numSamples; i++) {
-            const val = monoFloat[i];
-            const absVal = Math.abs(val);
-            if (absVal > peak) peak = absVal;
-            sumSquares += val * val;
-            if (absVal >= 0.99) { // threshold for clipping
-              clippingCount++;
-            }
-          }
-          
-          const rms = Math.sqrt(sumSquares / numSamples);
-          const clippingRatio = clippingCount / numSamples;
-          
-          addLog(`ChÄ‚Â¡Ă‚ÂºĂ‚Â¥t lÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă‚Â£ng thu Ă„â€Ă‚Â¢m - Peak: ${peak.toFixed(3)}, RMS: ${rms.toFixed(3)}, TÄ‚Â¡Ă‚Â»Ă‚Â· lÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡ clipping (rĂ„â€Ă‚Â¨): ${(clippingRatio * 100).toFixed(1)}%, ThÄ‚Â¡Ă‚Â»Ă‚Âi lÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă‚Â£ng: ${duration.toFixed(1)} giĂ„â€Ă‚Â¢y.`);
-          
-          if (clippingRatio > 0.05 || (rms > 0.5 && peak > 0.98)) {
-            addLog("Ä‚Â¢Ă‚ÂĂ‚Â Ä‚Â¯Ă‚Â¸Ă‚Â CÄ‚Â¡Ă‚ÂºĂ‚Â¢NH BĂ„â€Ă‚ÂO CHÄ‚Â¡Ă‚ÂºĂ‚Â¤T LÄ‚â€ Ă‚Â¯Ä‚Â¡Ă‚Â»Ă‚Â¢NG: PhĂ„â€Ă‚Â¡t hiÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡n tĂ„â€Ă‚Â­n hiÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡u Ă„â€Ă‚Â¢m thanh cĂ„â€Ă‚Â³ hiÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡n tÄ‚â€ Ă‚Â°Ä‚Â¡Ă‚Â»Ă‚Â£ng rĂ„â€Ă‚Â¨ (clipping) hoÄ‚Â¡Ă‚ÂºĂ‚Â·c rĂ„â€Ă‚Âº (feedback loop) quĂ„â€Ă‚Â¡ lÄ‚Â¡Ă‚Â»Ă¢â‚¬Âºn.");
-            addLog("KhuyĂ„â€Ă‚Âªn dĂ„â€Ă‚Â¹ng: BÄ‚Â¡Ă‚ÂºĂ‚Â¡n nĂ„â€Ă‚Âªn chuyÄ‚Â¡Ă‚Â»Ă†â€™n nguÄ‚Â¡Ă‚Â»Ă¢â‚¬Å“n thĂ„â€Ă‚Â nh 'Ghi Ă„â€Ă‚Â¢m tÄ‚Â¡Ă‚Â»Ă‚Â« trĂ„â€Ă‚Â¬nh duyÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡t (System Audio Only)' vĂ„â€Ă‚Â  tÄ‚Â¡Ă‚ÂºĂ‚Â¯t Micro Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă†â€™ Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚ÂºĂ‚Â¡t Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă¢â€Â¢ tinh khiÄ‚Â¡Ă‚ÂºĂ‚Â¿t tÄ‚Â¡Ă‚Â»Ă¢â‚¬Ëœi Ä‚â€ Ă‚Â°u.");
-          }
-          
-          addLog("NĂ„â€Ă‚Â©n dÄ‚Â¡Ă‚Â»Ă‚Â¯ liÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¡u PCM sang luÄ‚Â¡Ă‚Â»Ă¢â‚¬Å“ng nĂ„â€Ă‚Â©n MP3 bÄ‚Â¡Ă‚ÂºĂ‚Â±ng bÄ‚Â¡Ă‚Â»Ă¢â€Â¢ nĂ„â€Ă‚Â©n tÄ‚Â¡Ă‚Â»Ă¢â‚¬Ëœi Ä‚â€ Ă‚Â°u...");
-          const finalMp3Blob = encodeMonoMp3(pcmInt16, decodedBuffer.sampleRate, 128);
+          const encoded = encodeCapturedAudio(decodedBuffer, encodeMonoMp3);
+          const { peak, rms, clippingRatio, duration, isLikelyClipped } = encoded.metrics;
+          addLog(`Ch?t l??ng thu ?m - Peak: ${peak.toFixed(3)}, RMS: ${rms.toFixed(3)}, clipping: ${(clippingRatio * 100).toFixed(1)}%, th?i l??ng: ${duration.toFixed(1)} gi?y.`);
+          if (isLikelyClipped) addLog("C?NH B?O: T?n hi?u c? d?u hi?u clipping ho?c feedback. H?y d?ng System Audio Only v? gi?m ?m l??ng.");
+          const finalMp3Blob = encoded.blob;
           const mp3Url = URL.createObjectURL(finalMp3Blob);
           
           replaceAudioBlobUrl(mp3Url);
