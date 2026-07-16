@@ -62,10 +62,10 @@ import LessonsView from './features/lessons/LessonsView';
 import LessonBuilderView from './features/lesson-builder/LessonBuilderView';
 import { createLessonFingerprint } from './features/lesson-editor/lessonEditorStatus';
 import { useLessonPreferences } from './features/lesson-preferences/useLessonPreferences';
-import { buildSpeechItems, detectLanguage, parseLineSymbols } from './features/lesson-editor/speechItemFactory';
+import { buildSpeechItems } from './features/lesson-editor/speechItemFactory';
 import { parseSpeechListImport } from './features/lesson-editor/speechListImport';
-import { duplicateSet, joinWithNext, ungroupSet, updateSpeechItem } from './features/lesson-editor/speechItemCommands';
 import { useLessonEditorController } from './application/lesson-editor/useLessonEditorController';
+import { useLessonRowController } from './application/lesson-editor/useLessonRowController';
 import { useLessonPersistenceController } from './application/lesson-persistence/useLessonPersistenceController';
 import { useBrowserVoiceCatalog } from './application/playback/useBrowserVoiceCatalog';
 import { usePlaybackController } from './application/playback/usePlaybackController';
@@ -204,10 +204,6 @@ export default function App() {
   }, []);
   const voices = useBrowserVoiceCatalog({ preferences: browserVoicePreferences, onDefaultsChanged: applyBrowserVoiceDefaults });
 
-  // HTML5 Drag and Drop states
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-
   // Auto progression configuration
   const [autoAdvance, setAutoAdvance] = useState<boolean>(true);
 
@@ -239,12 +235,6 @@ export default function App() {
   const [isSearchingUniversalImage, setIsSearchingUniversalImage] = useState<boolean>(false);
 
   const [timeBetweenLines, setTimeBetweenLines] = useState<number>(2.0); // Default pause time in seconds
-
-  // Quick addition line form
-  const [newRowText, setNewRowText] = useState<string>('');
-  const [newRowLang, setNewRowLang] = useState<LanguageCode | 'auto'>('auto');
-  const [newRowRepeats, setNewRowRepeats] = useState<number>(1);
-  const [newRowDelay, setNewRowDelay] = useState<number>(2.0);
 
   // Layout mode for the speech item rows
   const toggleRowLayoutMode = (mode: 'below' | 'side') => {
@@ -462,71 +452,7 @@ export default function App() {
     setSpeechList(newList);
     handleStopAll();
   }
-  // Add single custom row
-  const handleAddSingleRow = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newRowText.trim()) return;
-
-    // Parse symbols from the text if provided in the quick action form
-    const { cleanText, repeats, delaySec } = parseLineSymbols(newRowText.trim(), newRowRepeats, newRowDelay);
-    const detected = detectLanguage(cleanText);
-    const resolved: LanguageCode = newRowLang === 'auto' ? detected : newRowLang;
-
-    const newItem: SpeechItem = {
-      id: `row-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      text: cleanText,
-      detectedLang: detected,
-      selectedLang: newRowLang,
-      resolvedLang: resolved,
-      repeats: repeats,
-      delaySec: delaySec,
-      speed: speed
-    };
-
-    setSpeechList(prev => [...prev, newItem]);
-    setNewRowText('');
-    setNewRowLang('auto');
-    setNewRowRepeats(1);
-    setNewRowDelay(2.0);
-  };
-
-  // Draggable Drop handlers
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    setDraggedIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-    // Add visual styling to indicate drag start
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = '0.4';
-    }
-  };
-
-  const handleDragEnd = (e: React.DragEvent) => {
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = '1';
-    }
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    if (dragOverIndex !== index) {
-      setDragOverIndex(index);
-    }
-  };
-
-  const handleDropRow = (e: React.DragEvent, targetIndex: number) => {
-    e.preventDefault();
-    if (draggedIndex === null || draggedIndex === targetIndex) return;
-
-    const listCopy = [...speechList];
-    const [draggedItem] = listCopy.splice(draggedIndex, 1);
-    listCopy.splice(targetIndex, 0, draggedItem);
-    setSpeechList(listCopy);
-
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
+  const { draggedIndex, dragOverIndex, newRowText, setNewRowText, newRowLang, setNewRowLang, newRowRepeats, setNewRowRepeats, newRowDelay, setNewRowDelay, addSingleRow: handleAddSingleRow, dragStart: handleDragStart, dragEnd: handleDragEnd, dragOver: handleDragOver, dropRow: handleDropRow, updateRepeats: handleRowRepeatsChange, updateDelay: handleRowDelayChange, updateSpeed: handleRowSpeedChange, updateLanguage: handleRowLangChange, startEditing: startEditingRow, saveEditing: saveEditedRow, deleteRow: handleDeleteRow, joinNext: handleJoinWithNext, ungroup: handleUngroupSet, duplicate: handleDuplicateSet } = useLessonRowController({ speechList, setSpeechList, speed, playingItemId, stopPlayback: handleStopAll, editingItemId, setEditingItemId, editingText, setEditingText });
 
   const handleClearAll = () => {
     handleStopAll();
@@ -540,79 +466,6 @@ export default function App() {
     handleCreateList(content);
   };
 
-  const handleRowRepeatsChange = (id: string, count: number) => {
-    setSpeechList((items) => updateSpeechItem(items, id, { repeats: count }));
-  };
-
-  const handleRowDelayChange = (id: string, delay: number) => {
-    setSpeechList((items) => updateSpeechItem(items, id, { delaySec: delay }));
-  };
-
-  const handleRowSpeedChange = (id: string, rate: number) => {
-    setSpeechList((items) => updateSpeechItem(items, id, { speed: rate }));
-  };
-
-  const handleRowLangChange = (id: string, selectedLang: LanguageCode | 'auto') => {
-    setSpeechList((items) => updateSpeechItem(items, id, { selectedLang }));
-  };
-  // Edit item text inline
-  const startEditingRow = (item: SpeechItem) => {
-    setEditingItemId(item.id);
-    setEditingText(item.text);
-  };
-
-  const saveEditedRow = (id: string) => {
-    if (!editingText.trim()) {
-      handleDeleteRow(id);
-      return;
-    }
-
-    setSpeechList(prev => prev.map(item => {
-      if (item.id === id) {
-        const rawNewText = editingText.trim();
-        // Parse custom speed and repetition codes if typed during manual edit
-        const { cleanText, repeats, delaySec } = parseLineSymbols(rawNewText, item.repeats, item.delaySec);
-        const detected = detectLanguage(cleanText);
-        const resolved = item.selectedLang === 'auto' ? detected : item.selectedLang;
-        return {
-          ...item,
-          text: cleanText,
-          detectedLang: detected,
-          resolvedLang: resolved,
-          repeats: repeats,
-          delaySec: delaySec
-        };
-      }
-      return item;
-    }));
-
-    setEditingItemId(null);
-    setEditingText('');
-  };
-
-  const handleDeleteRow = (id: string) => {
-    if (playingItemId === id) {
-      handleStopAll();
-    }
-    setSpeechList(prev => prev.filter(item => item.id !== id));
-  };
-
-  const handleJoinWithNext = (index: number) => {
-    const setId = `set-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setSpeechList((items) => joinWithNext(items, index, setId));
-  };
-
-  const handleUngroupSet = (setId: string) => {
-    setSpeechList((items) => ungroupSet(items, setId));
-  };
-
-  const handleDuplicateSet = (setId: string) => {
-    const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setSpeechList((items) => duplicateSet(items, setId, {
-      createSetId: () => `set-${nonce}`,
-      createRowId: (sourceId) => `row-${nonce}-${sourceId}-dup`,
-    }));
-  };
   // Generate speech starting from row index zero
   const triggerPlaylistDrill = () => {
     if (speechList.length > 0) {
