@@ -1,26 +1,22 @@
-﻿export type AudioExportStatus = "idle" | "preparing" | "exporting" | "assembling" | "success" | "failure" | "cancelled";
-export type AudioExportState = { status: AudioExportStatus; totalUnits: number; completedUnits: number; progressPercent: number; message: string; error: string | null; resultUrl: string | null; urlToRevoke: string | null };
+export type AudioExportStatus = "idle" | "processing" | "recording" | "success" | "error";
+export type AudioExportState = { status: AudioExportStatus; progressPercent: number; progressText: string; logs: string[]; resultUrl: string | null; error: string | null };
 export type AudioExportAction =
-  | { type: "started"; totalUnits: number }
-  | { type: "unitCompleted"; message: string }
-  | { type: "assemblyStarted" }
-  | { type: "succeeded"; resultUrl: string }
+  | { type: "phaseChanged"; status: AudioExportStatus }
+  | { type: "progressChanged"; percent?: number; text?: string }
+  | { type: "logsCleared" }
+  | { type: "logAdded"; message: string }
+  | { type: "resultChanged"; url: string | null }
   | { type: "failed"; error: string }
-  | { type: "cancelled" }
   | { type: "reset" };
-
-export const createAudioExportState = (): AudioExportState => ({ status: "idle", totalUnits: 0, completedUnits: 0, progressPercent: 0, message: "", error: null, resultUrl: null, urlToRevoke: null });
-const isTerminal = (status: AudioExportStatus) => status === "success" || status === "failure" || status === "cancelled";
-
+export const createAudioExportState = (): AudioExportState => ({ status: "idle", progressPercent: 0, progressText: "", logs: [], resultUrl: null, error: null });
 export function audioExportReducer(state: AudioExportState, action: AudioExportAction): AudioExportState {
-  if (action.type === "reset") return { ...createAudioExportState(), urlToRevoke: state.resultUrl };
-  if (action.type === "started") return { ...createAudioExportState(), status: "preparing", totalUnits: Math.max(0, action.totalUnits) };
-  if (isTerminal(state.status)) return state;
   switch (action.type) {
-    case "unitCompleted": { const completedUnits = Math.min(state.totalUnits, state.completedUnits + 1); return { ...state, status: "exporting", completedUnits, progressPercent: state.totalUnits === 0 ? 0 : Math.round(completedUnits / state.totalUnits * 100), message: action.message }; }
-    case "assemblyStarted": return { ...state, status: "assembling", message: action.type };
-    case "succeeded": return { ...state, status: "success", progressPercent: 100, resultUrl: action.resultUrl, error: null };
-    case "failed": return { ...state, status: "failure", error: action.error };
-    case "cancelled": return { ...state, status: "cancelled" };
+    case "phaseChanged": return { ...state, status: action.status, error: null };
+    case "progressChanged": return { ...state, progressPercent: action.percent === undefined ? state.progressPercent : Math.max(0, Math.min(100, action.percent)), progressText: action.text ?? state.progressText };
+    case "logsCleared": return { ...state, logs: [] };
+    case "logAdded": return { ...state, logs: [...state.logs, action.message] };
+    case "resultChanged": return { ...state, resultUrl: action.url };
+    case "failed": return { ...state, status: "error", error: action.error };
+    case "reset": return createAudioExportState();
   }
 }
