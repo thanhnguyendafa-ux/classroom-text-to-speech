@@ -22,7 +22,8 @@ import { getPremiumVoiceForLang } from '../features/premium-tts/premiumVoices';
 import { premiumTtsCacheStore } from '../features/premium-tts/premiumTtsCacheStore';
 import { resolvePremiumAudio } from '../features/premium-tts/persistent-audio/premiumAudioResolver';
 import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, errorMessage, stopMediaStream } from '../features/media-capture/mediaCaptureAdapter';
-import { concatenatePcm, createSilence, createWavBlob } from '../infrastructure/audio/audioExportAssembler';
+import { createWavBlob } from '../infrastructure/audio/audioExportAssembler';
+import { PremiumAudioExportCancelledError, runPremiumAudioExport } from '../infrastructure/audio/premiumAudioExportStrategy';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -223,81 +224,41 @@ export default function AudioExportModal({
       return;
     }
     
-    const sampleRate = 24000; // Gemini TTS standard output is 24kHz Mono 16-bit
-    const audioBuffers: Int16Array[] = [];
-    
+    const sampleRate = 24000;
+
     try {
-      for (let i = 0; i < itemsToExport.length; i++) {
-        if (isStoppedManuallyRef.current) {
-          addLog("Đã hủy bởi người dùng.");
-          setStatus('idle');
-          return;
-        }
-        
-        const item = itemsToExport[i];
-        const stepPercent = Math.round((i / itemsToExport.length) * 80);
-        setProgressPercent(stepPercent);
-        setProgressText(`Đang kết nối AI để lấy giọng đọc câu ${i + 1}/${itemsToExport.length}...`);
-        
-        const itemLang = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
-        const chosenVoice = getPremiumVoiceForLang(itemLang, {
-          selectedPremiumVoiceEn,
-          selectedPremiumVoiceVi,
-          selectedPremiumVoiceZhCn,
-          selectedPremiumVoiceZhTw,
-          selectedPremiumVoiceJa,
-          selectedPremiumVoiceKo
-        });
-        
-        addLog(`Gọi API câu ${i + 1}/${itemsToExport.length} [${itemLang}]: "${item.text.substring(0, 30)}..."`);
-        
-        // 1. Fetch from Gemini endpoint using shared helper (utilizing shared cache)
-        const audioUrl = await resolvePremiumAudio({
-          userId,
-          lessonId,
-          text: item.text,
-          voice: chosenVoice,
-          lang: itemLang,
-          apiKey: userGeminiApiKey,
-          mode: 'prefer-saved'
-        });
-        
-        const rawPcm = extractPcmFromWavDataUrl(audioUrl);
-        
-        // Push the item's audio segments, repeating based on configured item repeats!
-        const lineRepeats = item.repeats || 1;
-        const lineDelay = item.delaySec !== undefined ? item.delaySec : timeBetweenLines;
-        
-        for (let rep = 0; rep < lineRepeats; rep++) {
-          audioBuffers.push(rawPcm);
-          // Insert silent buffers between repetitions
-          if (rep < lineRepeats - 1 && lineDelay > 0) {
-            audioBuffers.push(createSilence(sampleRate, lineDelay)); // Array filled with zeroes
-          }
-        }
-        
-        // Insert silence after line before auto advancing to next
-        if (i < itemsToExport.length - 1 && lineDelay > 0) {
-          audioBuffers.push(createSilence(sampleRate, lineDelay));
-        }
-      }
-      
-      // Calculate total compiled buffer length
+      const compiledPcm = await runPremiumAudioExport({
+        items: itemsToExport,
+        defaultPauseSeconds: timeBetweenLines,
+        sampleRate,
+        isCancelled: () => isStoppedManuallyRef.current,
+        onItemProgress: (completed, total, item) => {
+          setProgressPercent(Math.round((completed / total) * 80));
+          setProgressText(`?? t?i gi?ng ??c c?u ${completed}/${total}: "${item.text.substring(0, 40)}"`);
+        },
+        resolvePcm: async (item) => {
+          const itemLang = item.selectedLang === 'auto' ? item.detectedLang : item.selectedLang;
+          const chosenVoice = getPremiumVoiceForLang(itemLang, {
+            selectedPremiumVoiceEn,
+            selectedPremiumVoiceVi,
+            selectedPremiumVoiceZhCn,
+            selectedPremiumVoiceZhTw,
+            selectedPremiumVoiceJa,
+            selectedPremiumVoiceKo
+          });
+          addLog(`G?i API [${itemLang}]: "${item.text.substring(0, 30)}..."`);
+          const audioUrl = await resolvePremiumAudio({ userId, lessonId, text: item.text, voice: chosenVoice, lang: itemLang, apiKey: userGeminiApiKey, mode: 'prefer-saved' });
+          return extractPcmFromWavDataUrl(audioUrl);
+        },
+      });
       setProgressPercent(90);
-      setProgressText("Đang liên kết các mảnh âm thanh & chèn khoảng lặng giữa các câu...");
-      
-      const compiledPcm = concatenatePcm(audioBuffers);
-      
-      // Save compiled WAV container
-      addLog("Gói định dạng WAV container chất lượng cao...");
+      setProgressText("?ang ??ng g?i WAV...");
       const finalWavBlob = createWavBlob(compiledPcm, sampleRate);
       const url = URL.createObjectURL(finalWavBlob);
-      
       setAudioBlobUrl(url);
       setProgressPercent(100);
       setStatus('success');
-      addLog("Chúc mừng! File âm thanh đã được liên kết thành công kỹ thuật số 100%.");
-      
+      addLog("Xu?t file ?m thanh th?nh c?ng.");
     } catch (err: unknown) {
       console.error("Lỗi xuất Premium AI:", err);
       setStatus('error');

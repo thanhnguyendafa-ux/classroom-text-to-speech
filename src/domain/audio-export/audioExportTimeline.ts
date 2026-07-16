@@ -11,11 +11,11 @@ const normalizePauseMs = (value: number | undefined, fallback: number): number =
 };
 
 export function buildAudioExportTimeline(items: readonly SpeechItem[], defaultPauseSeconds: number): AudioExportTimelineUnit[] {
-  return items.flatMap(item => {
-    const pause = { type: "pause" as const, durationMs: normalizePauseMs(item.delaySec, defaultPauseSeconds) };
-    return Array.from({ length: normalizeRepeats(item.repeats) }, (_, index) => [
-      { type: "speech" as const, itemId: item.id, iteration: index + 1 },
-      pause,
-    ]).flat();
+  const occurrences = items.flatMap(item => Array.from({ length: normalizeRepeats(item.repeats) }, (_, index) => ({ itemId: item.id, iteration: index + 1, pauseMs: normalizePauseMs(item.delaySec, defaultPauseSeconds) })));
+  const timeline: AudioExportTimelineUnit[] = [];
+  occurrences.forEach((occurrence, index) => {
+    timeline.push({ type: "speech", itemId: occurrence.itemId, iteration: occurrence.iteration });
+    if (index < occurrences.length - 1 && occurrence.pauseMs > 0) timeline.push({ type: "pause", durationMs: occurrence.pauseMs });
   });
+  return timeline;
 }
