@@ -17,6 +17,7 @@ import { AudioExportResult } from '../features/audio-export/AudioExportResult';
 import { AudioExportProgress } from '../features/audio-export/AudioExportProgress';
 import { AudioExportSettings } from '../features/audio-export/AudioExportSettings';
 import { useAudioExportController } from '../application/audio-export/useAudioExportController';
+import { createAudioSilenceMonitor } from '../domain/audio-export/audioSilenceMonitor';
 
 interface AudioExportModalProps {
   isOpen: boolean;
@@ -370,8 +371,7 @@ export default function AudioExportModal({
       
       // Setup active silence checker loop
       let lastCheckTime = Date.now();
-      let activeSilenceDuration = 0;
-      let warningSilenceCounter = 0;
+      const silenceMonitor = createAudioSilenceMonitor();
 
       const updateVolumePeak = () => {
         if (isStoppedManuallyRef.current || !analyserNode || !analyserDataArray) return;
@@ -388,43 +388,16 @@ export default function AudioExportModal({
         const delta = (now - lastCheckTime) / 1000;
         lastCheckTime = now;
         
-        // Silent gate: if browser currently speaking, but no audio gets captured for 3 seconds, throw error!
-        // Only run this silent gate during active recording phase
-        const isCurrentlySpeaking = isExpectingSpeechRef.current;
-        if (isCurrentlySpeaking && capturePhaseRef.current === 'recording') {
-          if (avg < 1.0) {
-            activeSilenceDuration += delta;
-            if (activeSilenceDuration >= 3.0) {
-              addLog("CĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¢NH BÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂO: TÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­n hiĂ„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚Â¢Ă¢â€Â¬Ă‚Â¡u Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh biĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¿n mĂ„â€Ă‚Â¡Ä‚â€Ă‚ÂºÄ‚â€Ă‚Â¥t khi Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“ang Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‹Å“Ă„â€Ă‚Â¡Ä‚â€Ă‚Â»Ä‚â€Ă‚Âc bÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â i!");
-              abortReasonRef.current = 'silent-during-speech';
-              capturePhaseRef.current = 'error';
-              
-              if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-                animationFrameRef.current = null;
-              }
-              try { recorderSessionRef.current?.stop(); } catch {}
-              
-              if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-              }
-              return;
-            }
-          } else {
-            activeSilenceDuration = 0;
-          }
-        } else {
-          activeSilenceDuration = 0;
-        }
-
-        if (avg < 2) {
-          warningSilenceCounter++;
-          if (warningSilenceCounter > 180) {
-            setMicActiveWarning(true);
-          }
-        } else {
-          warningSilenceCounter = 0;
-          setMicActiveWarning(false);
+        const decision = silenceMonitor.sample({ level: avg, elapsedSeconds: delta, expectingSpeech: isExpectingSpeechRef.current, recording: capturePhaseRef.current === 'recording' });
+        setMicActiveWarning(decision.warn);
+        if (decision.abort) {
+          addLog("C?NH B?O: T?n hi?u ?m thanh bi?n m?t khi ?ang ??c b?i.");
+          abortReasonRef.current = 'silent-during-speech';
+          capturePhaseRef.current = 'error';
+          if (animationFrameRef.current) { cancelAnimationFrame(animationFrameRef.current); animationFrameRef.current = null; }
+          try { recorderSessionRef.current?.stop(); } catch {}
+          window.speechSynthesis.cancel();
+          return;
         }
         
         animationFrameRef.current = requestAnimationFrame(updateVolumePeak);
