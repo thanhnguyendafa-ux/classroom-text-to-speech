@@ -1,0 +1,5 @@
+﻿import type { SpeechItem } from '../../types';
+import { createWavBlob } from '../../infrastructure/audio/audioExportAssembler';
+import { runPremiumAudioExport } from '../../infrastructure/audio/premiumAudioExportStrategy';
+export interface ExecutePremiumAudioExportInput { items: readonly SpeechItem[]; defaultPauseSeconds: number; apiKey: string; resolvePcm: (item: SpeechItem) => Promise<Int16Array>; isCancelled: () => boolean; createObjectUrl?: (blob: Blob) => string; onProgress?: (completed: number, total: number, item: SpeechItem) => void; }
+export async function executePremiumAudioExport(input: ExecutePremiumAudioExportInput): Promise<string> { if (!input.apiKey.trim()) throw new Error('missing-api-key'); const sampleRate = 24000; const pcm = await runPremiumAudioExport({ items: input.items, defaultPauseSeconds: input.defaultPauseSeconds, sampleRate, resolvePcm: input.resolvePcm, isCancelled: input.isCancelled, onItemProgress: input.onProgress }); return (input.createObjectUrl ?? URL.createObjectURL)(createWavBlob(pcm, sampleRate)); }

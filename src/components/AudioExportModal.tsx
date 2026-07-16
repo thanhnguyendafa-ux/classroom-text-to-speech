@@ -6,8 +6,7 @@ import { getPremiumVoiceForLang } from '../features/premium-tts/premiumVoices';
 import { premiumTtsCacheStore } from '../features/premium-tts/premiumTtsCacheStore';
 import { resolvePremiumAudio } from '../features/premium-tts/persistent-audio/premiumAudioResolver';
 import { buildDisplayCaptureConstraints, captureDisplay, createAudioContext, errorMessage, stopMediaStream } from '../features/media-capture/mediaCaptureAdapter';
-import { createWavBlob } from '../infrastructure/audio/audioExportAssembler';
-import { PremiumAudioExportCancelledError, runPremiumAudioExport } from '../infrastructure/audio/premiumAudioExportStrategy';
+import { PremiumAudioExportCancelledError } from '../infrastructure/audio/premiumAudioExportStrategy';
 import { runBrowserSpeechSequence } from '../infrastructure/audio/browserSpeechSequence';
 import { encodeCapturedAudio } from '../infrastructure/audio/browserAudioEncodingStrategy';
 import { acquireCaptureStreams } from '../infrastructure/audio/browserCaptureStreams';
@@ -21,6 +20,7 @@ import { AudioExportSettings } from '../features/audio-export/AudioExportSetting
 import { useAudioExportController } from '../application/audio-export/useAudioExportController';
 import { useOwnedObjectUrl } from '../application/audio-export/useOwnedObjectUrl';
 import { BrowserCaptureResourceOwner } from '../application/audio-export/browserCaptureResourceOwner';
+import { executePremiumAudioExport } from '../application/audio-export/executePremiumAudioExport';
 import { createAudioSilenceMonitor } from '../domain/audio-export/audioSilenceMonitor';
 
 interface AudioExportModalProps {
@@ -157,15 +157,13 @@ export default function AudioExportModal({
       return;
     }
     
-    const sampleRate = 24000;
-
     try {
-      const compiledPcm = await runPremiumAudioExport({
+      const url = await executePremiumAudioExport({
         items: itemsToExport,
         defaultPauseSeconds: timeBetweenLines,
-        sampleRate,
+        apiKey: userGeminiApiKey,
         isCancelled: () => capture.stoppedManually,
-        onItemProgress: (completed, total, item) => {
+        onProgress: (completed, total, item) => {
           setProgressPercent(Math.round((completed / total) * 80));
           setProgressText(`?? t?i gi?ng ??c c?u ${completed}/${total}: "${item.text.substring(0, 40)}"`);
         },
@@ -186,8 +184,6 @@ export default function AudioExportModal({
       });
       setProgressPercent(90);
       setProgressText("?ang ??ng g?i WAV...");
-      const finalWavBlob = createWavBlob(compiledPcm, sampleRate);
-      const url = URL.createObjectURL(finalWavBlob);
       replaceAudioBlobUrl(url);
       setProgressPercent(100);
       setExportPhase('success');
