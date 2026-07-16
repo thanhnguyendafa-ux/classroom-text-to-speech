@@ -1,0 +1,2 @@
+﻿import assert from "node:assert/strict"; import test from "node:test"; import { selectMediaRecorderOptions } from "./mediaRecorderAdapter";
+test("selects the first supported recorder mime and falls back safely", () => { assert.deepEqual(selectMediaRecorderOptions(value => value.includes("ogg")), { mimeType: "audio/ogg;codecs=opus" }); assert.deepEqual(selectMediaRecorderOptions(() => false), {}); });
