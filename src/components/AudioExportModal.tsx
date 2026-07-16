@@ -19,6 +19,7 @@ import { AudioExportResult } from '../features/audio-export/AudioExportResult';
 import { AudioExportProgress } from '../features/audio-export/AudioExportProgress';
 import { AudioExportSettings } from '../features/audio-export/AudioExportSettings';
 import { useAudioExportController } from '../application/audio-export/useAudioExportController';
+import { useOwnedObjectUrl } from '../application/audio-export/useOwnedObjectUrl';
 import { createAudioSilenceMonitor } from '../domain/audio-export/audioSilenceMonitor';
 
 interface AudioExportModalProps {
@@ -92,7 +93,6 @@ export default function AudioExportModal({
   // Progress states
   const { state: exportState, setPhase: setExportPhase, setProgress: setProgressPercent, setProgressText, clearLogs, appendLog, setResultUrl, reset: resetExportState } = useAudioExportController();
   const { status, progressText, progressPercent, logs, resultUrl: audioBlobUrl } = exportState;
-  const audioBlobUrlRef = useRef<string | null>(null);
   
   // Live capture/volume states
   const [soundLevel, setSoundLevel] = useState<number>(0);
@@ -114,12 +114,7 @@ export default function AudioExportModal({
   const availableSets = useMemo(() => Array.from(new Set(speechList.flatMap(item => item.setId ? [item.setId] : []))), [speechList]);
   const itemsToExport = useMemo(() => selectedRange === 'all' ? speechList : speechList.filter(item => item.setId === selectedRange), [speechList, selectedRange]);
 
-  const replaceAudioBlobUrl = (nextUrl: string | null) => {
-    const previousUrl = audioBlobUrlRef.current;
-    if (previousUrl && previousUrl !== nextUrl) URL.revokeObjectURL(previousUrl);
-    audioBlobUrlRef.current = nextUrl;
-    setResultUrl(nextUrl);
-  };
+  const replaceAudioBlobUrl = useOwnedObjectUrl(setResultUrl);
   const resetExportSession = () => {
     replaceAudioBlobUrl(null);
     resetExportState();
@@ -129,7 +124,6 @@ export default function AudioExportModal({
   useEffect(() => {
     return () => {
       cancelAllProcesses();
-      replaceAudioBlobUrl(null);
     };
   }, []);
 
