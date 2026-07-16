@@ -10,6 +10,7 @@ import { createWavBlob } from '../infrastructure/audio/audioExportAssembler';
 import { PremiumAudioExportCancelledError, runPremiumAudioExport } from '../infrastructure/audio/premiumAudioExportStrategy';
 import { runBrowserSpeechSequence } from '../infrastructure/audio/browserSpeechSequence';
 import { encodeCapturedAudio } from '../infrastructure/audio/browserAudioEncodingStrategy';
+import { selectMediaRecorderOptions } from '../infrastructure/media/mediaRecorderAdapter';
 import { AudioExportResult } from '../features/audio-export/AudioExportResult';
 import { AudioExportProgress } from '../features/audio-export/AudioExportProgress';
 import { AudioExportSettings } from '../features/audio-export/AudioExportSettings';
@@ -509,13 +510,7 @@ export default function AudioExportModal({
         }
       }
       
-      let options = { mimeType: 'audio/webm;codecs=opus' };
-      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-        options = { mimeType: 'audio/ogg;codecs=opus' };
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-          options = { mimeType: '' }; // Fallback to browser default
-        }
-      }
+      const options = selectMediaRecorderOptions(MediaRecorder.isTypeSupported.bind(MediaRecorder));
       
       addLog(`KĂ„â€Ă‚Â­ch hoÄ‚Â¡Ă‚ÂºĂ‚Â¡t mĂ„â€Ă‚Â¡y ghi Ă„â€Ă‚Â¢m phÄ‚Â¡Ă‚Â»Ă‚Â¥ trÄ‚Â¡Ă‚Â»Ă‚Â£ (codec: ${options.mimeType || "mÄ‚Â¡Ă‚ÂºĂ‚Â·c Ä‚â€Ă¢â‚¬ËœÄ‚Â¡Ă‚Â»Ă¢â‚¬Â¹nh"})`);
       const recorder = new MediaRecorder(recorderStream, options);
