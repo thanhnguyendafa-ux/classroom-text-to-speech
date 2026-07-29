@@ -51,15 +51,15 @@ export async function runBrowserExportAction(input: RunBrowserExportActionInput)
     setSilentTimerCount(0);
     setMicActiveWarning(false);
     
-    addLog("ChuÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â©n bÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă‚Â¢Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¬Ä‚â€Ă‚Â¹ cÄ‚â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚Â Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡ chÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¿ ghi Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m SpeechSynthesis cÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â§a trĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh duyÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă‚Â¢Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¬Ä‚â€Ă‚Â¡t...");
+    addLog("Chuẩn bị cơ chế ghi âm SpeechSynthesis của trình duyệt...");
     if (audioSource === 'system') {
-      addLog("HÄ‚â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚Â Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¯Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂNG DÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂªN BÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â®T BUÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬Â¹Ä‚â€¦Ă¢â‚¬Å“C: BÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡n hĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£y chÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Ân tab 'ToĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n bÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă‚Â¢Ä‚Â¢Ă¢â€Â¬Ă‚ÂÄ‚â€Ă‚Â¢ mĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n hĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh' (Entire Screen), tĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­ch vĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â o Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â´ 'Chia sÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â» Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m thanh hÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă‚Â¢Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¬Ä‚â€Ă‚Â¡ thÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă‚Â¢Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¬Ä‚â€¹Ă…â€œng' (Share system audio) Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬Â¦Ä‚â€Ă‚Â¸ gĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â³c trĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡i dÄ‚â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚Â Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â°Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă‚Â¢Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¬Ä‚â€Ă‚Âºi, rÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă‚Â¢Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¬Ä‚â€¦Ă¢â‚¬Å“i chÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Ân MĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â n hĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¬nh cÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â§a bÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡n.");
+      addLog("HƯỚNG DẪN BẮT BUỘC: Bạn hãy chọn tab 'Toàn bộ màn hình' (Entire Screen), tích vào ô 'Chia sẻ âm thanh hệ thống' (Share system audio) ở góc trái dưới, rồi chọn Màn hình của bạn.");
     } else {
-      addLog("HÄ‚â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚Â Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¯Ä‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂNG DÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂªN: MĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡y ghi Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m sÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â½ thu trÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â±c tiÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¿p tÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â« Microphone qua loa ngoĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â i. HĂ„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â£y bÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â­t mÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â©c loa vÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â«a Ä‚â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă‚Â¢Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¬Ä‚â€¹Ă…â€œÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â§ nghe.");
+      addLog("HƯỚNG DẪN: Máy ghi âm sẽ thu trực tiếp từ Microphone qua loa ngoài. Hãy bật mức loa vừa đủ nghe.");
     }
 
     try {
-      if (audioSource === 'system') setProgressText("Preflight: Ä‘ang kiá»ƒm tra tĂ­n hiá»‡u Ă¢m thanh...");
+      if (audioSource === 'system') setProgressText("Preflight: đang kiểm tra tín hiệu âm thanh...");
       const preparedCapture = await prepareBrowserCapture({
         source: audioSource,
         displayConstraints: buildDisplayCaptureConstraints({ width: 320, height: 180, frameRate: 10, onlyCurrentTab, captureSystemAudio: true }),
@@ -86,7 +86,7 @@ export async function runBrowserExportAction(input: RunBrowserExportActionInput)
       capture.displayStream = stream;
       capture.microphoneStream = micStream;
       capture.audioContext = audioCtx;
-      addLog(audioSource === 'mic' ? "ÄĂ£ khá»Ÿi táº¡o microphone." : "ÄĂ£ nháº­n luá»“ng Ă¢m thanh há»‡ thá»‘ng.");
+      addLog(audioSource === 'mic' ? "Đã khởi tạo microphone." : "Đã nhận luồng âm thanh hệ thống.");
       if (preparedCapture.preflightPeak !== null) addLog(`Preflight OK, peak ${preparedCapture.preflightPeak.toFixed(1)}.`);
       if (hasDisplayAudio) {
         const silenceMonitor = createAudioSilenceMonitor();
@@ -102,7 +102,7 @@ export async function runBrowserExportAction(input: RunBrowserExportActionInput)
           onLevel: level => setSoundLevel(level),
           onWarning: warning => setMicActiveWarning(warning),
           onAbort: () => {
-            addLog("Cáº¢NH BĂO: TĂ­n hiá»‡u Ă¢m thanh biáº¿n máº¥t khi Ä‘ang Ä‘á»c bĂ i.");
+            addLog("CẢNH BÁO: Tín hiệu âm thanh biến mất khi đang đọc bài.");
             capture.abortReason = 'silent-during-speech';
             capture.phase = 'error';
             capture.stopLevelMonitor?.();
@@ -118,19 +118,19 @@ export async function runBrowserExportAction(input: RunBrowserExportActionInput)
       // 3. Initialize MediaRecorder to capture webm/opus buffer sequentially
 const handleRecordedBlob = async (webmBlob: Blob) => {
         if (capture.stoppedManually) {
-          addLog("ÄĂ£ dá»«ng ghi Ă¢m theo yĂªu cáº§u.");
+          addLog("Đã dừng ghi âm theo yêu cầu.");
           setExportPhase('idle');
           return;
         }
         if (capture.abortReason === 'silent-during-speech') {
           setExportPhase('error');
-          setProgressText("KhĂ´ng thu Ä‘Æ°á»£c tiáº¿ng");
-          addLog("Lá»–I: TrĂ¬nh duyá»‡t bá»‹ im láº·ng liĂªn tá»¥c khi Ä‘ang Ä‘á»c. Báº£n ghi Ä‘Ă£ bá»‹ há»§y.");
+          setProgressText("Không thu được tiếng");
+          addLog("LỖI: Trình duyệt bị im lặng liên tục khi đang đọc. Bản ghi đã bị hủy.");
           stopMediaStream(capture.displayStream); capture.displayStream = null;
           stopMediaStream(capture.microphoneStream); capture.microphoneStream = null;
           return;
         }
-        setProgressText("Äang giáº£i nĂ©n vĂ  chuyá»ƒn sang MP3...");
+        setProgressText("Đang giải nén và chuyển sang MP3...");
         setExportPhase('processing');
         const decodeContext = createAudioContext();
         try {
@@ -144,16 +144,16 @@ const handleRecordedBlob = async (webmBlob: Blob) => {
           capture.phase = 'success';
           setExportPhase('success');
           if (result.kind === 'source-fallback') {
-            addLog(`KhĂ´ng thá»ƒ mĂ£ hĂ³a MP3 (${result.decodeError}). Giá»¯ báº£n ghi WebM Ä‘á»ƒ trĂ¡nh máº¥t dá»¯ liá»‡u.`);
+            addLog(`Không thể mã hóa MP3 (${result.decodeError}). Giữ bản ghi WebM để tránh mất dữ liệu.`);
             return;
           }
           const { peak, rms, clippingRatio, duration, isLikelyClipped } = result.metrics;
-          addLog(`Cháº¥t lÆ°á»£ng thu Ă¢m - Peak: ${peak.toFixed(3)}, RMS: ${rms.toFixed(3)}, clipping: ${(clippingRatio * 100).toFixed(1)}%, thá»i lÆ°á»£ng: ${duration.toFixed(1)} giĂ¢y.`);
-          if (isLikelyClipped) addLog("Cáº¢NH BĂO: TĂ­n hiá»‡u cĂ³ dáº¥u hiá»‡u clipping hoáº·c feedback. HĂ£y dĂ¹ng System Audio Only vĂ  giáº£m Ă¢m lÆ°á»£ng.");
-          addLog("ÄĂ£ xuáº¥t file MP3 thĂ nh cĂ´ng.");
+          addLog(`Chất lượng thu âm - Peak: ${peak.toFixed(3)}, RMS: ${rms.toFixed(3)}, clipping: ${(clippingRatio * 100).toFixed(1)}%, thời lượng: ${duration.toFixed(1)} giây.`);
+          if (isLikelyClipped) addLog("CẢNH BÁO: Tín hiệu có dấu hiệu clipping hoặc feedback. Hãy dùng System Audio Only và giảm âm lượng.");
+          addLog("Đã xuất file MP3 thành công.");
         } catch (error: unknown) {
           console.error("Browser recording processing failed:", error);
-          addLog(`Lá»—i mĂ£ hĂ³a báº£n ghi: ${errorMessage(error)}`);
+          addLog(`Lỗi mã hóa bản ghi: ${errorMessage(error)}`);
           capture.phase = 'error';
           setExportPhase('error');
         } finally {
@@ -172,22 +172,22 @@ const handleRecordedBlob = async (webmBlob: Blob) => {
         createRecorderSession: (stream, onBlob) => createMediaRecorderSession(stream, onBlob),
         runSpeechSequence: runBrowserSpeechSequence,
         onRecordedBlob: handleRecordedBlob,
-        onRecorderReady: mimeType => addLog(`KĂ­ch hoáº¡t mĂ¡y ghi Ă¢m (codec: ${mimeType}).`),
+        onRecorderReady: mimeType => addLog(`Kích hoạt máy ghi âm (codec: ${mimeType}).`),
         onProgress: (index, item) => {
           setProgressPercent(Math.round((index / itemsToExport.length) * 100));
-          setProgressText(`Äang phĂ¡t dĂ²ng ${index + 1}/${itemsToExport.length}: "${item.text.substring(0, 40)}"`);
+          setProgressText(`Đang phát dòng ${index + 1}/${itemsToExport.length}: "${item.text.substring(0, 40)}"`);
         },
-        onRepeat: (index, repeat, total) => addLog(`Äá»c láº¡i cĂ¢u ${index + 1} (láº§n ${repeat}/${total})`),
-        onError: (index, error) => addLog(`TTS cáº£nh bĂ¡o trĂªn dĂ²ng ${index + 1}: ${error}`),
+        onRepeat: (index, repeat, total) => addLog(`Đọc lại câu ${index + 1} (lần ${repeat}/${total})`),
+        onError: (index, error) => addLog(`TTS cảnh báo trên dòng ${index + 1}: ${error}`),
         speechSynthesis: window.speechSynthesis,
         createUtterance: text => new SpeechSynthesisUtterance(text),
         wait: (callback, delayMs) => window.setTimeout(callback, delayMs),
       });
-      if (!capture.stoppedManually) addLog("ÄĂ£ cháº¡y háº¿t danh sĂ¡ch cĂ¢u. Äang dá»«ng ghi Ă¢m...");
+      if (!capture.stoppedManually) addLog("Đã chạy hết danh sách câu. Đang dừng ghi âm...");
 
     } catch (err: unknown) {
       console.error(err);
       setExportPhase('error');
-      addLog(`LÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă‚Â¢Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¬Ä‚Â¢Ă¢â€Â¬Ă‚Âi chuÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚ÂºĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â©n bÄ‚â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¡Ă„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â»Ă„â€Ă‚Â¢Ä‚Â¢Ă¢â‚¬ÂĂ‚Â¬Ä‚â€Ă‚Â¹ ghi Ă„â€Ă¢â‚¬ÂÄ‚Â¢Ă¢â€Â¬Ă‚ÂĂ„â€Ă¢â‚¬ÂÄ‚â€Ă‚Â¢m: ${errorMessage(err)}`);
+      addLog(`Lỗi chuẩn bị ghi âm: ${errorMessage(err)}`);
     }
 }

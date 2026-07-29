@@ -7,220 +7,220 @@ export interface PromptGuideInput {
 }
 
 export function buildPromptGuide({ promptTopic, promptMainIdeas, promptType }: PromptGuideInput) {
-    const topicText = promptTopic.trim() || 'Giao thĂ´ng cĂ´ng cá»™ng';
-    const mainIdeasText = promptMainIdeas.trim() || 'Khuyáº¿n khĂ­ch cĂ´ng dĂ¢n sá»­ dá»¥ng phÆ°Æ¡ng tiá»‡n cĂ´ng cá»™ng Ä‘á»ƒ giáº£m Ă¹n táº¯c vĂ  giáº£m Ă´ nhiá»…m mĂ´i trÆ°á»ng.';
+    const topicText = promptTopic.trim() || 'Giao thông công cộng';
+    const mainIdeasText = promptMainIdeas.trim() || 'Khuyến khích công dân sử dụng phương tiện công cộng để giảm ùn tắc và giảm ô nhiễm môi trường.';
 
     let timingRequirements = '';
     let formatRequirements = '';
     let exampleText = '';
 
     switch (promptType) {
-      case 'pause': // Máº«u trĂªn lĂ  /
-        timingRequirements = `YĂªu cáº§u vá» thá»i gian nghá»‰:
-* Cuá»‘i má»—i dĂ²ng pháº£i cĂ³ kĂ½ hiá»‡u /Y.
-* Y lĂ  sá»‘ giĂ¢y nghá»‰ Ä‘á»ƒ ngÆ°á»i há»c nghe, hiá»ƒu vĂ  nháº¡i láº¡i trá»n váº¹n dĂ²ng Ä‘Ă³.
-* KhĂ´ng quy Ä‘á»‹nh sá»‘ giĂ¢y cá»‘ Ä‘á»‹nh theo loáº¡i tá»«, cá»¥m tá»« hoáº·c cĂ¢u.
-* HĂ£y tá»± Ä‘iá»u chá»‰nh thá»i gian theo sá»‘ lÆ°á»£ng tá»«, Ä‘á»™ dĂ i ná»™i dung, Ä‘á»™ khĂ³ phĂ¡t Ă¢m vĂ  tá»‘c Ä‘á»™ nháº¡i láº¡i cá»§a ngÆ°á»i há»c bĂ¬nh thÆ°á»ng.
-* Ná»™i dung ngáº¯n vĂ  dá»… cĂ³ thá»ƒ dĂ¹ng thá»i gian nghá»‰ ngáº¯n hÆ¡n.
-* Ná»™i dung dĂ i hoáº·c khĂ³ pháº£i cĂ³ thá»i gian nghá»‰ dĂ i hÆ¡n.
-* Thá»i gian pháº£i Ä‘á»§ thoáº£i mĂ¡i Ä‘á»ƒ ngÆ°á»i há»c nghe xong rá»“i nháº¡i láº¡i Ä‘áº§y Ä‘á»§, khĂ´ng Ä‘Æ°á»£c chuyá»ƒn quĂ¡ nhanh.
-* CĂ³ thá»ƒ dĂ¹ng sá»‘ nguyĂªn hoáº·c sá»‘ tháº­p phĂ¢n, vĂ­ dá»¥: /2.5, /4, /6.5, /9.`;
+      case 'pause': // Mẫu trên là /
+        timingRequirements = `Yêu cầu về thời gian nghỉ:
+* Cuối mỗi dòng phải có ký hiệu /Y.
+* Y là số giây nghỉ để người học nghe, hiểu và nhại lại trọn vẹn dòng đó.
+* Không quy định số giây cố định theo loại từ, cụm từ hoặc câu.
+* Hãy tự điều chỉnh thời gian theo số lượng từ, độ dài nội dung, độ khó phát âm và tốc độ nhại lại của người học bình thường.
+* Nội dung ngắn và dễ có thể dùng thời gian nghỉ ngắn hơn.
+* Nội dung dài hoặc khó phải có thời gian nghỉ dài hơn.
+* Thời gian phải đủ thoải mái để người học nghe xong rồi nhại lại đầy đủ, không được chuyển quá nhanh.
+* Có thể dùng số nguyên hoặc số thập phân, ví dụ: /2.5, /4, /6.5, /9.`;
 
-        formatRequirements = `YĂªu cáº§u Ä‘á»‹nh dáº¡ng:
-* Viáº¿t cĂ¡c dĂ²ng liá»n nhau hoĂ n toĂ n.
-* KhĂ´ng Ä‘á»ƒ dĂ²ng trá»‘ng.
-* KhĂ´ng Ä‘Ă¡nh sá»‘ thá»© tá»±.
-* KhĂ´ng dĂ¹ng dáº¥u Ä‘áº§u dĂ²ng.
-* KhĂ´ng thĂªm tiĂªu Ä‘á».
-* KhĂ´ng thĂªm lá»i giáº£i thĂ­ch trÆ°á»›c hoáº·c sau bĂ i.
-* KhĂ´ng dĂ¹ng dáº¥u cháº¥m pháº©y (;).
-* Má»—i dĂ²ng pháº£i káº¿t thĂºc báº±ng kĂ½ hiá»‡u thá»i gian /Y.
-* Äáº§u ra chá»‰ chá»©a danh sĂ¡ch vÄƒn báº£n thĂ´ Ä‘á»ƒ sao chĂ©p trá»±c tiáº¿p vĂ o á»©ng dá»¥ng.`;
+        formatRequirements = `Yêu cầu định dạng:
+* Viết các dòng liền nhau hoàn toàn.
+* Không để dòng trống.
+* Không đánh số thứ tự.
+* Không dùng dấu đầu dòng.
+* Không thêm tiêu đề.
+* Không thêm lời giải thích trước hoặc sau bài.
+* Không dùng dấu chấm phẩy (;).
+* Mỗi dòng phải kết thúc bằng ký hiệu thời gian /Y.
+* Đầu ra chỉ chứa danh sách văn bản thô để sao chép trực tiếp vào ứng dụng.`;
 
-        exampleText = `VĂ­ dá»¥ cĂ¡ch phĂ¡t triá»ƒn ná»™i dung:
-Chá»§ Ä‘á»: Giao thĂ´ng cĂ´ng cá»™ng
-giao thĂ´ng cĂ´ng cá»™ng /3
+        exampleText = `Ví dụ cách phát triển nội dung:
+Chủ đề: Giao thông công cộng
+giao thông công cộng /3
 public transportation /3.5
-sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng /4
+sử dụng giao thông công cộng /4
 use public transportation /4.5
-khuyáº¿n khĂ­ch ngÆ°á»i dĂ¢n sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng /6
+khuyến khích người dân sử dụng giao thông công cộng /6
 encourage people to use public transportation /6.5
-TrÆ°á»›c háº¿t, chĂ­nh phá»§ nĂªn khuyáº¿n khĂ­ch ngÆ°á»i dĂ¢n sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng. /9
+Trước hết, chính phủ nên khuyến khích người dân sử dụng giao thông công cộng. /9
 Firstly, governments should encourage people to use public transportation. /9.5
-sá»‘ lÆ°á»£ng Ă´ tĂ´ /3
+số lượng ô tô /3
 the number of cars /3.5
-giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´ /4
+giảm số lượng ô tô /4
 reduce the number of cars /4.5
-giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´ trĂªn Ä‘Æ°á»ng /5.5
+giảm số lượng ô tô trên đường /5.5
 reduce the number of cars on the road /6
-Äiá»u nĂ y cĂ³ thá»ƒ giĂºp giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´ trĂªn Ä‘Æ°á»ng. /8
+Điều này có thể giúp giảm số lượng ô tô trên đường. /8
 This can help reduce the number of cars on the road. /8.5
-táº¯c ngháº½n giao thĂ´ng /3
+tắc nghẽn giao thông /3
 traffic congestion /3.5
-giáº£m táº¯c ngháº½n giao thĂ´ng /4.5
+giảm tắc nghẽn giao thông /4.5
 reduce traffic congestion /5
-giáº£m táº¯c ngháº½n giao thĂ´ng á»Ÿ cĂ¡c thĂ nh phá»‘ lá»›n /6
+giảm tắc nghẽn giao thông ở các thành phố lớn /6
 reduce traffic congestion in major cities /6.5
-Nhá» Ä‘Ă³, tĂ¬nh tráº¡ng táº¯c ngháº½n giao thĂ´ng á»Ÿ cĂ¡c thĂ nh phá»‘ lá»›n cĂ³ thá»ƒ Ä‘Æ°á»£c giáº£m bá»›t. /10
+Nhờ đó, tình trạng tắc nghẽn giao thông ở các thành phố lớn có thể được giảm bớt. /10
 As a result, traffic congestion in major cities can be reduced. /10.5`;
         break;
 
-      case 'advanced': // Máº«u ; /
-        timingRequirements = `YĂªu cáº§u vá» táº§n suáº¥t láº·p vĂ  thá»i gian nghá»‰:
-* Cuá»‘i má»—i dĂ²ng pháº£i cĂ³ kĂ½ hiá»‡u ;X /Y.
-* X lĂ  sá»‘ láº§n láº·p Ä‘á»c láº¡i cá»§a cĂ¢u Ä‘Ă³ (vĂ­ dá»¥: ;2 hoáº·c ;3 tĂ¹y thuá»™c Ä‘á»™ dĂ i hoáº·c Ä‘á»™ khĂ³ cá»§a máº«u tá»«/cĂ¢u Ä‘á»ƒ há»c viĂªn nháº¡i láº¡i nhiá»u láº§n).
-* Y lĂ  sá»‘ giĂ¢y nghá»‰ Ä‘á»ƒ ngÆ°á»i há»c nghe, hiá»ƒu vĂ  nháº¡i láº¡i trá»n váº¹n dĂ²ng Ä‘Ă³ sau khi láº·p xong.
-* KhĂ´ng quy Ä‘á»‹nh sá»‘ giĂ¢y cá»‘ Ä‘á»‹nh theo loáº¡i tá»«, cá»¥m tá»« hoáº·c cĂ¢u.
-* HĂ£y tá»± Ä‘iá»u chá»‰nh sá»‘ láº§n láº·p vĂ  thá»i gian theo sá»‘ lÆ°á»£ng tá»«, Ä‘á»™ dĂ i ná»™i dung, Ä‘á»™ khĂ³ phĂ¡t Ă¢m vĂ  tá»‘c Ä‘á»™ nháº¡i láº¡i cá»§a ngÆ°á»i há»c bĂ¬nh thÆ°á»ng.
-* Thá»i gian pháº£i Ä‘á»§ thoáº£i mĂ¡i Ä‘á»ƒ ngÆ°á»i há»c nghe xong rá»“i nháº¡i láº¡i Ä‘áº§y Ä‘á»§, khĂ´ng Ä‘Æ°á»£c chuyá»ƒn quĂ¡ nhanh.`;
+      case 'advanced': // Mẫu ; /
+        timingRequirements = `Yêu cầu về tần suất lặp và thời gian nghỉ:
+* Cuối mỗi dòng phải có ký hiệu ;X /Y.
+* X là số lần lặp đọc lại của câu đó (ví dụ: ;2 hoặc ;3 tùy thuộc độ dài hoặc độ khó của mẫu từ/câu để học viên nhại lại nhiều lần).
+* Y là số giây nghỉ để người học nghe, hiểu và nhại lại trọn vẹn dòng đó sau khi lặp xong.
+* Không quy định số giây cố định theo loại từ, cụm từ hoặc câu.
+* Hãy tự điều chỉnh số lần lặp và thời gian theo số lượng từ, độ dài nội dung, độ khó phát âm và tốc độ nhại lại của người học bình thường.
+* Thời gian phải đủ thoải mái để người học nghe xong rồi nhại lại đầy đủ, không được chuyển quá nhanh.`;
 
-        formatRequirements = `YĂªu cáº§u Ä‘á»‹nh dáº¡ng:
-* Viáº¿t cĂ¡c dĂ²ng liá»n nhau hoĂ n toĂ n.
-* KhĂ´ng Ä‘á»ƒ dĂ²ng trá»‘ng.
-* KhĂ´ng Ä‘Ă¡nh sá»‘ thá»© tá»±.
-* KhĂ´ng dĂ¹ng dáº¥u Ä‘áº§u dĂ²ng.
-* KhĂ´ng thĂªm tiĂªu Ä‘á».
-* KhĂ´ng thĂªm lá»i giáº£i thĂ­ch trÆ°á»›c hoáº·c sau bĂ i.
-* Má»—i dĂ²ng pháº£i káº¿t thĂºc báº±ng kĂ½ hiá»‡u ;X /Y.
-* Äáº§u ra chá»‰ chá»©a danh sĂ¡ch vÄƒn báº£n thĂ´ Ä‘á»ƒ sao chĂ©p trá»±c tiáº¿p vĂ o á»©ng dá»¥ng.`;
+        formatRequirements = `Yêu cầu định dạng:
+* Viết các dòng liền nhau hoàn toàn.
+* Không để dòng trống.
+* Không đánh số thứ tự.
+* Không dùng dấu đầu dòng.
+* Không thêm tiêu đề.
+* Không thêm lời giải thích trước hoặc sau bài.
+* Mỗi dòng phải kết thúc bằng ký hiệu ;X /Y.
+* Đầu ra chỉ chứa danh sách văn bản thô để sao chép trực tiếp vào ứng dụng.`;
 
-        exampleText = `VĂ­ dá»¥ cĂ¡ch phĂ¡t triá»ƒn ná»™i dung:
-Chá»§ Ä‘á»: Giao thĂ´ng cĂ´ng cá»™ng
-giao thĂ´ng cĂ´ng cá»™ng ;2 /3
+        exampleText = `Ví dụ cách phát triển nội dung:
+Chủ đề: Giao thông công cộng
+giao thông công cộng ;2 /3
 public transportation ;2 /3.5
-sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng ;2 /4
+sử dụng giao thông công cộng ;2 /4
 use public transportation ;2 /4.5
-khuyáº¿n khĂ­ch ngÆ°á»i dĂ¢n sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng ;3 /6
+khuyến khích người dân sử dụng giao thông công cộng ;3 /6
 encourage people to use public transportation ;3 /6.5
-TrÆ°á»›c háº¿t, chĂ­nh phá»§ nĂªn khuyáº¿n khĂ­ch ngÆ°á»i dĂ¢n sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng. ;3 /9
+Trước hết, chính phủ nên khuyến khích người dân sử dụng giao thông công cộng. ;3 /9
 Firstly, governments should encourage people to use public transportation. ;3 /9.5
-sá»‘ lÆ°á»£ng Ă´ tĂ´ ;2 /3
+số lượng ô tô ;2 /3
 the number of cars ;2 /3.5
-giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´ ;2 /4
+giảm số lượng ô tô ;2 /4
 reduce the number of cars ;2 /4.5
-giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´ trĂªn Ä‘Æ°á»ng ;3 /5.5
+giảm số lượng ô tô trên đường ;3 /5.5
 reduce the number of cars on the road ;3 /6
-Äiá»u nĂ y cĂ³ thá»ƒ giĂºp giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´ trĂªn Ä‘Æ°á»ng. ;3 /8
+Điều này có thể giúp giảm số lượng ô tô trên đường. ;3 /8
 This can help reduce the number of cars on the road. ;3 /8.5
-táº¯c ngháº½n giao thĂ´ng ;2 /3
+tắc nghẽn giao thông ;2 /3
 traffic congestion ;2 /3.5
-giáº£m táº¯c ngháº½n giao thĂ´ng ;2 /4.5
+giảm tắc nghẽn giao thông ;2 /4.5
 reduce traffic congestion ;2 /5
-giáº£m táº¯c ngháº½n giao thĂ´ng á»Ÿ cĂ¡c thĂ nh phá»‘ lá»›n ;3 /6
+giảm tắc nghẽn giao thông ở các thành phố lớn ;3 /6
 reduce traffic congestion in major cities ;3 /6.5
-Nhá» Ä‘Ă³, tĂ¬nh tráº¡ng táº¯c ngháº½n giao thĂ´ng á»Ÿ cĂ¡c thĂ nh phá»‘ lá»›n cĂ³ thá»ƒ Ä‘Æ°á»£c giáº£m bá»›t. ;3 /10
+Nhờ đó, tình trạng tắc nghẽn giao thông ở các thành phố lớn có thể được giảm bớt. ;3 /10
 As a result, traffic congestion in major cities can be reduced. ;3 /10.5`;
         break;
 
-      case 'repeat': // Máº«u chá»‰ cĂ³ ;
-        timingRequirements = `YĂªu cáº§u vá» sá»‘ láº§n láº·p láº¡i:
-* Cuá»‘i má»—i dĂ²ng pháº£i cĂ³ kĂ½ hiá»‡u ;X.
-* X lĂ  sá»‘ láº§n láº·p Ä‘á»c láº¡i cá»§a cĂ¢u Ä‘Ă³ Ä‘á»ƒ há»c viĂªn nháº¡i Ä‘i nháº¡i láº¡i nhiá»u láº§n (vĂ­ dá»¥: ;2 hoáº·c ;3 tĂ¹y thuá»™c Ä‘á»™ dĂ i hoáº·c Ä‘á»™ khĂ³ cá»§a máº«u tá»«/cĂ¢u).
-* KHĂ”NG sá»­ dá»¥ng kĂ½ hiá»‡u gáº¡ch chĂ©o / Ä‘á»ƒ chia khoáº£ng nghá»‰ trong máº«u nĂ y.`;
+      case 'repeat': // Mẫu chỉ có ;
+        timingRequirements = `Yêu cầu về số lần lặp lại:
+* Cuối mỗi dòng phải có ký hiệu ;X.
+* X là số lần lặp đọc lại của câu đó để học viên nhại đi nhại lại nhiều lần (ví dụ: ;2 hoặc ;3 tùy thuộc độ dài hoặc độ khó của mẫu từ/câu).
+* KHÔNG sử dụng ký hiệu gạch chéo / để chia khoảng nghỉ trong mẫu này.`;
 
-        formatRequirements = `YĂªu cáº§u Ä‘á»‹nh dáº¡ng:
-* Viáº¿t cĂ¡c dĂ²ng liá»n nhau hoĂ n toĂ n.
-* KhĂ´ng Ä‘á»ƒ dĂ²ng trá»‘ng.
-* KhĂ´ng Ä‘Ă¡nh sá»‘ thá»© tá»±.
-* KhĂ´ng dĂ¹ng dáº¥u Ä‘áº§u dĂ²ng.
-* KhĂ´ng thĂªm tiĂªu Ä‘á».
-* KhĂ´ng thĂªm lá»i giáº£i thĂ­ch trÆ°á»›c hoáº·c sau bĂ i.
-* KhĂ´ng dĂ¹ng dáº¥u gáº¡ch chĂ©o (/).
-* Má»—i dĂ²ng pháº£i káº¿t thĂºc báº±ng kĂ½ hiá»‡u ;X.
-* Äáº§u ra chá»‰ chá»©a danh sĂ¡ch vÄƒn báº£n thĂ´ Ä‘á»ƒ sao chĂ©p trá»±c tiáº¿p vĂ o á»©ng dá»¥ng.`;
+        formatRequirements = `Yêu cầu định dạng:
+* Viết các dòng liền nhau hoàn toàn.
+* Không để dòng trống.
+* Không đánh số thứ tự.
+* Không dùng dấu đầu dòng.
+* Không thêm tiêu đề.
+* Không thêm lời giải thích trước hoặc sau bài.
+* Không dùng dấu gạch chéo (/).
+* Mỗi dòng phải kết thúc bằng ký hiệu ;X.
+* Đầu ra chỉ chứa danh sách văn bản thô để sao chép trực tiếp vào ứng dụng.`;
 
-        exampleText = `VĂ­ dá»¥ cĂ¡ch phĂ¡t triá»ƒn ná»™i dung:
-Chá»§ Ä‘á»: Giao thĂ´ng cĂ´ng cá»™ng
-giao thĂ´ng cĂ´ng cá»™ng ;2
+        exampleText = `Ví dụ cách phát triển nội dung:
+Chủ đề: Giao thông công cộng
+giao thông công cộng ;2
 public transportation ;2
-sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng ;2
+sử dụng giao thông công cộng ;2
 use public transportation ;2
-khuyáº¿n khĂ­ch ngÆ°á»i dĂ¢n sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng ;3
+khuyến khích người dân sử dụng giao thông công cộng ;3
 encourage people to use public transportation ;3
-TrÆ°á»›c háº¿t, chĂ­nh phá»§ nĂªn khuyáº¿n khĂ­ch ngÆ°á»i dĂ¢n sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng. ;3
+Trước hết, chính phủ nên khuyến khích người dân sử dụng giao thông công cộng. ;3
 Firstly, governments should encourage people to use public transportation. ;3
-sá»‘ lÆ°á»£ng Ă´ tĂ´ ;2
+số lượng ô tô ;2
 the number of cars ;2
-giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´ ;2
+giảm số lượng ô tô ;2
 reduce the number of cars ;2
-giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´ trĂªn Ä‘Æ°á»ng ;3
+giảm số lượng ô tô trên đường ;3
 reduce the number of cars on the road ;3
-Äiá»u nĂ y cĂ³ thá»ƒ giĂºp giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´ trĂªn Ä‘Æ°á»ng. ;3
+Điều này có thể giúp giảm số lượng ô tô trên đường. ;3
 This can help reduce the number of cars on the road. ;3
-táº¯c ngháº½n giao thĂ´ng ;2
+tắc nghẽn giao thông ;2
 traffic congestion ;2
-giáº£m táº¯c ngháº½n giao thĂ´ng ;2
+giảm tắc nghẽn giao thông ;2
 reduce traffic congestion ;2
-giáº£m táº¯c ngháº½n giao thĂ´ng á»Ÿ cĂ¡c thĂ nh phá»‘ lá»›n ;3
+giảm tắc nghẽn giao thông ở các thành phố lớn ;3
 reduce traffic congestion in major cities ;3
-Nhá» Ä‘Ă³, tĂ¬nh tráº¡ng táº¯c ngháº½n giao thĂ´ng á»Ÿ cĂ¡c thĂ nh phá»‘ lá»›n cĂ³ thá»ƒ Ä‘Æ°á»£c giáº£m bá»›t. ;3
+Nhờ đó, tình trạng tắc nghẽn giao thông ở các thành phố lớn có thể được giảm bớt. ;3
 As a result, traffic congestion in major cities can be reduced. ;3`;
         break;
 
-      case 'basic': // Máº«u khĂ´ng cĂ³ / hay ;
+      case 'basic': // Mẫu không có / hay ;
       default:
-        timingRequirements = `YĂªu cáº§u Ä‘á»‹nh dáº¡ng:
-* KHĂ”NG sá»­ dá»¥ng báº¥t ká»³ kĂ½ tá»± phĂ¢n tĂ¡ch Ä‘áº·c biá»‡t nĂ o khĂ¡c (khĂ´ng cĂ³ ; vĂ  khĂ´ng cĂ³ /). Chá»‰ xuáº¥t vÄƒn báº£n thuáº§n tuĂ½.`;
+        timingRequirements = `Yêu cầu định dạng:
+* KHÔNG sử dụng bất kỳ ký tự phân tách đặc biệt nào khác (không có ; và không có /). Chỉ xuất văn bản thuần tuý.`;
 
-        formatRequirements = `YĂªu cáº§u Ä‘á»‹nh dáº¡ng:
-* Viáº¿t cĂ¡c dĂ²ng liá»n nhau hoĂ n toĂ n.
-* KhĂ´ng Ä‘á»ƒ dĂ²ng trá»‘ng.
-* KhĂ´ng Ä‘Ă¡nh sá»‘ thá»© tá»±.
-* KhĂ´ng dĂ¹ng dáº¥u Ä‘áº§u dĂ²ng.
-* KhĂ´ng thĂªm tiĂªu Ä‘á».
-* KhĂ´ng thĂªm lá»i giáº£i thĂ­ch trÆ°á»›c hoáº·c sau bĂ i.
-* Äáº§u ra chá»‰ chá»©a danh sĂ¡ch dĂ²ng chá»¯ thĂ´ nhÆ° cáº¥u trĂºc máº«u dÆ°á»›i Ä‘Ă¢y, khĂ´ng cáº§n tiĂªu Ä‘á» hay giáº£i thĂ­ch thĂªm.`;
+        formatRequirements = `Yêu cầu định dạng:
+* Viết các dòng liền nhau hoàn toàn.
+* Không để dòng trống.
+* Không đánh số thứ tự.
+* Không dùng dấu đầu dòng.
+* Không thêm tiêu đề.
+* Không thêm lời giải thích trước hoặc sau bài.
+* Đầu ra chỉ chứa danh sách dòng chữ thô như cấu trúc mẫu dưới đây, không cần tiêu đề hay giải thích thêm.`;
 
-        exampleText = `VĂ­ dá»¥ cĂ¡ch phĂ¡t triá»ƒn ná»™i dung:
-Chá»§ Ä‘á»: Giao thĂ´ng cĂ´ng cá»™ng
-giao thĂ´ng cĂ´ng cá»™ng
+        exampleText = `Ví dụ cách phát triển nội dung:
+Chủ đề: Giao thông công cộng
+giao thông công cộng
 public transportation
-sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng
+sử dụng giao thông công cộng
 use public transportation
-khuyáº¿n khĂ­ch ngÆ°á»i dĂ¢n sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng
+khuyến khích người dân sử dụng giao thông công cộng
 encourage people to use public transportation
-TrÆ°á»›c háº¿t, chĂ­nh phá»§ nĂªn khuyáº¿n khĂ­ch ngÆ°á»i dĂ¢n sá»­ dá»¥ng giao thĂ´ng cĂ´ng cá»™ng.
+Trước hết, chính phủ nên khuyến khích người dân sử dụng giao thông công cộng.
 Firstly, governments should encourage people to use public transportation.
-sá»‘ lÆ°á»£ng Ă´ tĂ´
+số lượng ô tô
 the number of cars
-giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´
+giảm số lượng ô tô
 reduce the number of cars
-giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´ trĂªn Ä‘Æ°á»ng
+giảm số lượng ô tô trên đường
 reduce the number of cars on the road
-Äiá»u nĂ y cĂ³ thá»ƒ giĂºp giáº£m sá»‘ lÆ°á»£ng Ă´ tĂ´ trĂªn Ä‘Æ°á»ng.
+Điều này có thể giúp giảm số lượng ô tô trên đường.
 This can help reduce the number of cars on the road.
-táº¯c ngháº½n giao thĂ´ng
+tắc nghẽn giao thông
 traffic congestion
-giáº£m táº¯c ngháº½n giao thĂ´ng
+giảm tắc nghẽn giao thông
 reduce traffic congestion
-giáº£m táº¯c ngháº½n giao thĂ´ng á»Ÿ cĂ¡c thĂ nh phá»‘ lá»›n
+giảm tắc nghẽn giao thông ở các thành phố lớn
 reduce traffic congestion in major cities
-Nhá» Ä‘Ă³, tĂ¬nh tráº¡ng táº¯c ngháº½n giao thĂ´ng á»Ÿ cĂ¡c thĂ nh phá»‘ lá»›n cĂ³ thá»ƒ Ä‘Æ°á»£c giáº£m bá»›t.
+Nhờ đó, tình trạng tắc nghẽn giao thông ở các thành phố lớn có thể được giảm bớt.
 As a result, traffic congestion in major cities can be reduced.`;
         break;
     }
 
-    return `HĂ£y soáº¡n má»™t bĂ i luyá»‡n nghe â€“ nháº¡i song ngá»¯ theo chá»§ Ä‘á»:
+    return `Hãy soạn một bài luyện nghe – nhại song ngữ theo chủ đề:
 
-Chá»§ Ä‘á»: ${topicText}
+Chủ đề: ${topicText}
 
-Ná»™i dung hoáº·c Ă½ chĂ­nh cáº§n phĂ¡t triá»ƒn:
+Nội dung hoặc ý chính cần phát triển:
 ${mainIdeasText}
 
-HĂ£y táº¡o má»™t Ä‘oáº¡n ngáº¯n gá»“m cĂ¡c cĂ¢u cĂ³ ná»™i dung liĂªn káº¿t tá»± nhiĂªn vá»›i nhau.
+Hãy tạo một đoạn ngắn gồm các câu có nội dung liên kết tự nhiên với nhau.
 
-Vá»›i tá»«ng cĂ¢u hoĂ n chá»‰nh, hĂ£y xĂ¢y dá»±ng ná»™i dung tá»« tá»« theo trĂ¬nh tá»±:
-tá»« hoáº·c Ă½ trá»ng tĂ¢m â†’ cá»¥m tá»« ngáº¯n â†’ cá»¥m tá»« dĂ i hÆ¡n â†’ cĂ¢u hoĂ n chá»‰nh
+Với từng câu hoàn chỉnh, hãy xây dựng nội dung từ từ theo trình tự:
+từ hoặc ý trọng tâm → cụm từ ngắn → cụm từ dài hơn → câu hoàn chỉnh
 
-Tá»« vĂ  cá»¥m tá»« á»Ÿ bÆ°á»›c trÆ°á»›c pháº£i Ä‘Æ°á»£c lá»“ng láº¡i vĂ o bÆ°á»›c sau. Sau khi hoĂ n thĂ nh má»™t cĂ¢u, má»›i chuyá»ƒn sang xĂ¢y dá»±ng cĂ¢u tiáº¿p theo theo cĂ¹ng quy trĂ¬nh.
+Từ và cụm từ ở bước trước phải được lồng lại vào bước sau. Sau khi hoàn thành một câu, mới chuyển sang xây dựng câu tiếp theo theo cùng quy trình.
 
-YĂªu cáº§u song ngá»¯:
-* LuĂ´n viáº¿t tiáº¿ng Viá»‡t trÆ°á»›c.
-* DĂ²ng tiáº¿ng Anh tÆ°Æ¡ng á»©ng Ä‘áº·t ngay bĂªn dÆ°á»›i.
-* Má»—i ná»™i dung pháº£i cĂ³ Ä‘á»§ má»™t cáº·p Viá»‡t â€“ Anh.
-* Báº£n dá»‹ch pháº£i tá»± nhiĂªn, sĂ¡t nghÄ©a vĂ  dá»… nháº¡i láº¡i.
-* CĂ¡c tá»«, cá»¥m tá»« vĂ  cĂ¢u pháº£i liĂªn káº¿t vá»›i nhau, khĂ´ng Ä‘Æ°á»£c rá»i ráº¡c.
-* CĂ¡c cĂ¢u hoĂ n chá»‰nh cuá»‘i cĂ¹ng pháº£i táº¡o thĂ nh má»™t Ä‘oáº¡n ngáº¯n cĂ³ máº¡ch Ă½ rĂµ rĂ ng.
+Yêu cầu song ngữ:
+* Luôn viết tiếng Việt trước.
+* Dòng tiếng Anh tương ứng đặt ngay bên dưới.
+* Mỗi nội dung phải có đủ một cặp Việt – Anh.
+* Bản dịch phải tự nhiên, sát nghĩa và dễ nhại lại.
+* Các từ, cụm từ và câu phải liên kết với nhau, không được rời rạc.
+* Các câu hoàn chỉnh cuối cùng phải tạo thành một đoạn ngắn có mạch ý rõ ràng.
 
 ${timingRequirements}
 
@@ -228,5 +228,5 @@ ${formatRequirements}
 
 ${exampleText}
 
-HĂ£y Ă¡p dá»¥ng Ä‘Ăºng cĂ¡ch phĂ¡t triá»ƒn trĂªn cho chá»§ Ä‘á» tĂ´i cung cáº¥p, nhÆ°ng khĂ´ng sao chĂ©p ná»™i dung vĂ­ dá»¥.`;
+Hãy áp dụng đúng cách phát triển trên cho chủ đề tôi cung cấp, nhưng không sao chép nội dung ví dụ.`;
   };

@@ -20,6 +20,8 @@ import { applySecurityHeaders } from "./src/server/httpSecurity";
 import { sendApiError } from './src/server/apiError';
 import { requireRequestUser } from './src/server/requestIdentity';
 import { resolveServerPort } from "./src/server/serverConfig";
+import { createHealthResponse } from "./src/server/health";
+import { checkFirestoreConnection } from "./src/server/storage";
 
 dotenv.config();
 
@@ -34,8 +36,9 @@ app.use((req, res, next) => {
 });
 
 // 0. API Health and Connection Status Check
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", service: "classroom-text-to-speech-api" });
+app.get("/api/health", async (_req, res) => {
+  const response = await createHealthResponse(checkFirestoreConnection);
+  res.status(response.statusCode).json(response.body);
 });
 
 // 1. Unsplash Image Search with Rate Limiting

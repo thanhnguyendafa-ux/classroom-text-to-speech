@@ -10,6 +10,7 @@ test('injects the requested topic and ideas into the prompt', () => {
   });
   assert.match(prompt, /Healthy food/);
   assert.match(prompt, /Eat more vegetables/);
+  assert.match(prompt, /Hãy soạn một bài luyện nghe/);
 });
 
 test('pause mode requires per-line pause markers', () => {

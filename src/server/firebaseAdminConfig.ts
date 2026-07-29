@@ -1,7 +1,9 @@
-export interface FirebaseClientConfig {
-  projectId?: unknown;
-  firestoreDatabaseId?: unknown;
-}
+import {
+  nonEmptyConfigString,
+  type FirebaseClientConfig,
+} from '../lib/firebase/firebaseClientConfig.js';
+
+export type { FirebaseClientConfig } from '../lib/firebase/firebaseClientConfig.js';
 
 export interface FirebaseAdminEnvironment {
   FIREBASE_PROJECT_ID?: string;
@@ -9,24 +11,20 @@ export interface FirebaseAdminEnvironment {
   FIRESTORE_DATABASE_ID?: string;
 }
 
-function nonEmptyString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
-
 export function resolveFirebaseAdminConfig(
   clientConfig: FirebaseClientConfig,
   environment: FirebaseAdminEnvironment,
 ): { projectId: string; databaseId?: string } {
-  const projectId = nonEmptyString(environment.FIREBASE_PROJECT_ID)
-    ?? nonEmptyString(environment.GCLOUD_PROJECT)
-    ?? nonEmptyString(clientConfig.projectId);
+  const projectId = nonEmptyConfigString(environment.FIREBASE_PROJECT_ID)
+    ?? nonEmptyConfigString(environment.GCLOUD_PROJECT)
+    ?? nonEmptyConfigString(clientConfig.projectId);
 
   if (!projectId) {
     throw new Error('FIREBASE_PROJECT_ID or firebase-applet-config.json projectId is required.');
   }
 
-  const databaseId = nonEmptyString(environment.FIRESTORE_DATABASE_ID)
-    ?? nonEmptyString(clientConfig.firestoreDatabaseId);
+  const databaseId = nonEmptyConfigString(environment.FIRESTORE_DATABASE_ID)
+    ?? nonEmptyConfigString(clientConfig.firestoreDatabaseId);
 
   return databaseId ? { projectId, databaseId } : { projectId };
 }

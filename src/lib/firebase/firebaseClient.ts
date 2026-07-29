@@ -3,11 +3,14 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../../firebase-applet-config.json';
+import { resolveFirestoreDatabaseId } from './firebaseClientConfig';
 
 const app = initializeApp(firebaseConfig);
+const firestoreDatabaseId = resolveFirestoreDatabaseId(firebaseConfig);
 
-// Initialize Firestore with the exact database ID from config
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = firestoreDatabaseId
+  ? getFirestore(app, firestoreDatabaseId)
+  : getFirestore(app);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
